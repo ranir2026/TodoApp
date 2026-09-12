@@ -1,4 +1,4 @@
-const WEEKS = 16;
+const WEEKS = 13;
 
 function toDateKey(d) {
   return d.toLocaleDateString("en-CA");
@@ -41,9 +41,9 @@ export default function ActivityHeatmap({ todos }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <p className="mb-2 text-xs font-medium text-slate-500">Activity</p>
-      <div className="flex gap-0.5 overflow-x-auto">
+      <div className="flex justify-between gap-px">
         {weeks.map((days, wi) => (
-          <div key={wi} className="flex flex-col gap-0.5">
+          <div key={wi} className="flex flex-col gap-px">
             {days.map((date, di) => {
               const key = toDateKey(date);
               const isFuture = date > today;
@@ -52,7 +52,7 @@ export default function ActivityHeatmap({ todos }) {
                 <div
                   key={di}
                   title={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${count} completed`}
-                  className={`h-2.5 w-2.5 rounded-sm ${isFuture ? "bg-transparent" : levelClass(count)}`}
+                  className={`h-2 w-2 rounded-sm ${isFuture ? "bg-transparent" : levelClass(count)}`}
                 />
               );
             })}

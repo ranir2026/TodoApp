@@ -9,7 +9,18 @@ function toDateKey(d) {
   return d.toLocaleDateString("en-CA");
 }
 
+// Parses a "YYYY-MM-DD" string as a local date (avoids the day-shift that
+// `new Date("YYYY-MM-DD")` causes by parsing it as UTC).
+export function parseDateKey(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function matchesRepeat(item, due, cursor) {
+  if (item.endDate) {
+    const end = parseDateKey(item.endDate);
+    return cursor >= due && cursor <= end;
+  }
   switch (item.repeat) {
     case "daily":
       return cursor >= due;
@@ -35,8 +46,7 @@ export function expandRange(items, startDate, endDate) {
     const key = toDateKey(cursor);
     for (const item of items) {
       if (!item.dueDate) continue;
-      const due = new Date(item.dueDate);
-      due.setHours(0, 0, 0, 0);
+      const due = parseDateKey(item.dueDate);
       if (matchesRepeat(item, due, cursor)) {
         (map[key] ??= []).push({ ...item, occurrenceDate: key });
       }

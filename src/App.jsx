@@ -35,7 +35,7 @@ export default function App() {
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-  function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeat }) {
+  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat }) {
     setTodos((prev) => [
       ...prev,
       {
@@ -44,6 +44,7 @@ export default function App() {
         title,
         courseId: courseId ?? courses[0]?.id ?? null,
         dueDate,
+        endDate: endDate ?? null,
         startTime: startTime ?? null,
         endTime: endTime ?? null,
         priority: priority ?? "normal",
@@ -372,9 +373,9 @@ export default function App() {
       <button
         onClick={() => setPaletteOpen(true)}
         title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
-        className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-400 shadow-sm hover:border-slate-300"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-400 shadow-sm hover:border-slate-300"
       >
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Commands
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Cmds
       </button>
 
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />

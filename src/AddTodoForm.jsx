@@ -6,6 +6,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [dueDate, setDueDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState("normal");
@@ -20,6 +21,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
       title: title.trim(),
       courseId: courseId || courses[0]?.id || null,
       dueDate: dueDate || null,
+      endDate: type === "event" ? endDate || null : null,
       startTime: startTime || null,
       endTime: endTime || null,
       priority,
@@ -28,6 +30,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
     });
     setTitle("");
     setDueDate("");
+    setEndDate("");
     setStartTime("");
     setEndTime("");
     setPriority("normal");
@@ -68,12 +71,26 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
       </select>
-      <input
-        type="date"
-        value={dueDate}
-        onChange={(e) => setDueDate(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
-      />
+      <div className="flex items-center gap-1.5">
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+        />
+        {type === "event" && (
+          <>
+            <span className="text-xs text-slate-300">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="End date (optional, for multi-day events)"
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+            />
+          </>
+        )}
+      </div>
       <div className="flex items-center gap-1.5">
         <input
           type="time"

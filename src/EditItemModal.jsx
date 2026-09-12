@@ -11,6 +11,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
         title: item.title,
         courseId: item.courseId ?? courses[0]?.id ?? "",
         dueDate: item.dueDate ?? "",
+        endDate: item.endDate ?? "",
         startTime: item.startTime ?? "",
         endTime: item.endTime ?? "",
         priority: item.priority ?? "normal",
@@ -35,6 +36,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
       ...form,
       title: form.title.trim(),
       dueDate: form.dueDate || null,
+      endDate: form.type === "event" ? form.endDate || null : null,
       startTime: form.startTime || null,
       endTime: form.endTime || null,
       description: form.description.trim() || null,
@@ -81,12 +83,26 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <input
-          type="date"
-          value={form.dueDate ?? ""}
-          onChange={(e) => update("dueDate", e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
-        />
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={form.dueDate ?? ""}
+            onChange={(e) => update("dueDate", e.target.value)}
+            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+          />
+          {form.type === "event" && (
+            <>
+              <span className="text-xs text-slate-300">to</span>
+              <input
+                type="date"
+                value={form.endDate ?? ""}
+                onChange={(e) => update("endDate", e.target.value)}
+                title="End date (optional, for multi-day events)"
+                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+              />
+            </>
+          )}
+        </div>
         <div className="flex items-center gap-1.5">
           <input
             type="time"

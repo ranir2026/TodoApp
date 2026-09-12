@@ -1,3 +1,5 @@
+import { parseDateKey } from "./occurrences";
+
 function formatTime(t) {
   const [h, m] = t.split(":").map(Number);
   const d = new Date(2000, 0, 1, h, m);
@@ -11,7 +13,7 @@ function timeRangeLabel(todo) {
 
 function dueLabel(dueDate) {
   if (!dueDate) return null;
-  const due = new Date(dueDate);
+  const due = parseDateKey(dueDate);
   const now = new Date();
   const diffDays = Math.ceil((due - now) / 86400000);
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };

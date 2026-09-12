@@ -113,6 +113,10 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
     }
     if (e.key === "Enter") {
       e.preventDefault();
+      if (!text.trim()) {
+        onClose();
+        return;
+      }
       submit();
     }
     if (e.key === "Escape" && suggestions.length === 0) {
