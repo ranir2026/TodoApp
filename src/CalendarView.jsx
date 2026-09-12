@@ -53,7 +53,7 @@ function monthCells(cursor) {
 }
 
 export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
-  const [mode, setMode] = useState("month");
+  const [mode, setMode] = useState("day");
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
