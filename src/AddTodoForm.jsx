@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 
-export default function AddTodoForm({ courses, onAdd }) {
+const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -18,6 +18,7 @@ export default function AddTodoForm({ courses, onAdd }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <input
+        ref={ref}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Add a task..."
@@ -56,4 +57,6 @@ export default function AddTodoForm({ courses, onAdd }) {
       </button>
     </form>
   );
-}
+});
+
+export default AddTodoForm;

@@ -9,11 +9,15 @@ function dueLabel(dueDate) {
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
-export default function TodoItem({ todo, course, onToggle, onDelete }) {
+export default function TodoItem({ todo, course, onToggle, onDelete, selected }) {
   const due = dueLabel(todo.dueDate);
 
   return (
-    <li className="group flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 transition-shadow hover:shadow-sm">
+    <li
+      className={`group flex items-start gap-3 rounded-lg border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
+        selected ? "border-todo-400 ring-2 ring-todo-400/30" : "border-slate-200"
+      }`}
+    >
       <button
         onClick={() => onToggle(todo.id)}
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
