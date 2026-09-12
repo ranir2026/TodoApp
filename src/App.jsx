@@ -23,14 +23,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const addInputRef = useRef(null);
 
-  function addTodo({ title, courseId, dueDate, priority }) {
+  function addTodo({ title, courseId, dueDate, startTime, endTime, priority }) {
     setTodos((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         title,
-        courseId,
+        courseId: courseId ?? courses[0]?.id ?? null,
         dueDate,
+        startTime: startTime ?? null,
+        endTime: endTime ?? null,
         priority,
         completed: false,
         createdAt: new Date().toISOString(),

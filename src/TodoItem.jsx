@@ -1,3 +1,14 @@
+function formatTime(t) {
+  const [h, m] = t.split(":").map(Number);
+  const d = new Date(2000, 0, 1, h, m);
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function timeRangeLabel(todo) {
+  if (!todo.startTime) return null;
+  return todo.endTime ? `${formatTime(todo.startTime)} – ${formatTime(todo.endTime)}` : formatTime(todo.startTime);
+}
+
 function dueLabel(dueDate) {
   if (!dueDate) return null;
   const due = new Date(dueDate);
@@ -11,6 +22,7 @@ function dueLabel(dueDate) {
 
 export default function TodoItem({ todo, course, onToggle, onDelete, selected }) {
   const due = dueLabel(todo.dueDate);
+  const timeRange = timeRangeLabel(todo);
 
   return (
     <li
@@ -53,6 +65,9 @@ export default function TodoItem({ todo, course, onToggle, onDelete, selected })
           )}
           {due && !todo.completed && (
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
+          )}
+          {timeRange && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
           )}
         </div>
       </div>
