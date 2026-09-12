@@ -8,6 +8,7 @@ import CommandPalette from "./CommandPalette";
 import KeybindSettings from "./KeybindSettings";
 import EditItemModal from "./EditItemModal";
 import QuickAddModal from "./QuickAddModal";
+import ActivityHeatmap from "./ActivityHeatmap";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 
@@ -59,7 +60,11 @@ export default function App() {
   }
 
   function toggleTodo(id) {
-    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+    setTodos((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null } : t,
+      ),
+    );
   }
 
   function deleteTodo(id) {
@@ -174,7 +179,7 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
-      <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
+      <aside className="no-scrollbar flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
@@ -325,6 +330,8 @@ export default function App() {
 
       <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-14 pl-1">
         <StatsBar todos={todos} />
+
+        <ActivityHeatmap todos={todos} />
 
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
           {["active", "completed", "all"].map((f) => (
