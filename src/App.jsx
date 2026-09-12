@@ -30,6 +30,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const addInputRef = useRef(null);
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeat }) {
     setTodos((prev) => [
@@ -173,6 +174,7 @@ export default function App() {
     <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
       <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
         <div>
+          <p className="text-lg font-bold tracking-tight text-slate-900">{today}</p>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
@@ -188,7 +190,7 @@ export default function App() {
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <p className="mb-1.5 text-xs font-medium text-slate-500">Courses</p>
+          <p className="mb-1.5 text-xs font-medium text-slate-500">Categories</p>
           <ul className="space-y-1">
             {courses.map((c) => (
               <li key={c.id} className="group flex items-center gap-1.5">
@@ -222,7 +224,7 @@ export default function App() {
                   onClick={() => deleteCourse(c.id)}
                   disabled={courses.length <= 1}
                   className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:text-danger-500 group-hover:opacity-100 disabled:opacity-0"
-                  aria-label="Delete course"
+                  aria-label="Delete category"
                 >
                   ×
                 </button>
@@ -233,7 +235,7 @@ export default function App() {
             <input
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
-              placeholder="New course..."
+              placeholder="New category..."
               className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none focus:border-course-500"
             />
             <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-course-600">
@@ -251,7 +253,7 @@ export default function App() {
               <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
                 {[
                   { id: "date", label: "Date" },
-                  { id: "course", label: "Course" },
+                  { id: "course", label: "Category" },
                 ].map((o) => (
                   <button
                     key={o.id}

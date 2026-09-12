@@ -15,7 +15,8 @@ export const SUGGESTION_KEYWORDS = [
   { insert: "weekly", hint: "repeats every week" },
   { insert: "monthly", hint: "repeats every month" },
   { insert: "urgent", hint: "marks it urgent" },
-  { insert: "event:", hint: "creates an event instead of a task" },
+  { insert: "tk", hint: "marks it a task" },
+  { insert: "ev", hint: "marks it an event" },
 ];
 
 function toDateKey(d) {
@@ -104,14 +105,24 @@ function extractTime(text) {
 export function parseQuickAdd(rawText, courses) {
   let text = rawText;
   let type = "task";
+  let typeExplicit = false;
   let priority = "normal";
   let repeat = "none";
   let courseId = null;
+  let courseName = null;
 
   let m = text.match(/^\s*(event|evt)\s*:\s*/i);
   if (m) {
     type = "event";
+    typeExplicit = true;
     text = text.slice(m[0].length);
+  }
+
+  m = text.match(/\b(tk|ev)\b/i);
+  if (m) {
+    type = m[1].toLowerCase() === "ev" ? "event" : "task";
+    typeExplicit = true;
+    text = stripMatch(text, m);
   }
 
   if (/!/.test(text)) {
@@ -139,7 +150,10 @@ export function parseQuickAdd(rawText, courses) {
   if (m && courses.length) {
     const q = m[1].toLowerCase();
     const found = courses.find((c) => c.name.toLowerCase().startsWith(q)) || courses.find((c) => c.name.toLowerCase().includes(q));
-    if (found) courseId = found.id;
+    if (found) {
+      courseId = found.id;
+      courseName = found.name;
+    }
     text = stripMatch(text, m);
   }
 
@@ -153,10 +167,12 @@ export function parseQuickAdd(rawText, courses) {
 
   return {
     type,
+    typeExplicit,
     title,
     priority,
     repeat,
     courseId,
+    courseName,
     dueDate: dateResult.dueDate,
     startTime: timeResult.startTime,
     endTime: timeResult.endTime,
