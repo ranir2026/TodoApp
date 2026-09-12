@@ -30,7 +30,9 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const addInputRef = useRef(null);
-  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const now = new Date();
+  const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
+  const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
   function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeat }) {
     setTodos((prev) => [
@@ -174,7 +176,6 @@ export default function App() {
     <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
       <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
         <div>
-          <p className="text-lg font-bold tracking-tight text-slate-900">{today}</p>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
@@ -351,6 +352,13 @@ export default function App() {
               {v}
             </button>
           ))}
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="text-right leading-none">
+          <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
+          <p className="mt-1 text-base font-semibold text-slate-400">{monthDate}</p>
         </div>
       </aside>
 

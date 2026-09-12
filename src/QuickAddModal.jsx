@@ -165,41 +165,56 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
         </div>
 
         {preview && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`rounded-md border px-2 py-1 text-xs font-medium ${
-                preview.typeExplicit ? "border-slate-200 bg-slate-100 text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
-              }`}
-            >
-              {preview.typeExplicit ? (preview.type === "event" ? "Event" : "Task") : "tk / ev ?"}
-            </span>
-            {previewCourse && (
+          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-medium text-slate-800">
+              {preview.title || <span className="text-slate-300 italic">Untitled…</span>}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
-                className="rounded-md border px-2 py-1 text-xs font-medium"
-                style={{ backgroundColor: `${previewCourse.color}1f`, borderColor: `${previewCourse.color}55`, color: previewCourse.color }}
+                className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                  preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
+                }`}
               >
-                @{previewCourse.name}
+                {preview.typeExplicit ? (preview.type === "event" ? "Event" : "Task") : "tk / ev ?"}
               </span>
-            )}
-            {preview.dueDate && (
-              <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                {formatDate(preview.dueDate)}
-              </span>
-            )}
-            {preview.startTime && (
-              <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                {formatTime(preview.startTime)}
-                {preview.endTime ? ` – ${formatTime(preview.endTime)}` : ""}
-              </span>
-            )}
-            {preview.repeat !== "none" && (
-              <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 capitalize">
-                ↻ {preview.repeat}
-              </span>
-            )}
-            {preview.priority === "urgent" && (
-              <span className="rounded-md border border-urgent-200 bg-urgent-100 px-2 py-1 text-xs font-medium text-urgent-700">Urgent</span>
-            )}
+
+              {previewCourse ? (
+                <span
+                  className="rounded-md border px-2 py-1 text-xs font-medium"
+                  style={{ backgroundColor: `${previewCourse.color}1f`, borderColor: `${previewCourse.color}55`, color: previewCourse.color }}
+                >
+                  @{previewCourse.name}
+                </span>
+              ) : (
+                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no category</span>
+              )}
+
+              {preview.dueDate ? (
+                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                  {formatDate(preview.dueDate)}
+                </span>
+              ) : (
+                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no date</span>
+              )}
+
+              {preview.startTime ? (
+                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                  {formatTime(preview.startTime)}
+                  {preview.endTime ? ` – ${formatTime(preview.endTime)}` : ""}
+                </span>
+              ) : (
+                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no time</span>
+              )}
+
+              {preview.repeat !== "none" && (
+                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 capitalize">
+                  ↻ {preview.repeat}
+                </span>
+              )}
+              {preview.priority === "urgent" && (
+                <span className="rounded-md border border-urgent-200 bg-urgent-100 px-2 py-1 text-xs font-medium text-urgent-700">Urgent</span>
+              )}
+            </div>
           </div>
         )}
 

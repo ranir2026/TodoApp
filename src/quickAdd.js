@@ -57,9 +57,9 @@ function extractDate(text) {
     return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
-  m = text.match(/\b(sun|mon|tue|wed|thu|fri|sat)(day|\.|)\b/i);
+  m = text.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/i);
   if (m) {
-    const target = DOW.indexOf(m[1].toLowerCase());
+    const target = DOW.indexOf(m[1].slice(0, 3).toLowerCase());
     const d = new Date(today);
     const diff = (target - d.getDay() + 7) % 7 || 7;
     d.setDate(d.getDate() + diff);
