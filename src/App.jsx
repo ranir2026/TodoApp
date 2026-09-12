@@ -112,72 +112,67 @@ export default function App() {
   );
 
   return (
-    <div className="mx-auto flex h-screen max-w-6xl flex-col overflow-hidden px-4 py-3 sm:px-6">
-      <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2">
+    <div className="mx-auto flex h-screen max-w-6xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
+      <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
+        <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
+
         <StatsBar todos={todos} />
-      </header>
 
-      <section className="mb-2">
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
-      </section>
 
-      <section className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-            {["active", "completed", "all"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors ${
-                  filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-            {["list", "calendar"].map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors ${
-                  view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <form onSubmit={addCourse} className="flex items-center gap-2">
-            <input
-              value={newCourseName}
-              onChange={(e) => setNewCourseName(e.target.value)}
-              placeholder="New course..."
-              className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none focus:border-course-500"
-            />
-            <button type="submit" className="rounded-lg bg-course-500 px-3 py-1 text-sm font-medium text-white hover:bg-course-600">
-              Add course
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+          {["active", "completed", "all"].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+                filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {f}
             </button>
-          </form>
-          <button
-            onClick={() => setPaletteOpen(true)}
-            title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1 text-sm text-slate-500 hover:border-slate-300"
-          >
-            Commands <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">{comboLabel(keymap.openPalette)}</span>
-          </button>
+          ))}
         </div>
-      </section>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+          {["list", "calendar"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+                view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={addCourse} className="flex items-center gap-1.5">
+          <input
+            value={newCourseName}
+            onChange={(e) => setNewCourseName(e.target.value)}
+            placeholder="New course..."
+            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-course-500"
+          />
+          <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-course-600">
+            Add
+          </button>
+        </form>
+
+        <button
+          onClick={() => setPaletteOpen(true)}
+          title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
+          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:border-slate-300"
+        >
+          Commands <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">{comboLabel(keymap.openPalette)}</span>
+        </button>
+      </aside>
+
+      <main className="min-h-0 flex-1 overflow-y-auto">
         {view === "list" ? (
           <ul className="space-y-2 pb-2">
             {visibleTodos.length === 0 && (
@@ -204,7 +199,7 @@ export default function App() {
             onQuickAdd={(title, dueDate) => addTodo({ title, courseId: null, dueDate, priority: "normal" })}
           />
         )}
-      </div>
+      </main>
 
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const HOUR_HEIGHT = 48;
+const HOUR_HEIGHT = 44;
 
 function toDateKey(d) {
   return d.toLocaleDateString("en-CA");
@@ -77,7 +77,7 @@ export default function CalendarView({ todos, courseMap, onToggle, onQuickAdd })
       : cursor.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <button onClick={() => shift(-1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
@@ -109,11 +109,13 @@ export default function CalendarView({ todos, courseMap, onToggle, onQuickAdd })
         </div>
       </div>
 
-      {mode === "month" && (
-        <MonthGrid cursor={cursor} todosByDay={todosByDay} courseMap={courseMap} onToggle={onToggle} onQuickAdd={onQuickAdd} />
-      )}
-      {mode === "week" && <TimeGrid days={weekDays(cursor)} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
-      {mode === "day" && <TimeGrid days={[cursor]} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
+      <div className="min-h-0 flex-1">
+        {mode === "month" && (
+          <MonthGrid cursor={cursor} todosByDay={todosByDay} courseMap={courseMap} onToggle={onToggle} onQuickAdd={onQuickAdd} />
+        )}
+        {mode === "week" && <TimeGrid days={weekDays(cursor)} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
+        {mode === "day" && <TimeGrid days={[cursor]} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
+      </div>
     </div>
   );
 }
@@ -220,15 +222,9 @@ function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
 function TimeGrid({ days, todosByDay, onToggle, now }) {
   const todayKey = toDateKey(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ block: "center" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days[0]?.toDateString()]);
 
   return (
-    <div className="overflow-x-auto">
+    <div className="h-full overflow-auto">
       <div className="flex" style={{ minWidth: days.length > 1 ? 640 : 320 }}>
         <div className="w-14 shrink-0 pt-6 text-right text-[10px] text-slate-400">
           {Array.from({ length: 24 }, (_, h) => (
@@ -287,7 +283,6 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
 
                 {isToday && (
                   <div
-                    ref={scrollRef}
                     className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
                     style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
                   >
