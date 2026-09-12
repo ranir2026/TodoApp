@@ -1,0 +1,56 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  /* Indigo — courses */
+  --color-course-50: #eef2ff;
+  --color-course-100: #e0e7ff;
+  --color-course-300: #a5b4fc;
+  --color-course-500: #6366f1;
+  --color-course-600: #4f46e5;
+  --color-course-700: #4338ca;
+
+  /* Amber — todos */
+  --color-todo-50: #fffbeb;
+  --color-todo-100: #fef3c7;
+  --color-todo-300: #fcd34d;
+  --color-todo-500: #f59e0b;
+  --color-todo-600: #d97706;
+  --color-todo-700: #b45309;
+
+  /* Violet — urgent deadlines */
+  --color-urgent-50: #f5f3ff;
+  --color-urgent-100: #ede9fe;
+  --color-urgent-300: #c4b5fd;
+  --color-urgent-500: #8b5cf6;
+  --color-urgent-600: #7c3aed;
+  --color-urgent-700: #6d28d9;
+
+  /* Neutral / status */
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
