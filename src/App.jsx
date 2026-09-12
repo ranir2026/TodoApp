@@ -323,7 +323,7 @@ export default function App() {
         )}
       </main>
 
-      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pl-1">
+      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-14 pl-1">
         <StatsBar todos={todos} />
 
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
