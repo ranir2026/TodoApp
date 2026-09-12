@@ -1,4 +1,5 @@
 import { forwardRef, useState } from "react";
+import { REPEAT_OPTIONS } from "./occurrences";
 
 const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [type, setType] = useState("task");
@@ -9,7 +10,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState("normal");
   const [description, setDescription] = useState("");
-  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  const [repeat, setRepeat] = useState("none");
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -23,7 +24,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
       endTime: endTime || null,
       priority,
       description: description.trim() || null,
-      repeatWeekly,
+      repeat,
     });
     setTitle("");
     setDueDate("");
@@ -31,7 +32,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
     setEndTime("");
     setPriority("normal");
     setDescription("");
-    setRepeatWeekly(false);
+    setRepeat("none");
   }
 
   return (
@@ -97,10 +98,15 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
         rows={2}
         className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
       />
-      <label className="flex items-center gap-1.5 text-xs text-slate-500">
-        <input type="checkbox" checked={repeatWeekly} onChange={(e) => setRepeatWeekly(e.target.checked)} className="rounded" />
-        Repeats weekly
-      </label>
+      <select
+        value={repeat}
+        onChange={(e) => setRepeat(e.target.value)}
+        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+      >
+        {REPEAT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
       <div className="flex items-center gap-1.5">
         <button
           type="button"

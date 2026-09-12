@@ -17,6 +17,7 @@ export default function App() {
   const [todos, setTodos] = useLocalStorage("todos", []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
   const [filter, setFilter] = useState("active"); // active | completed | all
+  const [sortBy, setSortBy] = useState("date"); // date | course
   const [view, setView] = useState("list"); // list | calendar
   const [newCourseName, setNewCourseName] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
@@ -27,7 +28,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const addInputRef = useRef(null);
 
-  function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeatWeekly }) {
+  function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeat }) {
     setTodos((prev) => [
       ...prev,
       {
@@ -40,7 +41,7 @@ export default function App() {
         endTime: endTime ?? null,
         priority: priority ?? "normal",
         description: description ?? null,
-        repeatWeekly: repeatWeekly ?? false,
+        repeat: repeat ?? "none",
         completed: false,
         createdAt: new Date().toISOString(),
       },
@@ -90,26 +91,32 @@ export default function App() {
     });
   }
 
-  const visibleTodos = useMemo(() => {
+  const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
+  const courseOrder = useMemo(() => Object.fromEntries(courses.map((c, i) => [c.id, i])), [courses]);
+
+  const visibleTasks = useMemo(() => {
     const list = todos.filter((t) => {
+      if ((t.type ?? "task") !== "task") return false;
       if (filter === "active") return !t.completed;
       if (filter === "completed") return t.completed;
       return true;
     });
     return [...list].sort((a, b) => {
+      if (sortBy === "course") {
+        const diff = (courseOrder[a.courseId] ?? 99) - (courseOrder[b.courseId] ?? 99);
+        if (diff !== 0) return diff;
+      }
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [todos, filter]);
-
-  const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
+  }, [todos, filter, sortBy, courseOrder]);
 
   function moveSelection(delta) {
-    if (view !== "list" || visibleTodos.length === 0) return;
-    const idx = visibleTodos.findIndex((t) => t.id === selectedId);
-    const nextIdx = idx === -1 ? 0 : Math.min(Math.max(idx + delta, 0), visibleTodos.length - 1);
-    setSelectedId(visibleTodos[nextIdx].id);
+    if (view !== "list" || visibleTasks.length === 0) return;
+    const idx = visibleTasks.findIndex((t) => t.id === selectedId);
+    const nextIdx = idx === -1 ? 0 : Math.min(Math.max(idx + delta, 0), visibleTasks.length - 1);
+    setSelectedId(visibleTasks[nextIdx].id);
   }
 
   useGlobalKeybinds(
@@ -148,14 +155,12 @@ export default function App() {
   );
 
   return (
-    <div className="mx-auto flex h-screen max-w-6xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
+    <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
       <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
-
-        <StatsBar todos={todos} />
 
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
@@ -173,18 +178,24 @@ export default function App() {
           ))}
         </div>
 
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {["list", "calendar"].map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span className="shrink-0 font-medium">Sort by</span>
+          <div className="flex flex-1 gap-1 rounded-lg bg-slate-100 p-1">
+            {[
+              { id: "date", label: "Date" },
+              { id: "course", label: "Course" },
+            ].map((o) => (
+              <button
+                key={o.id}
+                onClick={() => setSortBy(o.id)}
+                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  sortBy === o.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -232,27 +243,17 @@ export default function App() {
             </button>
           </form>
         </div>
-
-        <div className="flex-1" />
-
-        <button
-          onClick={() => setPaletteOpen(true)}
-          title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
-          className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-400 hover:border-slate-300"
-        >
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Commands
-        </button>
       </aside>
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         {view === "list" ? (
           <ul className="space-y-2 pb-2">
-            {visibleTodos.length === 0 && (
+            {visibleTasks.length === 0 && (
               <li className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
                 No tasks here.
               </li>
             )}
-            {visibleTodos.map((todo) => (
+            {visibleTasks.map((todo) => (
               <TodoItem
                 key={todo.id}
                 todo={todo}
@@ -273,6 +274,32 @@ export default function App() {
           />
         )}
       </main>
+
+      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pl-1">
+        <StatsBar todos={todos} />
+
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+          {["list", "calendar"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+                view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <button
+        onClick={() => setPaletteOpen(true)}
+        title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-400 shadow-sm hover:border-slate-300"
+      >
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Commands
+      </button>
 
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />

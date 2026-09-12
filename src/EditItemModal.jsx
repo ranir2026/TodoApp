@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { REPEAT_OPTIONS } from "./occurrences";
 
 export default function EditItemModal({ item, courses, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(null);
@@ -14,7 +15,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
         endTime: item.endTime ?? "",
         priority: item.priority ?? "normal",
         description: item.description ?? "",
-        repeatWeekly: !!item.repeatWeekly,
+        repeat: item.repeat ?? "none",
       });
     } else {
       setForm(null);
@@ -108,10 +109,15 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
           rows={3}
           className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
         />
-        <label className="flex items-center gap-1.5 text-xs text-slate-500">
-          <input type="checkbox" checked={form.repeatWeekly} onChange={(e) => update("repeatWeekly", e.target.checked)} className="rounded" />
-          Repeats weekly
-        </label>
+        <select
+          value={form.repeat}
+          onChange={(e) => update("repeat", e.target.value)}
+          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+        >
+          {REPEAT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={() => update("priority", form.priority === "urgent" ? "normal" : "urgent")}

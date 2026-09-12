@@ -76,8 +76,8 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
           {timeRange && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
           )}
-          {todo.repeatWeekly && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">↻ Weekly</span>
+          {todo.repeat && todo.repeat !== "none" && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
           )}
         </div>
       </button>
