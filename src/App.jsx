@@ -7,6 +7,7 @@ import CalendarView from "./CalendarView";
 import CommandPalette from "./CommandPalette";
 import KeybindSettings from "./KeybindSettings";
 import EditItemModal from "./EditItemModal";
+import QuickAddModal from "./QuickAddModal";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 
@@ -27,6 +28,7 @@ export default function App() {
   const [editingItem, setEditingItem] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const addInputRef = useRef(null);
 
   function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeat }) {
@@ -134,6 +136,7 @@ export default function App() {
     {
       openPalette: () => setPaletteOpen((v) => !v),
       openSettings: () => setSettingsOpen(true),
+      quickAdd: () => setQuickAddOpen(true),
       newTask: () => addInputRef.current?.focus(),
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
       moveDown: () => moveSelection(1),
@@ -146,15 +149,17 @@ export default function App() {
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
+        else if (quickAddOpen) setQuickAddOpen(false);
         else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen && !editingItem,
+    !settingsOpen && !editingItem && !quickAddOpen,
   );
 
   const commands = useMemo(
     () => [
-      { id: "newTask", label: "New task", run: () => addInputRef.current?.focus() },
+      { id: "quickAdd", label: "Quick add task/event", run: () => setQuickAddOpen(true) },
+      { id: "newTask", label: "Focus new task form", run: () => addInputRef.current?.focus() },
       { id: "toggleView", label: "Toggle list / calendar view", run: () => setView((v) => (v === "list" ? "calendar" : "list")) },
       { id: "filterActive", label: "Show active tasks", run: () => setFilter("active") },
       { id: "filterCompleted", label: "Show completed tasks", run: () => setFilter("completed") },
@@ -171,6 +176,14 @@ export default function App() {
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
           <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
+
+        <button
+          onClick={() => setQuickAddOpen(true)}
+          className="flex items-center justify-between rounded-xl border border-todo-200 bg-todo-50 px-3 py-2 text-sm font-medium text-todo-700 hover:border-todo-300"
+        >
+          Quick add
+          <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-todo-600">{comboLabel(keymap.quickAdd)}</span>
+        </button>
 
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
@@ -358,6 +371,12 @@ export default function App() {
         }}
         onDelete={deleteTodo}
         onClose={() => setEditingItem(null)}
+      />
+      <QuickAddModal
+        open={quickAddOpen}
+        courses={courses}
+        onAdd={(item) => addTodo(item)}
+        onClose={() => setQuickAddOpen(false)}
       />
     </div>
   );

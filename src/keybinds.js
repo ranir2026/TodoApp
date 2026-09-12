@@ -1,6 +1,7 @@
 export const DEFAULT_KEYMAP = {
   openPalette: "ctrl+k",
-  newTask: "n",
+  quickAdd: "n",
+  newTask: "shift+n",
   toggleView: "v",
   moveDown: "j",
   moveUp: "k",
@@ -14,7 +15,8 @@ export const DEFAULT_KEYMAP = {
 
 export const ACTION_LABELS = {
   openPalette: "Open command palette",
-  newTask: "Focus new task input",
+  quickAdd: "Open quick add",
+  newTask: "Focus new task form",
   toggleView: "Toggle list / calendar view",
   moveDown: "Select next task",
   moveUp: "Select previous task",

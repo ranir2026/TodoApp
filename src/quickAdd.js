@@ -1,5 +1,23 @@
 const DOW = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
+export const SUGGESTION_KEYWORDS = [
+  { insert: "today", hint: "due today" },
+  { insert: "tomorrow", hint: "due tomorrow" },
+  { insert: "tmrw", hint: "due tomorrow" },
+  { insert: "monday", hint: "due next Monday" },
+  { insert: "tuesday", hint: "due next Tuesday" },
+  { insert: "wednesday", hint: "due next Wednesday" },
+  { insert: "thursday", hint: "due next Thursday" },
+  { insert: "friday", hint: "due next Friday" },
+  { insert: "saturday", hint: "due next Saturday" },
+  { insert: "sunday", hint: "due next Sunday" },
+  { insert: "daily", hint: "repeats every day" },
+  { insert: "weekly", hint: "repeats every week" },
+  { insert: "monthly", hint: "repeats every month" },
+  { insert: "urgent", hint: "marks it urgent" },
+  { insert: "event:", hint: "creates an event instead of a task" },
+];
+
 function toDateKey(d) {
   return d.toLocaleDateString("en-CA");
 }
@@ -24,7 +42,7 @@ function extractDate(text) {
   let m = text.match(/\btoday\b/i);
   if (m) return { dueDate: toDateKey(today), text: stripMatch(text, m) };
 
-  m = text.match(/\btomorrow\b/i);
+  m = text.match(/\b(tomorrow|tmrw)\b/i);
   if (m) {
     const d = new Date(today);
     d.setDate(d.getDate() + 1);
