@@ -6,6 +6,7 @@ import TodoItem from "./TodoItem";
 import CalendarView from "./CalendarView";
 import CommandPalette from "./CommandPalette";
 import KeybindSettings from "./KeybindSettings";
+import EditItemModal from "./EditItemModal";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 
@@ -18,26 +19,36 @@ export default function App() {
   const [filter, setFilter] = useState("active"); // active | completed | all
   const [view, setView] = useState("list"); // list | calendar
   const [newCourseName, setNewCourseName] = useState("");
+  const [editingCourseId, setEditingCourseId] = useState(null);
+  const [editingCourseName, setEditingCourseName] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const addInputRef = useRef(null);
 
-  function addTodo({ title, courseId, dueDate, startTime, endTime, priority }) {
+  function addTodo({ type, title, courseId, dueDate, startTime, endTime, priority, description, repeatWeekly }) {
     setTodos((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
+        type: type ?? "task",
         title,
         courseId: courseId ?? courses[0]?.id ?? null,
         dueDate,
         startTime: startTime ?? null,
         endTime: endTime ?? null,
-        priority,
+        priority: priority ?? "normal",
+        description: description ?? null,
+        repeatWeekly: repeatWeekly ?? false,
         completed: false,
         createdAt: new Date().toISOString(),
       },
     ]);
+  }
+
+  function updateTodo(id, patch) {
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
   function toggleTodo(id) {
@@ -46,6 +57,7 @@ export default function App() {
 
   function deleteTodo(id) {
     setTodos((prev) => prev.filter((t) => t.id !== id));
+    setEditingItem(null);
   }
 
   function addCourse(e) {
@@ -53,6 +65,29 @@ export default function App() {
     if (!newCourseName.trim()) return;
     setCourses((prev) => [...prev, { id: crypto.randomUUID(), name: newCourseName.trim() }]);
     setNewCourseName("");
+  }
+
+  function startRenameCourse(course) {
+    setEditingCourseId(course.id);
+    setEditingCourseName(course.name);
+  }
+
+  function submitRenameCourse() {
+    if (editingCourseName.trim()) {
+      setCourses((prev) => prev.map((c) => (c.id === editingCourseId ? { ...c, name: editingCourseName.trim() } : c)));
+    }
+    setEditingCourseId(null);
+  }
+
+  function deleteCourse(id) {
+    if (courses.length <= 1) return;
+    if (!window.confirm("Delete this course? Its tasks will move to the first remaining course.")) return;
+    setCourses((prev) => {
+      const remaining = prev.filter((c) => c.id !== id);
+      const fallbackId = remaining[0]?.id ?? null;
+      setTodos((prevTodos) => prevTodos.map((t) => (t.courseId === id ? { ...t, courseId: fallbackId } : t)));
+      return remaining;
+    });
   }
 
   const visibleTodos = useMemo(() => {
@@ -94,9 +129,10 @@ export default function App() {
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
+        else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen,
+    !settingsOpen && !editingItem,
   );
 
   const commands = useMemo(
@@ -151,24 +187,60 @@ export default function App() {
           ))}
         </div>
 
-        <form onSubmit={addCourse} className="flex items-center gap-1.5">
-          <input
-            value={newCourseName}
-            onChange={(e) => setNewCourseName(e.target.value)}
-            placeholder="New course..."
-            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-course-500"
-          />
-          <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-course-600">
-            Add
-          </button>
-        </form>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <p className="mb-1.5 text-xs font-medium text-slate-500">Courses</p>
+          <ul className="space-y-1">
+            {courses.map((c) => (
+              <li key={c.id} className="group flex items-center gap-1.5">
+                {editingCourseId === c.id ? (
+                  <input
+                    autoFocus
+                    value={editingCourseName}
+                    onChange={(e) => setEditingCourseName(e.target.value)}
+                    onBlur={submitRenameCourse}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitRenameCourse();
+                      if (e.key === "Escape") setEditingCourseId(null);
+                    }}
+                    className="min-w-0 flex-1 rounded border border-course-400 px-1.5 py-0.5 text-sm outline-none"
+                  />
+                ) : (
+                  <button onClick={() => startRenameCourse(c)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700 hover:text-course-600">
+                    {c.name}
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteCourse(c.id)}
+                  disabled={courses.length <= 1}
+                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:text-danger-500 group-hover:opacity-100 disabled:opacity-0"
+                  aria-label="Delete course"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <form onSubmit={addCourse} className="mt-2 flex items-center gap-1.5">
+            <input
+              value={newCourseName}
+              onChange={(e) => setNewCourseName(e.target.value)}
+              placeholder="New course..."
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none focus:border-course-500"
+            />
+            <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-course-600">
+              Add
+            </button>
+          </form>
+        </div>
+
+        <div className="flex-1" />
 
         <button
           onClick={() => setPaletteOpen(true)}
           title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
-          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:border-slate-300"
+          className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-400 hover:border-slate-300"
         >
-          Commands <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">{comboLabel(keymap.openPalette)}</span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Commands
         </button>
       </aside>
 
@@ -187,6 +259,7 @@ export default function App() {
                 course={courseMap[todo.courseId]}
                 onToggle={toggleTodo}
                 onDelete={deleteTodo}
+                onEdit={setEditingItem}
                 selected={todo.id === selectedId}
               />
             ))}
@@ -195,14 +268,24 @@ export default function App() {
           <CalendarView
             todos={todos}
             courseMap={courseMap}
-            onToggle={toggleTodo}
-            onQuickAdd={(title, dueDate) => addTodo({ title, courseId: null, dueDate, priority: "normal" })}
+            onEdit={setEditingItem}
+            onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })}
           />
         )}
       </main>
 
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
+      <EditItemModal
+        item={editingItem}
+        courses={courses}
+        onSave={(id, patch) => {
+          updateTodo(id, patch);
+          setEditingItem(null);
+        }}
+        onDelete={deleteTodo}
+        onClose={() => setEditingItem(null)}
+      />
     </div>
   );
 }

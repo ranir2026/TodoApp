@@ -1,38 +1,61 @@
 import { forwardRef, useState } from "react";
 
 const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
+  const [type, setType] = useState("task");
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [dueDate, setDueDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [priority, setPriority] = useState("normal");
+  const [description, setDescription] = useState("");
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
 
   function handleSubmit(e) {
     e.preventDefault();
     if (!title.trim()) return;
     onAdd({
+      type,
       title: title.trim(),
       courseId: courseId || courses[0]?.id || null,
       dueDate: dueDate || null,
       startTime: startTime || null,
       endTime: endTime || null,
       priority,
+      description: description.trim() || null,
+      repeatWeekly,
     });
     setTitle("");
     setDueDate("");
     setStartTime("");
     setEndTime("");
     setPriority("normal");
+    setDescription("");
+    setRepeatWeekly(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        {["task", "event"].map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setType(t)}
+            className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+              type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       <input
         ref={ref}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Add a task..."
+        placeholder={type === "event" ? "Add an event..." : "Add a task..."}
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
       />
       <select
@@ -67,6 +90,17 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
           className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
         />
       </div>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Notes (optional)"
+        rows={2}
+        className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
+      />
+      <label className="flex items-center gap-1.5 text-xs text-slate-500">
+        <input type="checkbox" checked={repeatWeekly} onChange={(e) => setRepeatWeekly(e.target.checked)} className="rounded" />
+        Repeats weekly
+      </label>
       <div className="flex items-center gap-1.5">
         <button
           type="button"

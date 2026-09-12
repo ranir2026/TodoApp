@@ -20,9 +20,10 @@ function dueLabel(dueDate) {
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
-export default function TodoItem({ todo, course, onToggle, onDelete, selected }) {
+export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, selected }) {
   const due = dueLabel(todo.dueDate);
   const timeRange = timeRangeLabel(todo);
+  const isEvent = todo.type === "event";
 
   return (
     <li
@@ -48,15 +49,21 @@ export default function TodoItem({ todo, course, onToggle, onDelete, selected })
         )}
       </button>
 
-      <div className="min-w-0 flex-1">
+      <button onClick={() => onEdit(todo)} className="min-w-0 flex-1 text-left">
         <p className={`text-sm font-medium ${todo.completed ? "text-slate-400 line-through" : "text-slate-800"}`}>
           {todo.title}
+          {todo.description && (
+            <svg viewBox="0 0 20 20" fill="currentColor" className="ml-1.5 inline-block h-3 w-3 -translate-y-px text-slate-300">
+              <path fillRule="evenodd" d="M2 4.75A2.75 2.75 0 014.75 2h10.5A2.75 2.75 0 0118 4.75v10.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25V4.75zM5 6.25a.75.75 0 01.75-.75h8.5a.75.75 0 010 1.5h-8.5A.75.75 0 015 6.25zm0 3.5a.75.75 0 01.75-.75h8.5a.75.75 0 010 1.5h-8.5A.75.75 0 015 9.75zm0 3.5a.75.75 0 01.75-.75h4.5a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+            </svg>
+          )}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {isEvent && (
+            <span className="rounded-full bg-course-100 px-2 py-0.5 text-xs font-medium text-course-700">Event</span>
+          )}
           {course && (
-            <span className="rounded-full bg-course-100 px-2 py-0.5 text-xs font-medium text-course-700">
-              {course.name}
-            </span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{course.name}</span>
           )}
           {todo.priority === "urgent" && (
             <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
@@ -69,8 +76,11 @@ export default function TodoItem({ todo, course, onToggle, onDelete, selected })
           {timeRange && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
           )}
+          {todo.repeatWeekly && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">↻ Weekly</span>
+          )}
         </div>
-      </div>
+      </button>
 
       <button
         onClick={() => onDelete(todo.id)}

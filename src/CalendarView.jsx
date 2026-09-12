@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { expandRange } from "./occurrences";
 
 const HOUR_HEIGHT = 44;
 
@@ -23,22 +24,35 @@ function formatHour(hour) {
   return d.toLocaleTimeString(undefined, { hour: "numeric" });
 }
 
-function groupByDay(todos) {
-  const map = {};
-  for (const t of todos) {
-    if (!t.dueDate) continue;
-    const key = t.dueDate.slice(0, 10);
-    (map[key] ??= []).push(t);
-  }
-  return map;
-}
-
 function chipClass(t) {
   if (t.completed) return "bg-slate-100 text-slate-400 line-through";
+  if (t.type === "event") return "bg-course-100 text-course-700";
   return t.priority === "urgent" ? "bg-urgent-100 text-urgent-700" : "bg-todo-100 text-todo-700";
 }
 
-export default function CalendarView({ todos, courseMap, onToggle, onQuickAdd }) {
+function weekDays(cursor) {
+  const start = startOfWeek(cursor);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+function monthCells(cursor) {
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const list = [];
+  for (let i = 0; i < startOffset; i++) list.push(null);
+  for (let day = 1; day <= daysInMonth; day++) list.push(new Date(year, month, day));
+  while (list.length % 7 !== 0) list.push(null);
+  return list;
+}
+
+export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
   const [mode, setMode] = useState("month");
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -52,7 +66,13 @@ export default function CalendarView({ todos, courseMap, onToggle, onQuickAdd })
     return () => clearInterval(id);
   }, []);
 
-  const todosByDay = useMemo(() => groupByDay(todos), [todos]);
+  const cells = useMemo(() => monthCells(cursor), [cursor]);
+  const days = mode === "week" ? weekDays(cursor) : mode === "day" ? [cursor] : null;
+
+  const rangeStart = mode === "month" ? cells.find(Boolean) : days[0];
+  const rangeEnd = mode === "month" ? [...cells].reverse().find(Boolean) : days[days.length - 1];
+
+  const occByDay = useMemo(() => expandRange(todos, rangeStart, rangeEnd), [todos, rangeStart, rangeEnd]);
 
   function shift(delta) {
     setCursor((c) => {
@@ -111,40 +131,18 @@ export default function CalendarView({ todos, courseMap, onToggle, onQuickAdd })
 
       <div className="min-h-0 flex-1">
         {mode === "month" && (
-          <MonthGrid cursor={cursor} todosByDay={todosByDay} courseMap={courseMap} onToggle={onToggle} onQuickAdd={onQuickAdd} />
+          <MonthGrid cells={cells} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} />
         )}
-        {mode === "week" && <TimeGrid days={weekDays(cursor)} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
-        {mode === "day" && <TimeGrid days={[cursor]} todosByDay={todosByDay} onToggle={onToggle} now={now} />}
+        {mode !== "month" && <TimeGrid days={days} occByDay={occByDay} onEdit={onEdit} now={now} />}
       </div>
     </div>
   );
 }
 
-function weekDays(cursor) {
-  const start = startOfWeek(cursor);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-}
-
-function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
+function MonthGrid({ cells, occByDay, courseMap, onEdit, onQuickAdd }) {
   const [addingKey, setAddingKey] = useState(null);
   const [draftTitle, setDraftTitle] = useState("");
-
-  const cells = useMemo(() => {
-    const year = cursor.getFullYear();
-    const month = cursor.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const startOffset = firstDay.getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const list = [];
-    for (let i = 0; i < startOffset; i++) list.push(null);
-    for (let day = 1; day <= daysInMonth; day++) list.push(new Date(year, month, day));
-    return list;
-  }, [cursor]);
-
+  const rows = cells.length / 7;
   const todayKey = toDateKey(new Date());
 
   function submitQuickAdd(key) {
@@ -154,47 +152,47 @@ function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
   }
 
   return (
-    <>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
+    <div className="flex h-full flex-col">
+      <div className="grid shrink-0 grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="py-1">{d}</div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="mt-1 grid flex-1 grid-cols-7 gap-1" style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
-          const dayTodos = todosByDay[key] || [];
+          const dayItems = occByDay[key] || [];
           const isToday = key === todayKey;
           const isAdding = addingKey === key;
 
           return (
             <div
               key={key}
-              className={`min-h-[68px] rounded-lg border p-1.5 text-left align-top ${
+              className={`flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex shrink-0 items-center justify-between">
                 <span className={`text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
                 <button onClick={() => setAddingKey(isAdding ? null : key)} className="rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
                   +
                 </button>
               </div>
 
-              <div className="mt-1 space-y-0.5">
-                {dayTodos.slice(0, 3).map((t) => (
+              <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+                {dayItems.slice(0, 4).map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => onToggle(t.id)}
+                    onClick={() => onEdit(t)}
                     className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
                     title={courseMap[t.courseId]?.name ? `${t.title} (${courseMap[t.courseId].name})` : t.title}
                   >
                     {t.title}
                   </button>
                 ))}
-                {dayTodos.length > 3 && <p className="px-1 text-[10px] text-slate-400">+{dayTodos.length - 3} more</p>}
+                {dayItems.length > 4 && <p className="px-1 text-[10px] text-slate-400">+{dayItems.length - 4} more</p>}
               </div>
 
               {isAdding && (
@@ -208,23 +206,34 @@ function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
                   }}
                   onBlur={() => submitQuickAdd(key)}
                   placeholder="Task..."
-                  className="mt-1 w-full rounded border border-todo-300 px-1 py-0.5 text-[11px] outline-none"
+                  className="mt-1 w-full shrink-0 rounded border border-todo-300 px-1 py-0.5 text-[11px] outline-none"
                 />
               )}
             </div>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
 
-function TimeGrid({ days, todosByDay, onToggle, now }) {
+function TimeGrid({ days, occByDay, onEdit, now }) {
   const todayKey = toDateKey(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const scrollAnchorRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollAnchorRef.current && containerRef.current) {
+      scrollAnchorRef.current.scrollIntoView({ block: "center" });
+    } else if (containerRef.current) {
+      containerRef.current.scrollTop = Math.max(0, (9 / 24) * containerRef.current.scrollHeight - 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days[0]?.toDateString()]);
 
   return (
-    <div className="h-full overflow-auto">
+    <div ref={containerRef} className="h-full overflow-auto">
       <div className="flex" style={{ minWidth: days.length > 1 ? 640 : 320 }}>
         <div className="w-14 shrink-0 pt-6 text-right text-[10px] text-slate-400">
           {Array.from({ length: 24 }, (_, h) => (
@@ -236,8 +245,8 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
 
         {days.map((day) => {
           const key = toDateKey(day);
-          const dayTodos = (todosByDay[key] || []).filter((t) => t.startTime);
-          const allDayTodos = (todosByDay[key] || []).filter((t) => !t.startTime);
+          const dayItems = (occByDay[key] || []).filter((t) => t.startTime);
+          const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime);
           const isToday = key === todayKey;
 
           return (
@@ -248,10 +257,10 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
                 </span>
               </div>
 
-              {allDayTodos.length > 0 && (
+              {allDayItems.length > 0 && (
                 <div className="space-y-0.5 border-b border-slate-100 p-1">
-                  {allDayTodos.map((t) => (
-                    <button key={t.id} onClick={() => onToggle(t.id)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}>
+                  {allDayItems.map((t) => (
+                    <button key={t.id} onClick={() => onEdit(t)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}>
                       {t.title}
                     </button>
                   ))}
@@ -263,7 +272,7 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
                   <div key={h} className="border-b border-slate-50" style={{ height: HOUR_HEIGHT }} />
                 ))}
 
-                {dayTodos.map((t) => {
+                {dayItems.map((t) => {
                   const start = timeToMinutes(t.startTime);
                   const end = t.endTime ? timeToMinutes(t.endTime) : start + 30;
                   const top = (start / 60) * HOUR_HEIGHT;
@@ -271,7 +280,7 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
                   return (
                     <button
                       key={t.id}
-                      onClick={() => onToggle(t.id)}
+                      onClick={() => onEdit(t)}
                       className={`absolute left-0.5 right-0.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(t)}`}
                       style={{ top, height }}
                       title={t.title}
@@ -283,6 +292,7 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
 
                 {isToday && (
                   <div
+                    ref={scrollAnchorRef}
                     className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
                     style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
                   >
