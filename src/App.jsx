@@ -10,7 +10,8 @@ import EditItemModal from "./EditItemModal";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 
-const DEFAULT_COURSES = [{ id: "c1", name: "General" }];
+const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
+const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
 
 export default function App() {
   const [courses, setCourses] = useLocalStorage("courses", DEFAULT_COURSES);
@@ -64,8 +65,15 @@ export default function App() {
   function addCourse(e) {
     e.preventDefault();
     if (!newCourseName.trim()) return;
-    setCourses((prev) => [...prev, { id: crypto.randomUUID(), name: newCourseName.trim() }]);
+    setCourses((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: newCourseName.trim(), color: COURSE_COLOR_PALETTE[prev.length % COURSE_COLOR_PALETTE.length] },
+    ]);
     setNewCourseName("");
+  }
+
+  function updateCourseColor(id, color) {
+    setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
   }
 
   function startRenameCourse(course) {
@@ -92,7 +100,6 @@ export default function App() {
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
-  const courseOrder = useMemo(() => Object.fromEntries(courses.map((c, i) => [c.id, i])), [courses]);
 
   const visibleTasks = useMemo(() => {
     const list = todos.filter((t) => {
@@ -102,21 +109,24 @@ export default function App() {
       return true;
     });
     return [...list].sort((a, b) => {
-      if (sortBy === "course") {
-        const diff = (courseOrder[a.courseId] ?? 99) - (courseOrder[b.courseId] ?? 99);
-        if (diff !== 0) return diff;
-      }
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [todos, filter, sortBy, courseOrder]);
+  }, [todos, filter]);
+
+  const groupedTasks = useMemo(() => {
+    if (sortBy !== "course") return null;
+    return courses.map((c) => ({ course: c, tasks: visibleTasks.filter((t) => t.courseId === c.id) })).filter((g) => g.tasks.length > 0);
+  }, [sortBy, courses, visibleTasks]);
+
+  const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
 
   function moveSelection(delta) {
-    if (view !== "list" || visibleTasks.length === 0) return;
-    const idx = visibleTasks.findIndex((t) => t.id === selectedId);
-    const nextIdx = idx === -1 ? 0 : Math.min(Math.max(idx + delta, 0), visibleTasks.length - 1);
-    setSelectedId(visibleTasks[nextIdx].id);
+    if (view !== "list" || orderedTasks.length === 0) return;
+    const idx = orderedTasks.findIndex((t) => t.id === selectedId);
+    const nextIdx = idx === -1 ? 0 : Math.min(Math.max(idx + delta, 0), orderedTasks.length - 1);
+    setSelectedId(orderedTasks[nextIdx].id);
   }
 
   useGlobalKeybinds(
@@ -164,45 +174,20 @@ export default function App() {
 
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {["active", "completed", "all"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span className="shrink-0 font-medium">Sort by</span>
-          <div className="flex flex-1 gap-1 rounded-lg bg-slate-100 p-1">
-            {[
-              { id: "date", label: "Date" },
-              { id: "course", label: "Course" },
-            ].map((o) => (
-              <button
-                key={o.id}
-                onClick={() => setSortBy(o.id)}
-                className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                  sortBy === o.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <p className="mb-1.5 text-xs font-medium text-slate-500">Courses</p>
           <ul className="space-y-1">
             {courses.map((c) => (
               <li key={c.id} className="group flex items-center gap-1.5">
+                <label className="relative h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-inset ring-black/10" style={{ backgroundColor: c.color || "#94a3b8" }}>
+                  <input
+                    type="color"
+                    value={c.color || "#94a3b8"}
+                    onChange={(e) => updateCourseColor(c.id, e.target.value)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label={`${c.name} color`}
+                  />
+                </label>
                 {editingCourseId === c.id ? (
                   <input
                     autoFocus
@@ -247,24 +232,71 @@ export default function App() {
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         {view === "list" ? (
-          <ul className="space-y-2 pb-2">
-            {visibleTasks.length === 0 && (
-              <li className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
+          <>
+            <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+              <span className="shrink-0 font-medium">Sort by</span>
+              <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+                {[
+                  { id: "date", label: "Date" },
+                  { id: "course", label: "Course" },
+                ].map((o) => (
+                  <button
+                    key={o.id}
+                    onClick={() => setSortBy(o.id)}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      sortBy === o.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {orderedTasks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
                 No tasks here.
-              </li>
+              </div>
+            ) : groupedTasks ? (
+              <div className="space-y-4 pb-2">
+                {groupedTasks.map((g) => (
+                  <div key={g.course.id}>
+                    <div className="mb-1.5 flex items-center gap-1.5 px-0.5">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: g.course.color }} />
+                      <h3 className="text-xs font-semibold tracking-wide text-slate-400 uppercase">{g.course.name}</h3>
+                    </div>
+                    <ul className="space-y-2">
+                      {g.tasks.map((todo) => (
+                        <TodoItem
+                          key={todo.id}
+                          todo={todo}
+                          course={courseMap[todo.courseId]}
+                          onToggle={toggleTodo}
+                          onDelete={deleteTodo}
+                          onEdit={setEditingItem}
+                          selected={todo.id === selectedId}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ul className="space-y-2 pb-2">
+                {visibleTasks.map((todo) => (
+                  <TodoItem
+                    key={todo.id}
+                    todo={todo}
+                    course={courseMap[todo.courseId]}
+                    onToggle={toggleTodo}
+                    onDelete={deleteTodo}
+                    onEdit={setEditingItem}
+                    selected={todo.id === selectedId}
+                  />
+                ))}
+              </ul>
             )}
-            {visibleTasks.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                course={courseMap[todo.courseId]}
-                onToggle={toggleTodo}
-                onDelete={deleteTodo}
-                onEdit={setEditingItem}
-                selected={todo.id === selectedId}
-              />
-            ))}
-          </ul>
+          </>
         ) : (
           <CalendarView
             todos={todos}
@@ -277,6 +309,20 @@ export default function App() {
 
       <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pl-1">
         <StatsBar todos={todos} />
+
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+          {["active", "completed", "all"].map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+                filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
 
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
           {["list", "calendar"].map((v) => (

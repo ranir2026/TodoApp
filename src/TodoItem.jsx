@@ -63,7 +63,12 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
             <span className="rounded-full bg-course-100 px-2 py-0.5 text-xs font-medium text-course-700">Event</span>
           )}
           {course && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{course.name}</span>
+            <span
+              className="rounded-full px-2 py-0.5 text-xs font-medium"
+              style={{ backgroundColor: `${course.color ?? "#94a3b8"}1f`, color: course.color ?? "#64748b" }}
+            >
+              {course.name}
+            </span>
           )}
           {todo.priority === "urgent" && (
             <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
