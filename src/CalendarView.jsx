@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const HOUR_HEIGHT = 48;
 
@@ -170,7 +170,7 @@ function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
           return (
             <div
               key={key}
-              className={`min-h-[88px] rounded-lg border p-1.5 text-left align-top ${
+              className={`min-h-[68px] rounded-lg border p-1.5 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
@@ -220,6 +220,12 @@ function MonthGrid({ cursor, todosByDay, courseMap, onToggle, onQuickAdd }) {
 function TimeGrid({ days, todosByDay, onToggle, now }) {
   const todayKey = toDateKey(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days[0]?.toDateString()]);
 
   return (
     <div className="overflow-x-auto">
@@ -281,6 +287,7 @@ function TimeGrid({ days, todosByDay, onToggle, now }) {
 
                 {isToday && (
                   <div
+                    ref={scrollRef}
                     className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
                     style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}
                   >

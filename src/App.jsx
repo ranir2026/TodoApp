@@ -112,27 +112,27 @@ export default function App() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Todo</h1>
-          <p className="text-sm text-slate-500">Stay on top of your coursework.</p>
+    <div className="mx-auto flex h-screen max-w-6xl flex-col overflow-hidden px-4 py-3 sm:px-6">
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
+          <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
         </div>
         <StatsBar todos={todos} />
       </header>
 
-      <section className="mb-6">
+      <section className="mb-2">
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
       </section>
 
-      <section className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
             {["active", "completed", "all"].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors ${
                   filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
@@ -145,7 +145,7 @@ export default function App() {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors ${
                   view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
@@ -161,52 +161,50 @@ export default function App() {
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
               placeholder="New course..."
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-course-500"
+              className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none focus:border-course-500"
             />
-            <button type="submit" className="rounded-lg bg-course-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-course-600">
+            <button type="submit" className="rounded-lg bg-course-500 px-3 py-1 text-sm font-medium text-white hover:bg-course-600">
               Add course
             </button>
           </form>
           <button
             onClick={() => setPaletteOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:border-slate-300"
+            title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1 text-sm text-slate-500 hover:border-slate-300"
           >
             Commands <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">{comboLabel(keymap.openPalette)}</span>
           </button>
         </div>
       </section>
 
-      {view === "list" ? (
-        <ul className="space-y-2">
-          {visibleTodos.length === 0 && (
-            <li className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
-              No tasks here.
-            </li>
-          )}
-          {visibleTodos.map((todo) => (
-            <TodoItem
-              key={todo.id}
-              todo={todo}
-              course={courseMap[todo.courseId]}
-              onToggle={toggleTodo}
-              onDelete={deleteTodo}
-              selected={todo.id === selectedId}
-            />
-          ))}
-        </ul>
-      ) : (
-        <CalendarView
-          todos={todos}
-          courseMap={courseMap}
-          onToggle={toggleTodo}
-          onQuickAdd={(title, dueDate) => addTodo({ title, courseId: null, dueDate, priority: "normal" })}
-        />
-      )}
-
-      <p className="mt-6 text-xs text-slate-400">
-        Press <span className="font-mono">{comboLabel(keymap.openPalette)}</span> for commands ·{" "}
-        <span className="font-mono">{comboLabel(keymap.openSettings)}</span> to edit shortcuts
-      </p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {view === "list" ? (
+          <ul className="space-y-2 pb-2">
+            {visibleTodos.length === 0 && (
+              <li className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
+                No tasks here.
+              </li>
+            )}
+            {visibleTodos.map((todo) => (
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                course={courseMap[todo.courseId]}
+                onToggle={toggleTodo}
+                onDelete={deleteTodo}
+                selected={todo.id === selectedId}
+              />
+            ))}
+          </ul>
+        ) : (
+          <CalendarView
+            todos={todos}
+            courseMap={courseMap}
+            onToggle={toggleTodo}
+            onQuickAdd={(title, dueDate) => addTodo({ title, courseId: null, dueDate, priority: "normal" })}
+          />
+        )}
+      </div>
 
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />

@@ -28,30 +28,23 @@ export default function StatsBar({ todos }) {
   });
 
   return (
-    <div className="flex flex-wrap gap-3">
-      <div className="min-w-[160px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs font-medium text-slate-500">Weekly completion</p>
-        <p className="mt-1 text-2xl font-bold text-slate-900">{completionPct}%</p>
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-todo-500 transition-all duration-500"
-            style={{ width: `${completionPct}%` }}
-          />
+    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-medium whitespace-nowrap text-slate-500">Week</p>
+        <p className="text-base font-bold text-slate-900">{completionPct}%</p>
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-todo-500 transition-all duration-500" style={{ width: `${completionPct}%` }} />
         </div>
       </div>
-
-      <div className="min-w-[140px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs font-medium text-slate-500">Due soon</p>
-        <p className="mt-1 text-2xl font-bold text-urgent-600">{dueSoon.length}</p>
-        <p className="mt-2 text-xs text-slate-400">within 48 hours</p>
+      <div className="h-6 w-px bg-slate-100" />
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-medium whitespace-nowrap text-slate-500">Due soon</p>
+        <p className="text-base font-bold text-urgent-600">{dueSoon.length}</p>
       </div>
-
-      <div className="min-w-[140px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs font-medium text-slate-500">Overdue</p>
-        <p className={`mt-1 text-2xl font-bold ${overdue.length ? "text-danger-600" : "text-slate-300"}`}>
-          {overdue.length}
-        </p>
-        <p className="mt-2 text-xs text-slate-400">needs attention</p>
+      <div className="h-6 w-px bg-slate-100" />
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-medium whitespace-nowrap text-slate-500">Overdue</p>
+        <p className={`text-base font-bold ${overdue.length ? "text-danger-600" : "text-slate-300"}`}>{overdue.length}</p>
       </div>
     </div>
   );
