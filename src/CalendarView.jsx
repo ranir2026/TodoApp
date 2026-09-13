@@ -306,10 +306,10 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now }) {
           ))}
         </div>
 
-        <div className="flex-1">
-          <div className="sticky top-0 z-10 h-6 border-b border-slate-100 bg-white text-center text-xs font-medium">
+        <div className="min-w-0 flex-1">
+          <div className="sticky top-0 z-10 grid h-6 grid-cols-7 border-b border-slate-100 bg-white text-center text-xs font-medium">
             {days.map((day) => (
-              <span key={toDateKey(day)} className="inline-block w-[14.2857%] text-slate-500">
+              <span key={toDateKey(day)} className="min-w-0 truncate text-slate-500">
                 {day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
               </span>
             ))}
@@ -341,7 +341,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now }) {
           const isToday = key === todayKey;
 
           return (
-            <div key={key} className="flex-1 border-l border-slate-100">
+            <div key={key} className="min-w-0 flex-1 border-l border-slate-100">
               {allDayItems.length > 0 && (
                 <div className="sticky top-6 z-10 space-y-0.5 border-b border-slate-100 bg-white p-1">
                   {allDayItems.map((t) => (
