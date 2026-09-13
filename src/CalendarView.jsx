@@ -76,8 +76,7 @@ function getMultiDaySegments(items, dates) {
     .filter(Boolean);
 }
 
-export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
-  const [mode, setMode] = useState("day");
+export default function CalendarView({ todos, courseMap, mode, onModeChange, onEdit, onQuickAdd }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -142,7 +141,7 @@ export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
           {["month", "week", "day"].map((m) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
+              onClick={() => onModeChange(m)}
               className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
                 mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
               }`}

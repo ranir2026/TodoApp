@@ -14,6 +14,7 @@ import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
+import EmailConfirmedScreen from "./EmailConfirmedScreen";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
@@ -29,6 +30,7 @@ export default function App() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date"); // date | course
   const [view, setView] = useState("list"); // list | calendar
+  const [calendarMode, setCalendarMode] = useState("day");
   const [newCourseName, setNewCourseName] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
   const [editingCourseName, setEditingCourseName] = useState("");
@@ -39,6 +41,10 @@ export default function App() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [emailConfirmed, setEmailConfirmed] = useState(() => {
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    return hashParams.get("type") === "signup";
+  });
   const [syncError, setSyncError] = useState("");
   const [undoAction, setUndoAction] = useState(null);
   const undoTimerRef = useRef(null);
@@ -46,6 +52,7 @@ export default function App() {
   const now = new Date();
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const resolvedKeymap = useMemo(() => ({ ...DEFAULT_KEYMAP, ...keymap }), [keymap]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -197,7 +204,7 @@ export default function App() {
   }
 
   useGlobalKeybinds(
-    keymap,
+    resolvedKeymap,
     {
       openPalette: () => setPaletteOpen((v) => !v),
       openSettings: () => setSettingsOpen(true),
@@ -211,6 +218,9 @@ export default function App() {
       filterActive: () => setFilter("active"),
       filterCompleted: () => setFilter("completed"),
       filterAll: () => setFilter("all"),
+      calendarMonth: () => { setView("calendar"); setCalendarMode("month"); },
+      calendarWeek: () => { setView("calendar"); setCalendarMode("week"); },
+      calendarDay: () => { setView("calendar"); setCalendarMode("day"); },
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -229,6 +239,9 @@ export default function App() {
       { id: "filterActive", label: "Show active tasks", run: () => setFilter("active") },
       { id: "filterCompleted", label: "Show completed tasks", run: () => setFilter("completed") },
       { id: "filterAll", label: "Show all tasks", run: () => setFilter("all") },
+      { id: "calendarMonth", label: "Show month calendar", run: () => { setView("calendar"); setCalendarMode("month"); } },
+      { id: "calendarWeek", label: "Show week calendar", run: () => { setView("calendar"); setCalendarMode("week"); } },
+      { id: "calendarDay", label: "Show day calendar", run: () => { setView("calendar"); setCalendarMode("day"); } },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
     ],
     [],
@@ -236,6 +249,16 @@ export default function App() {
 
   if (isSupabaseConfigured && authLoading) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Loading your account...</div>;
+  }
+  if (isSupabaseConfigured && emailConfirmed) {
+    return (
+      <EmailConfirmedScreen
+        onContinue={() => {
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          setEmailConfirmed(false);
+        }}
+      />
+    );
   }
   if (isSupabaseConfigured && !session) return <AuthScreen />;
 
@@ -252,7 +275,7 @@ export default function App() {
           className="flex items-center justify-between rounded-xl border border-todo-200 bg-todo-50 px-3 py-2 text-sm font-medium text-todo-700 hover:border-todo-300"
         >
           Quick add
-          <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-todo-600">{comboLabel(keymap.quickAdd)}</span>
+          <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-todo-600">{comboLabel(resolvedKeymap.quickAdd)}</span>
         </button>
 
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
@@ -399,6 +422,8 @@ export default function App() {
           <CalendarView
             todos={todos}
             courseMap={courseMap}
+            mode={calendarMode}
+            onModeChange={setCalendarMode}
             onEdit={setEditingItem}
             onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })}
           />
@@ -452,10 +477,10 @@ export default function App() {
 
       <button
         onClick={() => setPaletteOpen(true)}
-        title={`Open shortcuts (${comboLabel(keymap.openSettings)} to edit)`}
+        title={`Open shortcuts (${comboLabel(resolvedKeymap.openSettings)} to edit)`}
         className="fixed bottom-4 right-4 z-40 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-400 shadow-sm hover:border-slate-300"
       >
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Cmds
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span> Cmds
       </button>
 
       {undoAction && (
@@ -472,8 +497,8 @@ export default function App() {
         </div>
       )}
 
-      <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
-      <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
+      <CommandPalette open={paletteOpen} commands={commands} keymap={resolvedKeymap} onClose={() => setPaletteOpen(false)} />
+      <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <EditItemModal
         item={editingItem}
         courses={courses}

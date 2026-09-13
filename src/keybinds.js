@@ -11,6 +11,9 @@ export const DEFAULT_KEYMAP = {
   filterActive: "1",
   filterCompleted: "2",
   filterAll: "3",
+  calendarMonth: "alt+1",
+  calendarWeek: "alt+2",
+  calendarDay: "alt+3",
 };
 
 export const ACTION_LABELS = {
@@ -26,6 +29,9 @@ export const ACTION_LABELS = {
   filterActive: "Show active tasks",
   filterCompleted: "Show completed tasks",
   filterAll: "Show all tasks",
+  calendarMonth: "Show month calendar",
+  calendarWeek: "Show week calendar",
+  calendarDay: "Show day calendar",
 };
 
 export function normalizeCombo(e) {
