@@ -8,6 +8,7 @@ export const SUGGESTION_KEYWORDS = [
   { insert: "tuesday", hint: "due next Tuesday" },
   { insert: "wednesday", hint: "due next Wednesday" },
   { insert: "thursday", hint: "due next Thursday" },
+  { insert: "thurs", hint: "due next Thursday" },
   { insert: "friday", hint: "due next Friday" },
   { insert: "saturday", hint: "due next Saturday" },
   { insert: "sunday", hint: "due next Sunday" },
@@ -66,7 +67,7 @@ function extractDate(text) {
     return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
-  const weekdayPattern = /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
+  const weekdayPattern = /\b(sunday|monday|tuesday|wednesday|thursday|thurs|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
   const weekdayMatches = [...text.matchAll(weekdayPattern)];
   if (weekdayMatches.length) {
     const repeatDays = [...new Set(weekdayMatches.map((match) => match[1].slice(0, 3).toLowerCase()))];
