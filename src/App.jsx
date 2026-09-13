@@ -11,6 +11,7 @@ import QuickAddModal from "./QuickAddModal";
 import ActivityHeatmap from "./ActivityHeatmap";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
+import { parseDateKey } from "./occurrences";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
@@ -18,6 +19,16 @@ import EmailConfirmedScreen from "./EmailConfirmedScreen";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
+
+function dateGroupLabel(dateKey, today) {
+  if (dateKey === "undated") return "No date";
+  const date = parseDateKey(dateKey);
+  const daysAway = Math.round((date - today) / 86400000);
+  if (daysAway === 0) return "Today";
+  if (daysAway === 1) return "Tomorrow";
+  if (daysAway === -1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
 
 export default function App() {
   const [courses, setCourses] = useLocalStorage("courses", DEFAULT_COURSES);
@@ -207,6 +218,19 @@ export default function App() {
     if (sortBy !== "course") return null;
     return courses.map((c) => ({ course: c, tasks: visibleTasks.filter((t) => t.courseId === c.id) })).filter((g) => g.tasks.length > 0);
   }, [sortBy, courses, visibleTasks]);
+
+  const groupedDates = useMemo(() => {
+    if (sortBy !== "date") return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const groups = new Map();
+    for (const task of visibleTasks) {
+      const key = task.dueDate ?? "undated";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(task);
+    }
+    return [...groups.entries()].map(([key, tasks]) => ({ key, label: dateGroupLabel(key, today), tasks }));
+  }, [sortBy, visibleTasks]);
 
   const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
 
@@ -418,6 +442,27 @@ export default function App() {
                     </div>
                     <ul className="space-y-2">
                       {g.tasks.map((todo) => (
+                        <TodoItem
+                          key={todo.id}
+                          todo={todo}
+                          course={courseMap[todo.courseId]}
+                          onToggle={toggleTodo}
+                          onDelete={deleteTodo}
+                          onEdit={setEditingItem}
+                          selected={todo.id === selectedId}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : groupedDates ? (
+              <div className="space-y-4 pb-2">
+                {groupedDates.map((group) => (
+                  <div key={group.key}>
+                    <h3 className="mb-1.5 px-0.5 text-xs font-semibold tracking-wide text-slate-400 uppercase">{group.label}</h3>
+                    <ul className="space-y-2">
+                      {group.tasks.map((todo) => (
                         <TodoItem
                           key={todo.id}
                           todo={todo}

@@ -18,7 +18,7 @@ export default function ActivityHeatmap({ todos }) {
 
   const countsByDay = {};
   for (const t of todos) {
-    if (!t.completed || !t.completedAt) continue;
+    if (!t.completed || t.type === "event" || !t.completedAt) continue;
     const key = toDateKey(new Date(t.completedAt));
     countsByDay[key] = (countsByDay[key] || 0) + 1;
   }
@@ -46,13 +46,12 @@ export default function ActivityHeatmap({ todos }) {
             {days.map((date, di) => {
               const key = toDateKey(date);
               const isFuture = date > today;
-              const isToday = key === toDateKey(today);
               const count = countsByDay[key] || 0;
               return (
                 <div
                   key={di}
                   title={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${count} completed`}
-                  className={`h-2 w-2 rounded-sm ${isToday ? "bg-todo-500" : isFuture ? "bg-transparent" : levelClass(count)}`}
+                  className={`h-2 w-2 rounded-sm ${isFuture ? "bg-transparent" : levelClass(count)}`}
                 />
               );
             })}
