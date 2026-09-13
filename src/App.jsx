@@ -16,6 +16,7 @@ import { isSupabaseConfigured, supabase } from "./supabase";
 import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
 import EmailConfirmedScreen from "./EmailConfirmedScreen";
+import QuickLinkModal from "./QuickLinkModal";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
@@ -45,8 +46,6 @@ export default function App() {
   const [view, setView] = useState("list"); // list | calendar
   const [calendarMode, setCalendarMode] = useState("day");
   const [newCourseName, setNewCourseName] = useState("");
-  const [newLinkLabel, setNewLinkLabel] = useState("");
-  const [newLinkUrl, setNewLinkUrl] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
   const [editingCourseName, setEditingCourseName] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -54,6 +53,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [emailConfirmed, setEmailConfirmed] = useState(() => {
@@ -169,14 +169,11 @@ export default function App() {
     setNewCourseName("");
   }
 
-  function addQuickLink(e) {
-    e.preventDefault();
-    if (!newLinkLabel.trim() || !newLinkUrl.trim()) return;
-    let url = newLinkUrl.trim();
+  function addQuickLink(label, rawUrl) {
+    if (!label.trim() || !rawUrl.trim()) return;
+    let url = rawUrl.trim();
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-    setQuickLinks((prev) => [...prev, { id: crypto.randomUUID(), label: newLinkLabel.trim(), url }]);
-    setNewLinkLabel("");
-    setNewLinkUrl("");
+    setQuickLinks((prev) => [...prev, { id: crypto.randomUUID(), label: label.trim(), url }]);
   }
 
   function updateCourseColor(id, color) {
@@ -285,6 +282,7 @@ export default function App() {
       calendarNext: () => view === "calendar" && calendarRef.current?.shift(1),
       focusSearch: () => searchInputRef.current?.focus(),
       toggleSort: () => setSortBy((current) => current === "course" ? "date" : "course"),
+      quickLink: () => setQuickLinkOpen(true),
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -310,6 +308,7 @@ export default function App() {
       { id: "calendarNext", label: "Next calendar period", run: () => view === "calendar" && calendarRef.current?.shift(1) },
       { id: "focusSearch", label: "Focus task search", run: () => searchInputRef.current?.focus() },
       { id: "toggleSort", label: "Toggle date/category sort", run: () => setSortBy((current) => current === "course" ? "date" : "course") },
+      { id: "quickLink", label: "Add quick link", run: () => setQuickLinkOpen(true) },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
     ],
     [view],
@@ -550,13 +549,7 @@ export default function App() {
               ))}
             </ul>
           )}
-          <form onSubmit={addQuickLink} className="space-y-1.5">
-            <input value={newLinkLabel} onChange={(e) => setNewLinkLabel(e.target.value)} placeholder="Link name" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-course-400" />
-            <div className="flex gap-1">
-              <input value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} placeholder="example.com" type="url" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-course-400" />
-              <button type="submit" className="rounded-lg bg-course-500 px-2 py-1 text-xs font-medium text-white hover:bg-course-600" aria-label="Add quick link">Add</button>
-            </div>
-          </form>
+          <button onClick={() => setQuickLinkOpen(true)} className="w-full rounded-lg border border-dashed border-course-300 px-2 py-1.5 text-xs font-medium text-course-600 hover:bg-course-50">Add quick link</button>
         </section>
 
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
@@ -634,6 +627,7 @@ export default function App() {
         onAdd={(item) => addTodo(item)}
         onClose={() => setQuickAddOpen(false)}
       />
+      <QuickLinkModal open={quickLinkOpen} onAdd={addQuickLink} onClose={() => setQuickLinkOpen(false)} />
     </div>
   );
 }

@@ -18,6 +18,7 @@ export const DEFAULT_KEYMAP = {
   calendarNext: "arrowright",
   focusSearch: "ctrl+space",
   toggleSort: "c",
+  quickLink: "shift+l",
 };
 
 export const ACTION_LABELS = {
@@ -40,6 +41,7 @@ export const ACTION_LABELS = {
   calendarNext: "Next calendar period",
   focusSearch: "Focus task search",
   toggleSort: "Toggle date/category sort",
+  quickLink: "Add quick link",
 };
 
 export function normalizeCombo(e) {
