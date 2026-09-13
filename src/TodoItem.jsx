@@ -12,11 +12,12 @@ function timeRangeLabel(todo) {
   return todo.endTime ? `${formatTime(todo.startTime)} – ${formatTime(todo.endTime)}` : formatTime(todo.startTime);
 }
 
-function dueLabel(dueDate) {
+function dueLabel(dueDate, isEvent) {
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
   const diffDays = Math.ceil((due - now) / 86400000);
+  if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   if (diffDays === 0) return { text: "Due today", tone: "text-urgent-600 bg-urgent-500/10" };
   if (diffDays <= 2) return { text: `Due in ${diffDays}d`, tone: "text-todo-700 bg-todo-500/10" };
@@ -24,9 +25,9 @@ function dueLabel(dueDate) {
 }
 
 export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, selected }) {
-  const due = dueLabel(todo.dueDate);
-  const timeRange = timeRangeLabel(todo);
   const isEvent = todo.type === "event";
+  const due = dueLabel(todo.dueDate, isEvent);
+  const timeRange = timeRangeLabel(todo);
 
   return (
     <li

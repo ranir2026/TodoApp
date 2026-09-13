@@ -178,6 +178,7 @@ export function parseQuickAdd(rawText, courses) {
   const dateResult = extractDate(text);
   text = dateResult.text;
   repeatDays = dateResult.repeatDays ?? [];
+  if (repeat === "none" && repeatDays.length > 1) repeat = "weekly";
 
   const title = text.replace(/\s+/g, " ").trim();
 

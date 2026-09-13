@@ -94,6 +94,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
             type="date"
             value={form.dueDate ?? ""}
             onChange={(e) => update("dueDate", e.target.value)}
+            title={form.type === "event" ? "Event date" : "Due date"}
             className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
           />
           {form.type === "event" && (
@@ -103,7 +104,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
                 type="date"
                 value={form.endDate ?? ""}
                 onChange={(e) => update("endDate", e.target.value)}
-                title="End date (optional, for multi-day events)"
+                title="Event end date (optional, for multi-day events)"
                 className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
               />
             </>

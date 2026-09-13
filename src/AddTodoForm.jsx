@@ -82,6 +82,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
+          title={type === "event" ? "Event date" : "Due date"}
           className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
         />
         {type === "event" && (
@@ -91,7 +92,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              title="End date (optional, for multi-day events)"
+              title="Event end date (optional, for multi-day events)"
               className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
             />
           </>
