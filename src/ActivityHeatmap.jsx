@@ -23,13 +23,12 @@ export default function ActivityHeatmap({ todos }) {
     countsByDay[key] = (countsByDay[key] || 0) + 1;
   }
 
-  const totalDays = WEEKS * 7;
   const start = new Date(today);
-  start.setDate(start.getDate() - (totalDays - 1) - today.getDay());
+  start.setDate(start.getDate() - today.getDay() - (WEEKS - 1) * 7);
 
   const weeks = [];
   const cursor = new Date(start);
-  for (let w = 0; w < WEEKS + 1; w++) {
+  for (let w = 0; w < WEEKS; w++) {
     const days = [];
     for (let d = 0; d < 7; d++) {
       days.push(new Date(cursor));
@@ -47,12 +46,13 @@ export default function ActivityHeatmap({ todos }) {
             {days.map((date, di) => {
               const key = toDateKey(date);
               const isFuture = date > today;
+              const isToday = key === toDateKey(today);
               const count = countsByDay[key] || 0;
               return (
                 <div
                   key={di}
                   title={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${count} completed`}
-                  className={`h-2 w-2 rounded-sm ${isFuture ? "bg-transparent" : levelClass(count)}`}
+                  className={`h-2 w-2 rounded-sm ${isToday ? "bg-todo-500" : isFuture ? "bg-transparent" : levelClass(count)}`}
                 />
               );
             })}

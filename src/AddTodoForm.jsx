@@ -12,6 +12,8 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [priority, setPriority] = useState("normal");
   const [description, setDescription] = useState("");
   const [repeat, setRepeat] = useState("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
+  const [repeatCount, setRepeatCount] = useState("");
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -27,6 +29,8 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
       priority,
       description: description.trim() || null,
       repeat,
+      repeatUntil: repeat !== "none" ? repeatUntil || null : null,
+      repeatCount: repeat !== "none" ? repeatCount || null : null,
     });
     setTitle("");
     setDueDate("");
@@ -36,6 +40,8 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
     setPriority("normal");
     setDescription("");
     setRepeat("none");
+    setRepeatUntil("");
+    setRepeatCount("");
   }
 
   return (
@@ -124,6 +130,12 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+      {repeat !== "none" && (
+        <div className="flex items-center gap-1.5">
+          <input type="date" value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+          <input type="number" min="1" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+        </div>
+      )}
       <div className="flex items-center gap-1.5">
         <button
           type="button"

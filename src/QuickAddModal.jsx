@@ -86,7 +86,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
       startTime: parsed.startTime,
       endTime: parsed.endTime,
       priority: parsed.priority,
-      description: null,
+      description: parsed.description,
       repeat: parsed.repeat,
     });
     setText("");
@@ -173,6 +173,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
             <p className="text-sm font-medium text-slate-800">
               {preview.title || <span className="text-slate-300 italic">Untitled…</span>}
             </p>
+            {preview.description && <p className="mt-1 text-xs text-slate-500">{preview.description}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-md border px-2 py-1 text-xs font-medium ${
@@ -231,6 +232,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">3pm / 9:30am / 3pm-4pm</span> — sets start (and end) time</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">daily / weekly / monthly</span> — sets how often it repeats</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">!</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">urgent</span> — marks it urgent</p>
+          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">[note]</span> — adds additional info</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">tk</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">ev</span> (anywhere, usually at the end) — required: task or event</p>
           <p className="pt-1 text-slate-400">Everything else becomes the title. Press <span className="font-mono">Tab</span> to accept a suggestion, <span className="font-mono">Enter</span> to add.</p>
         </div>

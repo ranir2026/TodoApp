@@ -1,4 +1,5 @@
 import { parseDateKey } from "./occurrences";
+import { courseAccentStyle, courseChipStyle } from "./courseColors";
 
 function formatTime(t) {
   const [h, m] = t.split(":").map(Number);
@@ -31,7 +32,8 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
     <li
       className={`group flex items-start gap-3 rounded-lg border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
         selected ? "border-todo-400 ring-2 ring-todo-400/30" : "border-slate-200"
-      }`}
+      } border-l-4`}
+      style={courseAccentStyle(course)}
     >
       <button
         onClick={() => onToggle(todo.id)}
@@ -62,12 +64,12 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {isEvent && (
-            <span className="rounded-full bg-course-100 px-2 py-0.5 text-xs font-medium text-course-700">Event</span>
+            <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={courseChipStyle(course)}>Event</span>
           )}
           {course && (
             <span
               className="rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: `${course.color ?? "#94a3b8"}1f`, color: course.color ?? "#64748b" }}
+              style={courseChipStyle(course)}
             >
               {course.name}
             </span>

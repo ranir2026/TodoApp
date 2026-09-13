@@ -36,6 +36,15 @@ function stripMatch(text, match) {
   return text.slice(0, match.index) + " " + text.slice(match.index + match[0].length);
 }
 
+function extractDescription(text) {
+  const descriptions = [];
+  const cleanedText = text.replace(/\[([^\]]*)\]/g, (_, description) => {
+    if (description.trim()) descriptions.push(description.trim());
+    return " ";
+  });
+  return { description: descriptions.join(" ") || null, text: cleanedText };
+}
+
 function extractDate(text) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -104,6 +113,8 @@ function extractTime(text) {
 
 export function parseQuickAdd(rawText, courses) {
   let text = rawText;
+  const descriptionResult = extractDescription(text);
+  text = descriptionResult.text;
   let type = "task";
   let typeExplicit = false;
   let priority = "normal";
@@ -169,6 +180,7 @@ export function parseQuickAdd(rawText, courses) {
     type,
     typeExplicit,
     title,
+    description: descriptionResult.description,
     priority,
     repeat,
     courseId,

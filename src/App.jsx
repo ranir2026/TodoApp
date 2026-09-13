@@ -20,6 +20,10 @@ export default function App() {
   const [todos, setTodos] = useLocalStorage("todos", []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
   const [filter, setFilter] = useState("active"); // active | completed | all
+  const [search, setSearch] = useState("");
+  const [courseFilter, setCourseFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("task");
+  const [priorityFilter, setPriorityFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date"); // date | course
   const [view, setView] = useState("list"); // list | calendar
   const [newCourseName, setNewCourseName] = useState("");
@@ -30,12 +34,14 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [undoAction, setUndoAction] = useState(null);
+  const undoTimerRef = useRef(null);
   const addInputRef = useRef(null);
   const now = new Date();
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat }) {
+  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount }) {
     setTodos((prev) => [
       ...prev,
       {
@@ -50,6 +56,8 @@ export default function App() {
         priority: priority ?? "normal",
         description: description ?? null,
         repeat: repeat ?? "none",
+        repeatUntil: repeatUntil ?? null,
+        repeatCount: repeatCount ? Number(repeatCount) : null,
         completed: false,
         createdAt: new Date().toISOString(),
       },
@@ -60,17 +68,40 @@ export default function App() {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
+  function skipOccurrence(id, occurrenceDate) {
+    if (!occurrenceDate) return;
+    setTodos((prev) => prev.map((t) => t.id === id ? { ...t, skipDates: [...new Set([...(t.skipDates ?? []), occurrenceDate])] } : t));
+    setEditingItem(null);
+  }
+
   function toggleTodo(id) {
-    setTodos((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null } : t,
-      ),
-    );
+    const previous = todos.find((t) => t.id === id);
+    if (!previous) return;
+    const next = { ...previous, completed: !previous.completed, completedAt: !previous.completed ? new Date().toISOString() : null };
+    setTodos((prev) => prev.map((t) => (t.id === id ? next : t)));
+    showUndo(() => setTodos((prev) => prev.map((t) => (t.id === id ? previous : t))));
   }
 
   function deleteTodo(id) {
+    const index = todos.findIndex((t) => t.id === id);
+    const deleted = todos[index];
+    if (!deleted) return;
     setTodos((prev) => prev.filter((t) => t.id !== id));
+    showUndo(() => setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]));
     setEditingItem(null);
+  }
+
+  function showUndo(undo) {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoAction(() => undo);
+    undoTimerRef.current = setTimeout(() => setUndoAction(null), 5000);
+  }
+
+  function undoLastAction() {
+    if (!undoAction) return;
+    undoAction();
+    setUndoAction(null);
+    clearTimeout(undoTimerRef.current);
   }
 
   function addCourse(e) {
@@ -113,18 +144,24 @@ export default function App() {
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
 
   const visibleTasks = useMemo(() => {
+    const query = search.trim().toLowerCase();
     const list = todos.filter((t) => {
-      if ((t.type ?? "task") !== "task") return false;
       if (filter === "active") return !t.completed;
       if (filter === "completed") return t.completed;
       return true;
+    }).filter((t) => {
+      const matchesSearch = !query || `${t.title} ${t.description ?? ""}`.toLowerCase().includes(query);
+      const matchesCourse = courseFilter === "all" || t.courseId === courseFilter;
+      const matchesType = typeFilter === "all" || (t.type ?? "task") === typeFilter;
+      const matchesPriority = priorityFilter === "all" || t.priority === priorityFilter;
+      return matchesSearch && matchesCourse && matchesType && matchesPriority;
     });
     return [...list].sort((a, b) => {
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [todos, filter]);
+  }, [todos, filter, search, courseFilter, typeFilter, priorityFilter]);
 
   const groupedTasks = useMemo(() => {
     if (sortBy !== "course") return null;
@@ -256,8 +293,23 @@ export default function App() {
         {view === "list" ? (
           <>
             <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-todo-400" />
+              <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="max-w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
+                <option value="all">All categories</option>
+                {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+              </select>
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
+                <option value="task">Tasks</option>
+                <option value="event">Events</option>
+                <option value="all">Everything</option>
+              </select>
+              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
+                <option value="all">All priority</option>
+                <option value="urgent">Urgent</option>
+                <option value="normal">Normal</option>
+              </select>
               <span className="shrink-0 font-medium">Sort by</span>
-              <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+              <div className="flex shrink-0 gap-1 rounded-lg bg-slate-100 p-1">
                 {[
                   { id: "date", label: "Date" },
                   { id: "course", label: "Category" },
@@ -329,7 +381,7 @@ export default function App() {
         )}
       </main>
 
-      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-14 pl-1">
+      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-6 pl-1">
         <StatsBar todos={todos} />
 
         <ActivityHeatmap todos={todos} />
@@ -362,9 +414,7 @@ export default function App() {
           ))}
         </div>
 
-        <div className="flex-1" />
-
-        <div className="text-right leading-none">
+        <div className="mt-auto text-right leading-none">
           <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
           <p className="mt-1 text-base font-semibold text-slate-400">{monthDate}</p>
         </div>
@@ -378,6 +428,13 @@ export default function App() {
         <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(keymap.openPalette)}</span> Cmds
       </button>
 
+      {undoAction && (
+        <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg">
+          <span>Action completed</span>
+          <button onClick={undoLastAction} className="font-semibold text-todo-300 hover:text-todo-200">Undo</button>
+        </div>
+      )}
+
       <CommandPalette open={paletteOpen} commands={commands} keymap={keymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={keymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <EditItemModal
@@ -388,6 +445,7 @@ export default function App() {
           setEditingItem(null);
         }}
         onDelete={deleteTodo}
+        onSkipOccurrence={skipOccurrence}
         onClose={() => setEditingItem(null)}
       />
       <QuickAddModal

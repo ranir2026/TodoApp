@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { expandRange } from "./occurrences";
+import { expandRange, parseDateKey } from "./occurrences";
+import { courseChipStyle } from "./courseColors";
 
 const HOUR_HEIGHT = 44;
 
@@ -26,8 +27,7 @@ function formatHour(hour) {
 
 function chipClass(t) {
   if (t.completed) return "bg-slate-100 text-slate-400 line-through";
-  if (t.type === "event") return "bg-course-100 text-course-700";
-  return t.priority === "urgent" ? "bg-urgent-100 text-urgent-700" : "bg-todo-100 text-todo-700";
+  return "";
 }
 
 function weekDays(cursor) {
@@ -50,6 +50,30 @@ function monthCells(cursor) {
   for (let day = 1; day <= daysInMonth; day++) list.push(new Date(year, month, day));
   while (list.length % 7 !== 0) list.push(null);
   return list;
+}
+
+function isMultiDayEvent(item) {
+  return item.type === "event" && item.dueDate && item.endDate && item.endDate !== item.dueDate;
+}
+
+function dateValue(date) {
+  return date.getTime();
+}
+
+function getMultiDaySegments(items, dates) {
+  const rangeStart = dates[0];
+  const rangeEnd = dates[dates.length - 1];
+  return items
+    .filter(isMultiDayEvent)
+    .map((item) => {
+      const start = parseDateKey(item.dueDate);
+      const end = parseDateKey(item.endDate);
+      const visibleStart = dateValue(start) > dateValue(rangeStart) ? start : rangeStart;
+      const visibleEnd = dateValue(end) < dateValue(rangeEnd) ? end : rangeEnd;
+      if (dateValue(visibleStart) > dateValue(visibleEnd)) return null;
+      return { item, start: visibleStart, end: visibleEnd };
+    })
+    .filter(Boolean);
 }
 
 export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
@@ -131,15 +155,15 @@ export default function CalendarView({ todos, courseMap, onEdit, onQuickAdd }) {
 
       <div className="min-h-0 flex-1">
         {mode === "month" && (
-          <MonthGrid cells={cells} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} />
+          <MonthGrid cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} />
         )}
-        {mode !== "month" && <TimeGrid days={days} occByDay={occByDay} onEdit={onEdit} now={now} />}
+        {mode !== "month" && <TimeGrid days={days} todos={todos} courseMap={courseMap} occByDay={occByDay} onEdit={onEdit} now={now} />}
       </div>
     </div>
   );
 }
 
-function MonthGrid({ cells, occByDay, courseMap, onEdit, onQuickAdd }) {
+function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd }) {
   const [addingKey, setAddingKey] = useState(null);
   const [draftTitle, setDraftTitle] = useState("");
   const rows = cells.length / 7;
@@ -159,40 +183,55 @@ function MonthGrid({ cells, occByDay, courseMap, onEdit, onQuickAdd }) {
         ))}
       </div>
 
-      <div className="mt-1 grid flex-1 grid-cols-7 gap-1" style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
-        {cells.map((date, i) => {
+      <div className="mt-1 flex min-h-0 flex-1 flex-col gap-1">
+        {Array.from({ length: rows }, (_, row) => {
+          const week = cells.slice(row * 7, row * 7 + 7);
+          const weekDates = week.filter(Boolean);
+          const segments = getMultiDaySegments(todos, [
+            weekDates[0] ?? new Date(),
+            weekDates[weekDates.length - 1] ?? new Date(),
+          ]);
+          return (
+            <div key={row} className="relative min-h-0 flex-1 overflow-hidden">
+              <div className="grid h-full grid-cols-7 gap-1">
+        {week.map((date, dayIndex) => {
+          const i = row * 7 + dayIndex;
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
-          const dayItems = occByDay[key] || [];
+          const dayItems = (occByDay[key] || []).filter((item) => !isMultiDayEvent(item));
+          const visibleItems = dayItems.slice(0, 4);
+          const hiddenItemCount = dayItems.length - visibleItems.length;
           const isToday = key === todayKey;
           const isAdding = addingKey === key;
 
           return (
             <div
               key={key}
-              className={`flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 text-left align-top ${
+              className={`relative flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
-              <div className="flex shrink-0 items-center justify-between">
-                <span className={`text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
-                <button onClick={() => setAddingKey(isAdding ? null : key)} className="rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
-                  +
-                </button>
-              </div>
+              <button onClick={() => setAddingKey(isAdding ? null : key)} className="absolute right-1.5 top-1 rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
+                +
+              </button>
+              <span className={`absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
 
-              <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-                {dayItems.slice(0, 4).map((t) => (
+              <div
+                className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto"
+                style={segments.length ? { paddingTop: 24 + segments.length * 20 } : undefined}
+              >
+                {visibleItems.map((t) => (
                   <button
                     key={t.id}
                     onClick={() => onEdit(t)}
                     className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
+                    style={courseChipStyle(courseMap[t.courseId], t.completed)}
                     title={courseMap[t.courseId]?.name ? `${t.title} (${courseMap[t.courseId].name})` : t.title}
                   >
                     {t.title}
                   </button>
                 ))}
-                {dayItems.length > 4 && <p className="px-1 text-[10px] text-slate-400">+{dayItems.length - 4} more</p>}
+                {hiddenItemCount > 0 && <p className="px-1 text-[10px] text-slate-400">+{hiddenItemCount} more</p>}
               </div>
 
               {isAdding && (
@@ -212,12 +251,33 @@ function MonthGrid({ cells, occByDay, courseMap, onEdit, onQuickAdd }) {
             </div>
           );
         })}
+              </div>
+              <div className="pointer-events-none absolute inset-0 grid grid-cols-7 gap-1">
+                {segments.map(({ item, start, end }, segmentIndex) => {
+                  const startIndex = week.findIndex((date) => date && toDateKey(date) === toDateKey(start));
+                  const endIndex = week.findIndex((date) => date && toDateKey(date) === toDateKey(end));
+                  return (
+                    <button
+                      key={`${item.id}-${toDateKey(start)}`}
+                      onClick={() => onEdit(item)}
+                      className={`pointer-events-auto z-10 mx-0.5 h-5 min-w-0 self-start overflow-hidden truncate rounded px-1 text-left text-[11px] shadow-sm ${chipClass(item)}`}
+                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, transform: `translateY(${24 + segmentIndex * 20}px)` }}
+                      title={item.title}
+                    >
+                      {item.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function TimeGrid({ days, occByDay, onEdit, now }) {
+function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now }) {
   const todayKey = toDateKey(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const scrollAnchorRef = useRef(null);
@@ -243,24 +303,46 @@ function TimeGrid({ days, occByDay, onEdit, now }) {
           ))}
         </div>
 
+        <div className="flex-1">
+          <div className="sticky top-0 z-10 h-6 border-b border-slate-100 bg-white text-center text-xs font-medium">
+            {days.map((day) => (
+              <span key={toDateKey(day)} className="inline-block w-[14.2857%] text-slate-500">
+                {day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
+              </span>
+            ))}
+          </div>
+          <div className="relative border-b border-slate-100" style={{ minHeight: 28 }}>
+            <div className="grid grid-cols-7 gap-0.5 p-1">
+              {getMultiDaySegments(todos, days).map(({ item, start, end }) => {
+                const startIndex = days.findIndex((day) => toDateKey(day) === toDateKey(start));
+                const endIndex = days.findIndex((day) => toDateKey(day) === toDateKey(end));
+                return (
+                  <button
+                    key={`${item.id}-${toDateKey(start)}`}
+                    onClick={() => onEdit(item)}
+                    className={`z-10 truncate rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(item)}`}
+                    style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}` }}
+                    title={item.title}
+                  >
+                    {item.title}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex">
         {days.map((day) => {
           const key = toDateKey(day);
-          const dayItems = (occByDay[key] || []).filter((t) => t.startTime);
-          const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime);
+          const dayItems = (occByDay[key] || []).filter((t) => t.startTime && !isMultiDayEvent(t));
+          const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime && !isMultiDayEvent(t));
           const isToday = key === todayKey;
 
           return (
             <div key={key} className="flex-1 border-l border-slate-100">
-              <div className="sticky top-0 z-10 h-6 border-b border-slate-100 bg-white text-center text-xs font-medium">
-                <span className={isToday ? "font-bold text-todo-700" : "text-slate-500"}>
-                  {day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
-                </span>
-              </div>
-
               {allDayItems.length > 0 && (
                 <div className="space-y-0.5 border-b border-slate-100 p-1">
                   {allDayItems.map((t) => (
-                    <button key={t.id} onClick={() => onEdit(t)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}>
+                    <button key={t.id} onClick={() => onEdit(t)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`} style={courseChipStyle(courseMap[t.courseId], t.completed)}>
                       {t.title}
                     </button>
                   ))}
@@ -282,7 +364,7 @@ function TimeGrid({ days, occByDay, onEdit, now }) {
                       key={t.id}
                       onClick={() => onEdit(t)}
                       className={`absolute left-0.5 right-0.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(t)}`}
-                      style={{ top, height }}
+                      style={{ ...courseChipStyle(courseMap[t.courseId], t.completed), top, height }}
                       title={t.title}
                     >
                       {t.title}
@@ -304,6 +386,8 @@ function TimeGrid({ days, occByDay, onEdit, now }) {
             </div>
           );
         })}
+          </div>
+        </div>
       </div>
     </div>
   );

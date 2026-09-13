@@ -17,20 +17,26 @@ export function parseDateKey(dateStr) {
 }
 
 function matchesRepeat(item, due, cursor) {
-  if (item.endDate) {
+  if (item.skipDates?.includes(toDateKey(cursor))) return false;
+  if (item.repeat !== "none") {
+    if (cursor < due) return false;
+    if (item.repeatUntil && cursor > parseDateKey(item.repeatUntil)) return false;
+
+    const dayDifference = Math.floor((cursor - due) / 86400000);
+    const monthDifference = (cursor.getFullYear() - due.getFullYear()) * 12 + cursor.getMonth() - due.getMonth();
+    const occurrenceIndex = item.repeat === "daily" ? dayDifference : item.repeat === "weekly" ? Math.floor(dayDifference / 7) : monthDifference;
+    if (item.repeatCount && occurrenceIndex >= Number(item.repeatCount)) return false;
+
+    if (item.repeat === "daily") return true;
+    if (item.repeat === "weekly") return cursor.getDay() === due.getDay();
+    return cursor.getDate() === due.getDate();
+  }
+
+  if (item.type === "event" && item.endDate) {
     const end = parseDateKey(item.endDate);
     return cursor >= due && cursor <= end;
   }
-  switch (item.repeat) {
-    case "daily":
-      return cursor >= due;
-    case "weekly":
-      return cursor >= due && cursor.getDay() === due.getDay();
-    case "monthly":
-      return cursor >= due && cursor.getDate() === due.getDate();
-    default:
-      return toDateKey(cursor) === toDateKey(due);
-  }
+  return toDateKey(cursor) === toDateKey(due);
 }
 
 // Expands items (tasks/events) into per-day occurrences within [startDate, endDate] (inclusive),

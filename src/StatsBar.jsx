@@ -11,7 +11,7 @@ function startOfWeek(d) {
 export default function StatsBar({ todos }) {
   const now = new Date();
   const weekStart = startOfWeek(now);
-  const weekTodos = todos.filter((t) => new Date(t.createdAt) >= weekStart);
+  const weekTodos = todos.filter((t) => (t.type ?? "task") === "task" && new Date(t.createdAt) >= weekStart);
   const weekDone = weekTodos.filter((t) => t.completed);
   const completionPct = weekTodos.length
     ? Math.round((weekDone.length / weekTodos.length) * 100)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { REPEAT_OPTIONS } from "./occurrences";
 
-export default function EditItemModal({ item, courses, onSave, onDelete, onClose }) {
+export default function EditItemModal({ item, courses, onSave, onDelete, onSkipOccurrence, onClose }) {
   const [form, setForm] = useState(null);
 
   useEffect(() => {
@@ -17,6 +17,8 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
         priority: item.priority ?? "normal",
         description: item.description ?? "",
         repeat: item.repeat ?? "none",
+        repeatUntil: item.repeatUntil ?? "",
+        repeatCount: item.repeatCount ?? "",
       });
     } else {
       setForm(null);
@@ -40,6 +42,8 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
       startTime: form.startTime || null,
       endTime: form.endTime || null,
       description: form.description.trim() || null,
+      repeatUntil: form.repeat !== "none" ? form.repeatUntil || null : null,
+      repeatCount: form.repeat !== "none" && form.repeatCount ? Number(form.repeatCount) : null,
     });
   }
 
@@ -134,6 +138,12 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+        {form.repeat !== "none" && (
+          <div className="flex items-center gap-1.5">
+            <input type="date" value={form.repeatUntil} onChange={(e) => update("repeatUntil", e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+            <input type="number" min="1" value={form.repeatCount} onChange={(e) => update("repeatCount", e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+          </div>
+        )}
         <button
           type="button"
           onClick={() => update("priority", form.priority === "urgent" ? "normal" : "urgent")}
@@ -145,6 +155,15 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onClose
         </button>
 
         <div className="mt-2 flex items-center gap-2">
+          {form.repeat !== "none" && item.occurrenceDate && (
+            <button
+              type="button"
+              onClick={() => onSkipOccurrence(item.id, item.occurrenceDate)}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-urgent-700 hover:bg-urgent-500/10"
+            >
+              Skip this date
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDelete(item.id)}
