@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import StatsBar from "./StatsBar";
 import AddTodoForm from "./AddTodoForm";
@@ -11,6 +11,9 @@ import QuickAddModal from "./QuickAddModal";
 import ActivityHeatmap from "./ActivityHeatmap";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
+import { isSupabaseConfigured, supabase } from "./supabase";
+import { useSyncedData } from "./useSyncedData";
+import AuthScreen from "./AuthScreen";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
@@ -34,12 +37,28 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [syncError, setSyncError] = useState("");
   const [undoAction, setUndoAction] = useState(null);
   const undoTimerRef = useRef(null);
   const addInputRef = useRef(null);
   const now = new Date();
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const handleSyncError = useCallback((message) => setSyncError(message), []);
+  useSyncedData(session?.user, todos, setTodos, courses, setCourses, handleSyncError);
 
   function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount }) {
     setTodos((prev) => [
@@ -215,6 +234,11 @@ export default function App() {
     [],
   );
 
+  if (isSupabaseConfigured && authLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Loading your account...</div>;
+  }
+  if (isSupabaseConfigured && !session) return <AuthScreen />;
+
   return (
     <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
       <aside className="no-scrollbar flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
@@ -382,6 +406,12 @@ export default function App() {
       </main>
 
       <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-6 pl-1">
+        {session && (
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">
+            <span className="max-w-32 truncate" title={session.user.email}>{session.user.email}</span>
+            <button onClick={() => supabase.auth.signOut()} className="font-medium text-course-600 hover:text-course-700">Sign out</button>
+          </div>
+        )}
         <StatsBar todos={todos} />
 
         <ActivityHeatmap todos={todos} />
@@ -432,6 +462,13 @@ export default function App() {
         <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg">
           <span>Action completed</span>
           <button onClick={undoLastAction} className="font-semibold text-todo-300 hover:text-todo-200">Undo</button>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="fixed bottom-4 left-4 z-50 max-w-sm rounded-lg bg-danger-600 px-3 py-2 text-xs text-white shadow-lg">
+          Sync error: {syncError}
+          <button onClick={() => setSyncError("")} className="ml-2 font-semibold underline">Dismiss</button>
         </div>
       )}
 
