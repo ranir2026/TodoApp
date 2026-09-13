@@ -34,7 +34,7 @@ export default function App() {
   const [newCourseName, setNewCourseName] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
   const [editingCourseName, setEditingCourseName] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -49,6 +49,9 @@ export default function App() {
   const [undoAction, setUndoAction] = useState(null);
   const undoTimerRef = useRef(null);
   const addInputRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const taskListRef = useRef(null);
+  const calendarRef = useRef(null);
   const now = new Date();
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -203,11 +206,9 @@ export default function App() {
 
   const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
 
-  function moveSelection(delta) {
-    if (view !== "list" || orderedTasks.length === 0) return;
-    const idx = orderedTasks.findIndex((t) => t.id === selectedId);
-    const nextIdx = idx === -1 ? 0 : Math.min(Math.max(idx + delta, 0), orderedTasks.length - 1);
-    setSelectedId(orderedTasks[nextIdx].id);
+  function scrollTaskList(delta) {
+    if (view !== "list") return;
+    taskListRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   }
 
   useGlobalKeybinds(
@@ -218,8 +219,8 @@ export default function App() {
       quickAdd: () => setQuickAddOpen(true),
       newTask: () => addInputRef.current?.focus(),
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
-      moveDown: () => moveSelection(1),
-      moveUp: () => moveSelection(-1),
+      moveDown: () => scrollTaskList(220),
+      moveUp: () => scrollTaskList(-220),
       toggleComplete: () => selectedId && toggleTodo(selectedId),
       deleteSelected: () => selectedId && deleteTodo(selectedId),
       filterActive: () => setFilter("active"),
@@ -228,6 +229,10 @@ export default function App() {
       calendarMonth: () => { setView("calendar"); setCalendarMode("month"); },
       calendarWeek: () => { setView("calendar"); setCalendarMode("week"); },
       calendarDay: () => { setView("calendar"); setCalendarMode("day"); },
+      calendarPrevious: () => view === "calendar" && calendarRef.current?.shift(-1),
+      calendarNext: () => view === "calendar" && calendarRef.current?.shift(1),
+      focusSearch: () => searchInputRef.current?.focus(),
+      toggleSort: () => setSortBy((current) => current === "course" ? "date" : "course"),
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -249,9 +254,13 @@ export default function App() {
       { id: "calendarMonth", label: "Show month calendar", run: () => { setView("calendar"); setCalendarMode("month"); } },
       { id: "calendarWeek", label: "Show week calendar", run: () => { setView("calendar"); setCalendarMode("week"); } },
       { id: "calendarDay", label: "Show day calendar", run: () => { setView("calendar"); setCalendarMode("day"); } },
+      { id: "calendarPrevious", label: "Previous calendar period", run: () => view === "calendar" && calendarRef.current?.shift(-1) },
+      { id: "calendarNext", label: "Next calendar period", run: () => view === "calendar" && calendarRef.current?.shift(1) },
+      { id: "focusSearch", label: "Focus task search", run: () => searchInputRef.current?.focus() },
+      { id: "toggleSort", label: "Toggle date/category sort", run: () => setSortBy((current) => current === "course" ? "date" : "course") },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
     ],
-    [],
+    [view],
   );
 
   if (isSupabaseConfigured && authLoading) {
@@ -343,11 +352,11 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main ref={taskListRef} className="min-h-0 flex-1 overflow-y-auto">
         {view === "list" ? (
           <>
             <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-todo-400" />
+              <input ref={searchInputRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-todo-400" />
               <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="max-w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
                 <option value="all">All categories</option>
                 {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
@@ -427,6 +436,7 @@ export default function App() {
           </>
         ) : (
           <CalendarView
+            ref={calendarRef}
             todos={todos}
             courseMap={courseMap}
             mode={calendarMode}

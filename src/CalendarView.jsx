@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { expandRange, parseDateKey } from "./occurrences";
 import { courseChipStyle } from "./courseColors";
 
@@ -76,13 +76,25 @@ function getMultiDaySegments(items, dates) {
     .filter(Boolean);
 }
 
-export default function CalendarView({ todos, courseMap, mode, onModeChange, onEdit, onQuickAdd }) {
+const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, onModeChange, onEdit, onQuickAdd }, ref) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   });
   const [now, setNow] = useState(new Date());
+
+  useImperativeHandle(ref, () => ({
+    shift(delta) {
+      setCursor((current) => {
+        const next = new Date(current);
+        if (mode === "month") next.setMonth(next.getMonth() + delta);
+        else if (mode === "week") next.setDate(next.getDate() + delta * 7);
+        else next.setDate(next.getDate() + delta);
+        return next;
+      });
+    },
+  }), [mode]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
@@ -96,16 +108,6 @@ export default function CalendarView({ todos, courseMap, mode, onModeChange, onE
   const rangeEnd = mode === "month" ? [...cells].reverse().find(Boolean) : days[days.length - 1];
 
   const occByDay = useMemo(() => expandRange(todos, rangeStart, rangeEnd), [todos, rangeStart, rangeEnd]);
-
-  function shift(delta) {
-    setCursor((c) => {
-      const d = new Date(c);
-      if (mode === "month") d.setMonth(d.getMonth() + delta);
-      else if (mode === "week") d.setDate(d.getDate() + delta * 7);
-      else d.setDate(d.getDate() + delta);
-      return d;
-    });
-  }
 
   const title =
     mode === "month"
@@ -123,11 +125,11 @@ export default function CalendarView({ todos, courseMap, mode, onModeChange, onE
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button onClick={() => shift(-1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
+          <button onClick={() => ref.current?.shift(-1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
             ‹
           </button>
           <h2 className="min-w-[180px] text-sm font-semibold text-slate-800">{title}</h2>
-          <button onClick={() => shift(1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next">
+          <button onClick={() => ref.current?.shift(1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next">
             ›
           </button>
           <button
@@ -160,7 +162,9 @@ export default function CalendarView({ todos, courseMap, mode, onModeChange, onE
       </div>
     </div>
   );
-}
+});
+
+export default CalendarView;
 
 function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd }) {
   const [addingKey, setAddingKey] = useState(null);

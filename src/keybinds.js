@@ -4,7 +4,7 @@ export const DEFAULT_KEYMAP = {
   newTask: "shift+n",
   toggleView: "v",
   moveDown: "j",
-  moveUp: "k",
+  moveUp: "shift+j",
   toggleComplete: "x",
   deleteSelected: "d",
   openSettings: "ctrl+,",
@@ -14,6 +14,10 @@ export const DEFAULT_KEYMAP = {
   calendarMonth: "alt+1",
   calendarWeek: "alt+2",
   calendarDay: "alt+3",
+  calendarPrevious: "arrowleft",
+  calendarNext: "arrowright",
+  focusSearch: "ctrl+space",
+  toggleSort: "c",
 };
 
 export const ACTION_LABELS = {
@@ -21,8 +25,8 @@ export const ACTION_LABELS = {
   quickAdd: "Open quick add",
   newTask: "Focus new task form",
   toggleView: "Toggle list / calendar view",
-  moveDown: "Select next task",
-  moveUp: "Select previous task",
+  moveDown: "Scroll task list down",
+  moveUp: "Scroll task list up",
   toggleComplete: "Toggle complete on selected task",
   deleteSelected: "Delete selected task",
   openSettings: "Open keybind settings",
@@ -32,6 +36,10 @@ export const ACTION_LABELS = {
   calendarMonth: "Show month calendar",
   calendarWeek: "Show week calendar",
   calendarDay: "Show day calendar",
+  calendarPrevious: "Previous calendar period",
+  calendarNext: "Next calendar period",
+  focusSearch: "Focus task search",
+  toggleSort: "Toggle date/category sort",
 };
 
 export function normalizeCombo(e) {
