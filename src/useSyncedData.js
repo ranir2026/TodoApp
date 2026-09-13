@@ -4,6 +4,11 @@ import { supabase } from "./supabase";
 export function useSyncedData(user, todos, setTodos, courses, setCourses, onError) {
   const loadedUserRef = useRef(null);
   const saveTimerRef = useRef(null);
+  const latestDataRef = useRef({ todos, courses });
+
+  useEffect(() => {
+    latestDataRef.current = { todos, courses };
+  }, [todos, courses]);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,9 +33,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, onErro
 
         if (data) {
           setTodos(Array.isArray(data.todos) ? data.todos : []);
-          setCourses(Array.isArray(data.courses) && data.courses.length ? data.courses : courses);
+          setCourses(Array.isArray(data.courses) && data.courses.length ? data.courses : latestDataRef.current.courses);
         } else {
-          saveToCloud(user.id, todos, courses, onError);
+          saveToCloud(user.id, latestDataRef.current.todos, latestDataRef.current.courses, onError);
         }
         loadedUserRef.current = user.id;
       });
@@ -38,7 +43,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, onErro
     return () => {
       cancelled = true;
     };
-  }, [user, todos, courses, setTodos, setCourses, onError]);
+  }, [user, setTodos, setCourses, onError]);
 
   useEffect(() => {
     if (!supabase || !user || loadedUserRef.current !== user.id) return undefined;
