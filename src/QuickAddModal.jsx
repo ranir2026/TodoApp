@@ -204,7 +204,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
 
               {preview.dueDate ? (
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
-                  {preview.repeat === "weekly" && preview.repeatDays?.length
+                  {preview.repeatDays?.length > 1
                     ? formatRepeatDays(preview.repeatDays)
                     : formatDate(preview.dueDate)}
                 </span>
