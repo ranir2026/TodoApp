@@ -40,6 +40,12 @@ function formatTime(t) {
   return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+function formatRepeatDays(days) {
+  return days
+    .map((day) => day.charAt(0).toUpperCase() + day.slice(1))
+    .join(", ");
+}
+
 export default function QuickAddModal({ open, courses, onAdd, onClose }) {
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -197,7 +203,9 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
 
               {preview.dueDate ? (
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
-                  {formatDate(preview.dueDate)}
+                  {preview.repeat === "weekly" && preview.repeatDays?.length
+                    ? formatRepeatDays(preview.repeatDays)
+                    : formatDate(preview.dueDate)}
                 </span>
               ) : (
                 <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no date</span>
