@@ -16,7 +16,9 @@ function dueLabel(dueDate, isEvent) {
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
-  const diffDays = Math.ceil((due - now) / 86400000);
+  const dueEnd = new Date(due);
+  dueEnd.setHours(23, 59, 59, 999);
+  const diffDays = Math.ceil((dueEnd - now) / 86400000);
   if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   if (diffDays === 0) return { text: "Due today", tone: "text-urgent-600 bg-urgent-500/10" };
@@ -93,7 +95,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
       </button>
 
       <button
-        onClick={() => onDelete(todo.id)}
+        onClick={() => onDelete(todo.id, todo.occurrenceDate)}
         className="shrink-0 rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:text-danger-500 group-hover:opacity-100"
         aria-label="Delete"
       >

@@ -169,7 +169,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
           )}
           <button
             type="button"
-            onClick={() => onDelete(item.id)}
+            onClick={() => onDelete(item.id, item.occurrenceDate)}
             className="rounded-lg px-3 py-2 text-sm font-medium text-danger-600 hover:bg-danger-500/10"
           >
             Delete

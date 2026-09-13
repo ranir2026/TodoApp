@@ -28,7 +28,7 @@ export default function App() {
   const [courseFilter, setCourseFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("task");
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("date"); // date | course
+  const [sortBy, setSortBy] = useState("course"); // date | course
   const [view, setView] = useState("list"); // list | calendar
   const [calendarMode, setCalendarMode] = useState("day");
   const [newCourseName, setNewCourseName] = useState("");
@@ -110,7 +110,12 @@ export default function App() {
     showUndo(() => setTodos((prev) => prev.map((t) => (t.id === id ? previous : t))));
   }
 
-  function deleteTodo(id) {
+  function deleteTodo(id, occurrenceDate) {
+    const recurringItem = todos.find((t) => t.id === id);
+    if (recurringItem?.repeat && recurringItem.repeat !== "none" && occurrenceDate) {
+      skipOccurrence(id, occurrenceDate);
+      return;
+    }
     const index = todos.findIndex((t) => t.id === id);
     const deleted = todos[index];
     if (!deleted) return;

@@ -339,7 +339,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now }) {
           return (
             <div key={key} className="flex-1 border-l border-slate-100">
               {allDayItems.length > 0 && (
-                <div className="space-y-0.5 border-b border-slate-100 p-1">
+                <div className="sticky top-6 z-10 space-y-0.5 border-b border-slate-100 bg-white p-1">
                   {allDayItems.map((t) => (
                     <button key={t.id} onClick={() => onEdit(t)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`} style={courseChipStyle(courseMap[t.courseId], t.completed)}>
                       {t.title}

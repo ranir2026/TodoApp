@@ -2,6 +2,7 @@ const DOW = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 export const SUGGESTION_KEYWORDS = [
   { insert: "today", hint: "due today" },
+  { insert: "td", hint: "due today" },
   { insert: "tomorrow", hint: "due tomorrow" },
   { insert: "tmrw", hint: "due tomorrow" },
   { insert: "monday", hint: "due next Monday" },
@@ -50,7 +51,7 @@ function extractDate(text) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  let m = text.match(/\btoday\b/i);
+  let m = text.match(/\b(today|td)\b/i);
   if (m) return { dueDate: toDateKey(today), text: stripMatch(text, m) };
 
   m = text.match(/\b(tomorrow|tmrw)\b/i);

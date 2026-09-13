@@ -20,13 +20,16 @@ export default function StatsBar({ todos }) {
   const dueSoon = todos.filter((t) => {
     if (t.completed || t.type === "event" || !t.dueDate) return false;
     const due = parseDateKey(t.dueDate);
+    due.setHours(23, 59, 59, 999);
     const hoursUntil = (due - now) / 36e5;
     return hoursUntil >= 0 && hoursUntil <= 48;
   });
 
   const overdue = todos.filter((t) => {
     if (t.completed || t.type === "event" || !t.dueDate) return false;
-    return parseDateKey(t.dueDate) < now;
+    const due = parseDateKey(t.dueDate);
+    due.setHours(23, 59, 59, 999);
+    return due < now;
   });
 
   return (
