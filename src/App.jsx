@@ -19,6 +19,7 @@ import EmailConfirmedScreen from "./EmailConfirmedScreen";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
+const DEFAULT_QUICK_LINKS = [];
 
 function dateGroupLabel(dateKey, today) {
   if (dateKey === "undated") return "No date";
@@ -34,6 +35,7 @@ export default function App() {
   const [courses, setCourses] = useLocalStorage("courses", DEFAULT_COURSES);
   const [todos, setTodos] = useLocalStorage("todos", []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
+  const [quickLinks, setQuickLinks] = useLocalStorage("quickLinks", DEFAULT_QUICK_LINKS);
   const [filter, setFilter] = useState("active"); // active | completed | all
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("all");
@@ -43,6 +45,8 @@ export default function App() {
   const [view, setView] = useState("list"); // list | calendar
   const [calendarMode, setCalendarMode] = useState("day");
   const [newCourseName, setNewCourseName] = useState("");
+  const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
   const [editingCourseName, setEditingCourseName] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -163,6 +167,16 @@ export default function App() {
       { id: crypto.randomUUID(), name: newCourseName.trim(), color: COURSE_COLOR_PALETTE[prev.length % COURSE_COLOR_PALETTE.length] },
     ]);
     setNewCourseName("");
+  }
+
+  function addQuickLink(e) {
+    e.preventDefault();
+    if (!newLinkLabel.trim() || !newLinkUrl.trim()) return;
+    let url = newLinkUrl.trim();
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    setQuickLinks((prev) => [...prev, { id: crypto.randomUUID(), label: newLinkLabel.trim(), url }]);
+    setNewLinkLabel("");
+    setNewLinkUrl("");
   }
 
   function updateCourseColor(id, color) {
@@ -516,6 +530,34 @@ export default function App() {
         <StatsBar todos={todos} />
 
         <ActivityHeatmap todos={todos} />
+
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-500">Quick links</p>
+            <span className="text-[10px] text-slate-300">{quickLinks.length}</span>
+          </div>
+          {quickLinks.length > 0 && (
+            <ul className="mb-2 space-y-1">
+              {quickLinks.map((link) => (
+                <li key={link.id} className="group flex min-w-0 items-center gap-1">
+                  <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate rounded px-1 py-1 text-xs font-medium text-course-600 hover:bg-course-50 hover:text-course-700" title={link.url}>
+                    {link.label}
+                  </a>
+                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded px-1 text-xs text-slate-300 opacity-0 hover:text-danger-500 group-hover:opacity-100" aria-label={`Delete ${link.label}`}>
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={addQuickLink} className="space-y-1.5">
+            <input value={newLinkLabel} onChange={(e) => setNewLinkLabel(e.target.value)} placeholder="Link name" className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-course-400" />
+            <div className="flex gap-1">
+              <input value={newLinkUrl} onChange={(e) => setNewLinkUrl(e.target.value)} placeholder="example.com" type="url" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs outline-none focus:border-course-400" />
+              <button type="submit" className="rounded-lg bg-course-500 px-2 py-1 text-xs font-medium text-white hover:bg-course-600" aria-label="Add quick link">Add</button>
+            </div>
+          </form>
+        </section>
 
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
           {["active", "completed", "all"].map((f) => (
