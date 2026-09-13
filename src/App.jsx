@@ -67,27 +67,28 @@ export default function App() {
   const handleSyncError = useCallback((message) => setSyncError(message), []);
   useSyncedData(session?.user, todos, setTodos, courses, setCourses, handleSyncError);
 
-  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays }) {
+  function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays }) {
+    const independentDates = type === "event" && repeat === "none" && dueDates?.length > 1 ? dueDates : [dueDate];
     setTodos((prev) => [
       ...prev,
-      {
+      ...independentDates.map((eventDate) => ({
         id: crypto.randomUUID(),
         type: type ?? "task",
         title,
         courseId: courseId ?? courses[0]?.id ?? null,
-        dueDate,
-        endDate: endDate ?? null,
+        dueDate: eventDate,
+        endDate: independentDates.length > 1 ? null : endDate ?? null,
         startTime: startTime ?? null,
         endTime: endTime ?? null,
         priority: priority ?? "normal",
         description: description ?? null,
-        repeat: repeat ?? "none",
-        repeatDays: repeatDays?.length ? repeatDays : null,
-        repeatUntil: repeatUntil ?? null,
-        repeatCount: repeatCount ? Number(repeatCount) : null,
+        repeat: independentDates.length > 1 ? "none" : repeat ?? "none",
+        repeatDays: independentDates.length > 1 ? null : repeatDays?.length ? repeatDays : null,
+        repeatUntil: independentDates.length > 1 ? null : repeatUntil ?? null,
+        repeatCount: independentDates.length > 1 ? null : repeatCount ? Number(repeatCount) : null,
         completed: false,
         createdAt: new Date().toISOString(),
-      },
+      })),
     ]);
   }
 

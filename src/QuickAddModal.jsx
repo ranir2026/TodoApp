@@ -95,6 +95,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
       description: parsed.description,
       repeat: parsed.repeat,
       repeatDays: parsed.repeatDays,
+      dueDates: parsed.dueDates,
     });
     setText("");
     setError(null);

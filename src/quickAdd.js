@@ -70,12 +70,14 @@ function extractDate(text) {
   const weekdayMatches = [...text.matchAll(weekdayPattern)];
   if (weekdayMatches.length) {
     const repeatDays = [...new Set(weekdayMatches.map((match) => match[1].slice(0, 3).toLowerCase()))];
-    const firstTarget = DOW.indexOf(repeatDays[0]);
-    const d = new Date(today);
-    const diff = (firstTarget - d.getDay() + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
+    const dueDates = repeatDays.map((day) => {
+      const d = new Date(today);
+      const diff = (DOW.indexOf(day) - d.getDay() + 7) % 7 || 7;
+      d.setDate(d.getDate() + diff);
+      return toDateKey(d);
+    }).sort();
     const cleanedText = weekdayMatches.reduceRight((value, match) => stripMatch(value, match), text);
-    return { dueDate: toDateKey(d), repeatDays, text: cleanedText };
+    return { dueDate: dueDates[0], dueDates, repeatDays, text: cleanedText };
   }
 
   m = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
@@ -178,7 +180,6 @@ export function parseQuickAdd(rawText, courses) {
   const dateResult = extractDate(text);
   text = dateResult.text;
   repeatDays = dateResult.repeatDays ?? [];
-  if (repeat === "none" && repeatDays.length > 1) repeat = "weekly";
 
   const title = text.replace(/\s+/g, " ").trim();
 
@@ -193,6 +194,7 @@ export function parseQuickAdd(rawText, courses) {
     courseId,
     courseName,
     dueDate: dateResult.dueDate,
+    dueDates: dateResult.dueDates ?? (dateResult.dueDate ? [dateResult.dueDate] : []),
     startTime: timeResult.startTime,
     endTime: timeResult.endTime,
   };
