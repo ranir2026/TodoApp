@@ -34,7 +34,7 @@ export default function App() {
   const [newCourseName, setNewCourseName] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
   const [editingCourseName, setEditingCourseName] = useState("");
-  const [selectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -56,6 +56,10 @@ export default function App() {
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const resolvedKeymap = useMemo(() => ({ ...DEFAULT_KEYMAP, ...keymap }), [keymap]);
+
+  useEffect(() => {
+    if (keymap.moveUp === "k") setKeymap((current) => ({ ...current, moveUp: DEFAULT_KEYMAP.moveUp }));
+  }, [keymap.moveUp, setKeymap]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -206,9 +210,19 @@ export default function App() {
 
   const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
 
-  function scrollTaskList(delta) {
+  useEffect(() => {
+    if (!selectedId || view !== "list") return;
+    document.querySelector(`[data-task-id="${selectedId}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedId, view, orderedTasks]);
+
+  function moveSelection(delta) {
     if (view !== "list") return;
-    taskListRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+    if (orderedTasks.length === 0) return;
+    const index = orderedTasks.findIndex((task) => task.id === selectedId);
+    const nextIndex = index === -1
+      ? delta > 0 ? 0 : orderedTasks.length - 1
+      : Math.min(Math.max(index + delta, 0), orderedTasks.length - 1);
+    setSelectedId(orderedTasks[nextIndex].id);
   }
 
   useGlobalKeybinds(
@@ -219,8 +233,8 @@ export default function App() {
       quickAdd: () => setQuickAddOpen(true),
       newTask: () => addInputRef.current?.focus(),
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
-      moveDown: () => scrollTaskList(220),
-      moveUp: () => scrollTaskList(-220),
+      moveDown: () => moveSelection(1),
+      moveUp: () => moveSelection(-1),
       toggleComplete: () => selectedId && toggleTodo(selectedId),
       deleteSelected: () => selectedId && deleteTodo(selectedId),
       filterActive: () => setFilter("active"),

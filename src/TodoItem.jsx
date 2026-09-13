@@ -33,6 +33,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
 
   return (
     <li
+      data-task-id={todo.id}
       className={`group flex items-start gap-3 rounded-lg border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
         selected ? "border-todo-400 ring-2 ring-todo-400/30" : "border-slate-200"
       } border-l-4`}

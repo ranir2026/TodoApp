@@ -47,7 +47,7 @@ export function normalizeCombo(e) {
   if (e.ctrlKey || e.metaKey) parts.push("ctrl");
   if (e.altKey) parts.push("alt");
   const key = e.key.toLowerCase();
-  if (e.shiftKey && key.length > 1 && key !== "shift") parts.push("shift");
+  if (e.shiftKey && !["control", "meta", "alt", "shift"].includes(key)) parts.push("shift");
   if (key === " ") parts.push("space");
   else if (key !== "control" && key !== "meta" && key !== "alt" && key !== "shift") parts.push(key);
   return parts.join("+");
