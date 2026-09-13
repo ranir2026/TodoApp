@@ -17,6 +17,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
         priority: item.priority ?? "normal",
         description: item.description ?? "",
         repeat: item.repeat ?? "none",
+        repeatDays: item.repeatDays ?? [],
         repeatUntil: item.repeatUntil ?? "",
         repeatCount: item.repeatCount ?? "",
       });
@@ -44,6 +45,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
       description: form.description.trim() || null,
       repeatUntil: form.repeat !== "none" ? form.repeatUntil || null : null,
       repeatCount: form.repeat !== "none" && form.repeatCount ? Number(form.repeatCount) : null,
+      repeatDays: form.repeat === "weekly" ? form.repeatDays : null,
     });
   }
 

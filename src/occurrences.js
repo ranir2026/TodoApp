@@ -5,6 +5,8 @@ export const REPEAT_OPTIONS = [
   { value: "monthly", label: "Repeats monthly" },
 ];
 
+const DOW = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
 function toDateKey(d) {
   return d.toLocaleDateString("en-CA");
 }
@@ -28,7 +30,10 @@ function matchesRepeat(item, due, cursor) {
     if (item.repeatCount && occurrenceIndex >= Number(item.repeatCount)) return false;
 
     if (item.repeat === "daily") return true;
-    if (item.repeat === "weekly") return cursor.getDay() === due.getDay();
+    if (item.repeat === "weekly") {
+      const repeatDays = item.repeatDays?.length ? item.repeatDays : [DOW[cursor.getDay()]];
+      return repeatDays.includes(DOW[cursor.getDay()]);
+    }
     return cursor.getDate() === due.getDate();
   }
 

@@ -67,7 +67,7 @@ export default function App() {
   const handleSyncError = useCallback((message) => setSyncError(message), []);
   useSyncedData(session?.user, todos, setTodos, courses, setCourses, handleSyncError);
 
-  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount }) {
+  function addTodo({ type, title, courseId, dueDate, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays }) {
     setTodos((prev) => [
       ...prev,
       {
@@ -82,6 +82,7 @@ export default function App() {
         priority: priority ?? "normal",
         description: description ?? null,
         repeat: repeat ?? "none",
+        repeatDays: repeatDays?.length ? repeatDays : null,
         repeatUntil: repeatUntil ?? null,
         repeatCount: repeatCount ? Number(repeatCount) : null,
         completed: false,

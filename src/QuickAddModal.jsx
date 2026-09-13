@@ -88,6 +88,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
       priority: parsed.priority,
       description: parsed.description,
       repeat: parsed.repeat,
+      repeatDays: parsed.repeatDays,
     });
     setText("");
     setError(null);
@@ -213,7 +214,7 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
 
               {preview.repeat !== "none" && (
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 capitalize">
-                  ↻ {preview.repeat}
+                  ↻ {preview.repeat}{preview.repeat === "weekly" && preview.repeatDays?.length ? ` (${preview.repeatDays.join(", ")})` : ""}
                 </span>
               )}
               {preview.priority === "urgent" && (

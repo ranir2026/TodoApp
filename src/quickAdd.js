@@ -66,13 +66,16 @@ function extractDate(text) {
     return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
-  m = text.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/i);
-  if (m) {
-    const target = DOW.indexOf(m[1].slice(0, 3).toLowerCase());
+  const weekdayPattern = /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
+  const weekdayMatches = [...text.matchAll(weekdayPattern)];
+  if (weekdayMatches.length) {
+    const repeatDays = [...new Set(weekdayMatches.map((match) => match[1].slice(0, 3).toLowerCase()))];
+    const firstTarget = DOW.indexOf(repeatDays[0]);
     const d = new Date(today);
-    const diff = (target - d.getDay() + 7) % 7 || 7;
+    const diff = (firstTarget - d.getDay() + 7) % 7 || 7;
     d.setDate(d.getDate() + diff);
-    return { dueDate: toDateKey(d), text: stripMatch(text, m) };
+    const cleanedText = weekdayMatches.reduceRight((value, match) => stripMatch(value, match), text);
+    return { dueDate: toDateKey(d), repeatDays, text: cleanedText };
   }
 
   m = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
@@ -88,7 +91,7 @@ function extractDate(text) {
     return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
-  return { dueDate: null, text };
+  return { dueDate: null, repeatDays: [], text };
 }
 
 function extractTime(text) {
@@ -119,6 +122,7 @@ export function parseQuickAdd(rawText, courses) {
   let typeExplicit = false;
   let priority = "normal";
   let repeat = "none";
+  let repeatDays = [];
   let courseId = null;
   let courseName = null;
 
@@ -173,6 +177,7 @@ export function parseQuickAdd(rawText, courses) {
 
   const dateResult = extractDate(text);
   text = dateResult.text;
+  repeatDays = dateResult.repeatDays ?? [];
 
   const title = text.replace(/\s+/g, " ").trim();
 
@@ -183,6 +188,7 @@ export function parseQuickAdd(rawText, courses) {
     description: descriptionResult.description,
     priority,
     repeat,
+    repeatDays,
     courseId,
     courseName,
     dueDate: dateResult.dueDate,
