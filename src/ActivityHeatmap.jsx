@@ -38,9 +38,9 @@ export default function ActivityHeatmap({ todos }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="activity-heatmap rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <p className="mb-2 text-xs font-medium text-slate-500">Activity</p>
-      <div className="flex justify-between gap-px">
+      <div className="heatmap-desktop-grid flex justify-between gap-px">
         {weeks.map((days, wi) => (
           <div key={wi} className="flex flex-col gap-px">
             {days.map((date, di) => {
@@ -54,6 +54,19 @@ export default function ActivityHeatmap({ todos }) {
                   className={`h-2 w-2 rounded-sm ${isFuture ? "bg-transparent" : levelClass(count)}`}
                 />
               );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="heatmap-mobile-grid" aria-label="Activity heatmap">
+        {Array.from({ length: 7 }, (_, dayIndex) => (
+          <div key={dayIndex} className="heatmap-mobile-row">
+            {weeks.map((week, weekIndex) => {
+              const date = week[dayIndex];
+              const key = toDateKey(date);
+              const isFuture = date > today;
+              const count = countsByDay[key] || 0;
+              return <div key={weekIndex} title={`${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${count} completed`} className={`heatmap-mobile-cell ${isFuture ? "heatmap-future" : levelClass(count)}`} />;
             })}
           </div>
         ))}

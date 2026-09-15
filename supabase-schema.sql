@@ -2,8 +2,11 @@ create table if not exists public.app_state (
   user_id uuid primary key references auth.users(id) on delete cascade,
   todos jsonb not null default '[]'::jsonb,
   courses jsonb not null default '[]'::jsonb,
+  quick_links jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.app_state add column if not exists quick_links jsonb not null default '[]'::jsonb;
 
 alter table public.app_state enable row level security;
 

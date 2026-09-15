@@ -17,6 +17,7 @@ import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
 import EmailConfirmedScreen from "./EmailConfirmedScreen";
 import QuickLinkModal from "./QuickLinkModal";
+import MobileAddSheet from "./MobileAddSheet";
 
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
@@ -61,10 +62,16 @@ export default function App() {
     return hashParams.get("type") === "signup";
   });
   const [syncError, setSyncError] = useState("");
+  const [mobileTab, setMobileTab] = useState("tasks");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileAddOpen, setMobileAddOpen] = useState(false);
+  const [mobileSelectedDate, setMobileSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [mobileCalendarMode, setMobileCalendarMode] = useState("month");
   const [undoAction, setUndoAction] = useState(null);
   const undoTimerRef = useRef(null);
   const addInputRef = useRef(null);
   const searchInputRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
   const taskListRef = useRef(null);
   const calendarRef = useRef(null);
   const now = new Date();
@@ -87,7 +94,7 @@ export default function App() {
   }, []);
 
   const handleSyncError = useCallback((message) => setSyncError(message), []);
-  useSyncedData(session?.user, todos, setTodos, courses, setCourses, handleSyncError);
+  useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, handleSyncError);
 
   function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays }) {
     const independentDates = type === "event" && repeat === "none" && dueDates?.length > 1 ? dueDates : [dueDate];
@@ -245,6 +252,10 @@ export default function App() {
 
   const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
 
+  const mobileAgenda = useMemo(() => {
+    return todos.filter((todo) => todo.dueDate === mobileSelectedDate).sort((a, b) => (a.startTime || "99:99").localeCompare(b.startTime || "99:99"));
+  }, [todos, mobileSelectedDate]);
+
   useEffect(() => {
     if (!selectedId || view !== "list") return;
     document.querySelector(`[data-task-id="${selectedId}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -330,7 +341,23 @@ export default function App() {
   if (isSupabaseConfigured && !session) return <AuthScreen />;
 
   return (
-    <div className="mx-auto flex h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 sm:px-6">
+    <>
+      <div className="mobile-app md:hidden">
+        <header className="mobile-header">
+          <div><h1>Todo</h1><p className="mobile-date">{now.toLocaleDateString(undefined, { month: "short", day: "numeric" })} <span>•</span> {now.toLocaleDateString(undefined, { weekday: "long" })}</p></div>
+          <button type="button" onClick={() => setMobileSearchOpen((value) => !value)} className="mobile-icon-button" aria-label="Toggle search">⌕</button>
+        </header>
+        {mobileSearchOpen && <div className="mobile-search-wrap"><input ref={mobileSearchInputRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." /></div>}
+        <main className="mobile-content">
+          {mobileTab === "tasks" && <section><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Your workload</p><h2>Tasks</h2></div><button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-filter-button">{filter === "active" ? "Active" : "All"}</button></div><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={setEditingItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}</section>}
+          {mobileTab === "calendar" && <section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todos} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={setEditingItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /><div className="mobile-agenda"><div className="mobile-agenda-heading"><h3>{mobileSelectedDate === new Date().toLocaleDateString("en-CA") ? "Today's agenda" : `${mobileSelectedDate} agenda`}</h3><span>{mobileAgenda.length} items</span></div>{mobileAgenda.length ? mobileAgenda.map((todo) => <TodoItem key={todo.id} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={setEditingItem} />) : <p className="mobile-muted">Nothing scheduled on this day.</p>}</div></section>}
+          {mobileTab === "profile" && <section className="space-y-3"><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Signed in as</p><h2 className="mobile-email-heading">{session?.user?.email || "Local account"}</h2></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button">Sign out</button>}</div><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><button type="button" onClick={() => setQuickLinkOpen(true)}>Add link</button></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}</section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700">{course.name}</button><span className="text-xs text-slate-400">{todos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section>}
+        </main>
+        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" onClick={() => setMobileAddOpen(true)}><span>+</span>Add</button>{[{ id: "tasks", label: "Tasks", icon: "✓" }, { id: "calendar", label: "Calendar", icon: "□" }, { id: "profile", label: "Profile", icon: "○" }].map((item) => <button type="button" key={item.id} onClick={() => setMobileTab(item.id)} className={mobileTab === item.id ? "mobile-nav-active" : ""}><span>{item.icon}</span>{item.label}</button>)}</nav>
+        <MobileAddSheet open={mobileAddOpen} courses={courses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
+      </div>
+
+      <div className="mx-auto hidden h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 md:flex sm:px-6">
       <aside className="no-scrollbar flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
@@ -628,6 +655,7 @@ export default function App() {
         onClose={() => setQuickAddOpen(false)}
       />
       <QuickLinkModal open={quickLinkOpen} onAdd={addQuickLink} onClose={() => setQuickLinkOpen(false)} />
-    </div>
+      </div>
+    </>
   );
 }

@@ -46,7 +46,7 @@ function formatRepeatDays(days) {
     .join(", ");
 }
 
-export default function QuickAddModal({ open, courses, onAdd, onClose }) {
+export default function QuickAddModal({ open, embedded = false, courses, onAdd, onClose }) {
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState(null);
@@ -133,10 +133,10 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
+    <div className={embedded ? "mobile-quick-content" : "fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"} onClick={embedded ? undefined : onClose}>
       <div
-        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+        className={embedded ? "w-full" : "w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl"}
+        onClick={embedded ? undefined : (e) => e.stopPropagation()}
       >
         <h2 className="mb-2 text-sm font-semibold text-slate-900">Quick add</h2>
 
@@ -149,6 +149,10 @@ export default function QuickAddModal({ open, courses, onAdd, onClose }) {
               setError(null);
             }}
             onKeyDown={handleKeyDown}
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            enterKeyHint="done"
             placeholder="Essay @Math tomorrow 3pm !weekly tk"
             className="w-full rounded-lg border border-todo-300 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
           />
