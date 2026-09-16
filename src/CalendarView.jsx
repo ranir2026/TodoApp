@@ -84,6 +84,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
   });
   const [now, setNow] = useState(new Date());
   const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
 
   useImperativeHandle(ref, () => ({
     shift(delta) {
@@ -124,13 +125,16 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
 
   function handleTouchStart(event) {
     touchStartX.current = event.touches[0]?.clientX ?? null;
+    touchStartY.current = event.touches[0]?.clientY ?? null;
   }
 
   function handleTouchEnd(event) {
-    if (touchStartX.current === null) return;
+    if (touchStartX.current === null || touchStartY.current === null) return;
     const delta = event.changedTouches[0]?.clientX - touchStartX.current;
+    const verticalDelta = event.changedTouches[0]?.clientY - touchStartY.current;
     touchStartX.current = null;
-    if (Math.abs(delta) >= 48) {
+    touchStartY.current = null;
+    if (Math.abs(delta) >= 96 && Math.abs(delta) > Math.abs(verticalDelta) * 1.35) {
       setCursor((current) => {
         const next = new Date(current);
         if (mode === "month") next.setMonth(next.getMonth() + (delta < 0 ? 1 : -1));
@@ -199,7 +203,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="mobile-month-grid flex h-full flex-col">
       <div className="grid shrink-0 grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="py-1">{d}</div>
@@ -215,8 +219,8 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
             weekDates[weekDates.length - 1] ?? new Date(),
           ]);
           return (
-            <div key={row} className="relative min-h-0 flex-1 overflow-hidden">
-              <div className="grid h-full grid-cols-7 gap-1">
+            <div key={row} className="mobile-month-row relative min-h-0 flex-1 overflow-hidden">
+              <div className="grid grid-cols-7 gap-1">
         {week.map((date, dayIndex) => {
           const i = row * 7 + dayIndex;
           if (!date) return <div key={i} />;
@@ -231,7 +235,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
             <div
               key={key}
               onClick={() => onSelectDate?.(key)}
-              className={`relative flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
+              className={`mobile-month-day relative flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >

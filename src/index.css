@@ -120,7 +120,10 @@ body {
 .mobile-calendar-shell > div:first-child > div:first-child h2 { min-width: 0; flex: 1; text-align: center; font-size: 13px; }
 .mobile-calendar-shell > div:first-child > div:last-child { width: 100%; margin-top: 10px; }
 .mobile-calendar-shell > div:first-child > div:last-child button { flex: 1; padding: 8px 2px; }
-.mobile-calendar-shell .min-h-0 { min-height: 0; height: min(58vh, 390px); }
+.mobile-calendar-shell .min-h-0 { min-height: 0; height: auto; }
+.mobile-calendar-shell .mobile-month-grid { height: auto; }
+.mobile-calendar-shell .mobile-month-row { height: 58px; flex: none; }
+.mobile-calendar-shell .mobile-month-day { height: 58px; }
 .mobile-calendar-shell .grid.grid-cols-7 { gap: 2px; }
 .mobile-calendar-shell .grid.grid-cols-7 > * { min-width: 0; }
 .mobile-calendar-shell .grid.grid-cols-7 .rounded-lg { border-radius: 6px; padding: 3px; }

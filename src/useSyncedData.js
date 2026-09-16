@@ -19,6 +19,31 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     }
 
     loadedUserRef.current = null;
+    const channel = supabase
+      .channel(`app-state-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "app_state", filter: `user_id=eq.${user.id}` },
+        ({ new: nextState }) => applyRemoteState(nextState),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "app_state", filter: `user_id=eq.${user.id}` },
+        ({ new: nextState }) => applyRemoteState(nextState),
+      );
+
+    function applyRemoteState(nextState) {
+          const nextTodos = Array.isArray(nextState.todos) ? nextState.todos : [];
+          const nextCourses = Array.isArray(nextState.courses) && nextState.courses.length ? nextState.courses : latestDataRef.current.courses;
+          const nextQuickLinks = Array.isArray(nextState.quick_links) ? nextState.quick_links : latestDataRef.current.quickLinks;
+          if (JSON.stringify(nextTodos) !== JSON.stringify(latestDataRef.current.todos)) setTodos(nextTodos);
+          if (JSON.stringify(nextCourses) !== JSON.stringify(latestDataRef.current.courses)) setCourses(nextCourses);
+          if (JSON.stringify(nextQuickLinks) !== JSON.stringify(latestDataRef.current.quickLinks)) setQuickLinks(nextQuickLinks);
+    }
+
+    channel
+      .subscribe();
+
     supabase
       .from("app_state")
       .select("todos, courses, quick_links")
@@ -43,6 +68,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, [user, setTodos, setCourses, setQuickLinks, onError]);
 

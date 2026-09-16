@@ -8,6 +8,19 @@ create table if not exists public.app_state (
 
 alter table public.app_state add column if not exists quick_links jsonb not null default '[]'::jsonb;
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'app_state'
+  ) then
+    alter publication supabase_realtime add table public.app_state;
+  end if;
+end $$;
+
 alter table public.app_state enable row level security;
 
 create policy "Users can read their own app state"
