@@ -39,6 +39,7 @@
 
 :root {
   color-scheme: light;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 body {
@@ -72,6 +73,39 @@ body {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+.modal-backdrop {
+  animation: modal-backdrop-in 250ms var(--ease-out) both;
+}
+
+.modal-surface {
+  animation: modal-surface-in 250ms var(--ease-out) both;
+  transform-origin: center;
+}
+
+.task-complete-toggle {
+  transition: transform 120ms var(--ease-out), border-color 150ms ease, background-color 150ms ease, color 120ms ease;
+}
+
+.task-complete-toggle:active {
+  transform: scale(.92);
+}
+
+.undo-toast {
+  animation: undo-toast-in 220ms var(--ease-out) both;
+}
+
+@keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-surface-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes undo-toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop, .modal-surface, .undo-toast { animation-duration: 120ms; }
+  .modal-surface { animation-name: modal-backdrop-in; }
+  .undo-toast { animation-name: modal-backdrop-in; }
+  .task-complete-toggle { transition-duration: 100ms; }
+  .task-complete-toggle:active { transform: none; }
 }
 
 .mobile-app {
@@ -163,6 +197,7 @@ body {
   .mobile-calendar-shell .mobile-month-grid { height: 100%; }
   .mobile-calendar-shell .mobile-month-row { height: auto; flex: 1 1 0%; }
   .mobile-calendar-shell .mobile-month-day { height: auto; }
+  .mobile-calendar-shell .grid.grid-cols-7 button { display: block; }
 }
 
 @media (max-width: 767px) {

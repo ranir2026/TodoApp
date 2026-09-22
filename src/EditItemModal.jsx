@@ -50,11 +50,11 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30" onClick={onClose}>
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+        className="modal-surface w-full max-w-sm space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
       >
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Edit {form.type}</h2>

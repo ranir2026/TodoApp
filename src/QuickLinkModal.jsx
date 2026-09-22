@@ -21,8 +21,8 @@ export default function QuickLinkModal({ open, onAdd, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
-      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="modal-surface w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">Add quick link</h2>
