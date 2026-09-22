@@ -130,7 +130,6 @@ body {
 .mobile-calendar-shell .grid.grid-cols-7 .text-\[11px\] { font-size: 9px; }
 .mobile-calendar-shell .grid.grid-cols-7 .text-xs { font-size: 10px; }
 .mobile-calendar-shell .grid.grid-cols-7 button { display: none; }
-.mobile-calendar-section .mobile-agenda { margin-top: 0; }
 .mobile-email-heading { max-width: 235px; overflow: hidden; font-size: 15px !important; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.02em !important; }
 .mobile-agenda, .mobile-panel { margin-top: 14px; border: 1px solid #e3e8ed; border-radius: 16px; background: rgba(255,255,255,.86); padding: 14px; box-shadow: 0 5px 18px rgba(15, 23, 42, .04); }
 .mobile-agenda-heading, .mobile-panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }

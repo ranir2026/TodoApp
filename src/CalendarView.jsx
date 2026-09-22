@@ -76,6 +76,24 @@ function getMultiDaySegments(items, dates) {
     .filter(Boolean);
 }
 
+// Give overlapping bars their own visual lane so a week-long event remains one
+// uninterrupted bar instead of being obscured by another range.
+function withLanes(segments) {
+  const laneEnds = [];
+  return segments
+    .sort((a, b) => dateValue(a.start) - dateValue(b.start) || dateValue(b.end) - dateValue(a.end))
+    .map((segment) => {
+      let lane = laneEnds.findIndex((end) => dateValue(end) < dateValue(segment.start));
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(segment.end);
+      } else {
+        laneEnds[lane] = segment.end;
+      }
+      return { ...segment, lane };
+    });
+}
+
 const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, compact = false, onModeChange, onEdit, onQuickAdd, onSelectDate }, ref) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -147,7 +165,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
 
   return (
     <div className="mobile-calendar-shell flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="calendar-toolbar mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <button onClick={() => ref.current?.shift(-1)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
             ‹
@@ -214,10 +232,10 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
         {Array.from({ length: rows }, (_, row) => {
           const week = cells.slice(row * 7, row * 7 + 7);
           const weekDates = week.filter(Boolean);
-          const segments = getMultiDaySegments(todos, [
+          const segments = withLanes(getMultiDaySegments(todos, [
             weekDates[0] ?? new Date(),
             weekDates[weekDates.length - 1] ?? new Date(),
-          ]);
+          ]));
           return (
             <div key={row} className="mobile-month-row relative min-h-0 flex-1 overflow-hidden">
               <div className="grid grid-cols-7 gap-1">
@@ -246,7 +264,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
 
               <div
                 className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto"
-                style={segments.length ? { paddingTop: 24 + segments.length * 20 } : undefined}
+                style={segments.length ? { paddingTop: 24 + (Math.max(...segments.map((segment) => segment.lane), 0) + 1) * 20 } : undefined}
               >
                 {visibleItems.map((t) => (
                   <button
@@ -281,7 +299,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
         })}
               </div>
               <div className="pointer-events-none absolute inset-0 grid grid-cols-7 gap-1">
-                {segments.map(({ item, start, end }, segmentIndex) => {
+                {segments.map(({ item, start, end, lane }) => {
                   const startIndex = week.findIndex((date) => date && toDateKey(date) === toDateKey(start));
                   const endIndex = week.findIndex((date) => date && toDateKey(date) === toDateKey(end));
                   return (
@@ -289,7 +307,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
                       key={`${item.id}-${toDateKey(start)}`}
                       onClick={() => onEdit(item)}
                       className={`pointer-events-auto z-10 mx-0.5 h-5 min-w-0 self-start overflow-hidden truncate rounded px-1 text-left text-[11px] shadow-sm ${chipClass(item)}`}
-                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, transform: `translateY(${24 + segmentIndex * 20}px)` }}
+                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, transform: `translateY(${24 + lane * 20}px)` }}
                       title={item.title}
                     >
                       {item.title}
@@ -342,7 +360,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
           </div>
           <div className="relative border-b border-slate-100" style={{ minHeight: 28 }}>
             <div className="grid grid-cols-7 gap-0.5 p-1">
-              {getMultiDaySegments(todos, days).map(({ item, start, end }) => {
+              {withLanes(getMultiDaySegments(todos, days)).map(({ item, start, end, lane }) => {
                 const startIndex = days.findIndex((day) => toDateKey(day) === toDateKey(start));
                 const endIndex = days.findIndex((day) => toDateKey(day) === toDateKey(end));
                 return (
@@ -350,7 +368,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
                     key={`${item.id}-${toDateKey(start)}`}
                     onClick={() => onEdit(item)}
                     className={`z-10 truncate rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(item)}`}
-                    style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}` }}
+                    style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: lane + 1 }}
                     title={item.title}
                   >
                     {item.title}
