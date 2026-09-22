@@ -238,7 +238,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
           ]));
           return (
             <div key={row} className="mobile-month-row relative min-h-0 flex-1 overflow-hidden">
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid h-full grid-cols-7 gap-1">
         {week.map((date, dayIndex) => {
           const i = row * 7 + dayIndex;
           if (!date) return <div key={i} />;
@@ -253,7 +253,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
             <div
               key={key}
               onClick={() => onSelectDate?.(key)}
-              className={`mobile-month-day relative flex min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
+              className={`mobile-month-day relative z-0 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
@@ -263,7 +263,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
               <span className={`absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
 
               <div
-                className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto"
+                className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
                 style={segments.length ? { paddingTop: 24 + (Math.max(...segments.map((segment) => segment.lane), 0) + 1) * 20 } : undefined}
               >
                 {visibleItems.map((t) => (
@@ -307,7 +307,7 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
                       key={`${item.id}-${toDateKey(start)}`}
                       onClick={() => onEdit(item)}
                       className={`pointer-events-auto z-10 mx-0.5 h-5 min-w-0 self-start overflow-hidden truncate rounded px-1 text-left text-[11px] shadow-sm ${chipClass(item)}`}
-                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, transform: `translateY(${24 + lane * 20}px)` }}
+                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: 1, transform: `translateY(${24 + lane * 20}px)` }}
                       title={item.title}
                     >
                       {item.title}
