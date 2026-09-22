@@ -157,6 +157,12 @@ body {
 
 @media (min-width: 768px) {
   .mobile-app { display: none; }
+  /* The calendar shares its component with mobile, but desktop needs the
+     flex-sized grid rather than the compact, fixed-height mobile rows. */
+  .mobile-calendar-shell .min-h-0 { height: 100%; }
+  .mobile-calendar-shell .mobile-month-grid { height: 100%; }
+  .mobile-calendar-shell .mobile-month-row { height: auto; flex: 1 1 0%; }
+  .mobile-calendar-shell .mobile-month-day { height: auto; }
 }
 
 @media (max-width: 767px) {
