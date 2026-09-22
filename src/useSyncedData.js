@@ -7,6 +7,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const isRemoteUpdateRef = useRef(false);
   const lastSyncedPayloadRef = useRef(null);
   const latestDataRef = useRef({ todos, courses, quickLinks });
+  const hasQuickLinksColumnRef = useRef(true);
 
   useEffect(() => {
     latestDataRef.current = { todos, courses, quickLinks };
@@ -37,14 +38,14 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       const current = latestDataRef.current;
       const hasTodosDiff = JSON.stringify(nextTodos) !== JSON.stringify(current.todos);
       const hasCoursesDiff = JSON.stringify(nextCourses) !== JSON.stringify(current.courses);
-      const hasQuickLinksDiff = JSON.stringify(nextQuickLinks) !== JSON.stringify(current.quickLinks);
+      const hasQuickLinksDiff = hasQuickLinksColumnRef.current && JSON.stringify(nextQuickLinks) !== JSON.stringify(current.quickLinks);
 
       if (hasTodosDiff || hasCoursesDiff || hasQuickLinksDiff) {
         isRemoteUpdateRef.current = true;
         lastSyncedPayloadRef.current = JSON.stringify({
           todos: nextTodos,
           courses: nextCourses,
-          quickLinks: nextQuickLinks,
+          quickLinks: hasQuickLinksColumnRef.current ? nextQuickLinks : current.quickLinks,
         });
 
         if (hasTodosDiff) setTodos(nextTodos);
@@ -54,20 +55,31 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     }
 
     const fetchRemoteState = async () => {
-      const { data, error } = await supabase
+      // First attempt querying with quick_links
+      let res = await supabase
         .from("app_state")
         .select("todos, courses, quick_links")
         .eq("user_id", user.id)
         .maybeSingle();
 
+      // If column doesn't exist yet in Supabase (error 42703), fall back to todos & courses gracefully
+      if (res.error && (res.error.code === "42703" || res.error.message?.includes("quick_links"))) {
+        hasQuickLinksColumnRef.current = false;
+        res = await supabase
+          .from("app_state")
+          .select("todos, courses")
+          .eq("user_id", user.id)
+          .maybeSingle();
+      }
+
       if (cancelled) return;
-      if (error) {
-        onError?.(error.message);
+      if (res.error) {
+        onError?.(res.error.message);
         return;
       }
 
-      if (data) {
-        applyRemoteState(data);
+      if (res.data) {
+        applyRemoteState(res.data);
       } else {
         const payload = {
           todos: latestDataRef.current.todos,
@@ -75,7 +87,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
           quickLinks: latestDataRef.current.quickLinks,
         };
         lastSyncedPayloadRef.current = JSON.stringify(payload);
-        saveToCloud(user.id, payload.todos, payload.courses, payload.quickLinks, onError);
+        saveToCloud(user.id, payload.todos, payload.courses, payload.quickLinks, hasQuickLinksColumnRef, onError);
       }
       loadedUserRef.current = user.id;
     };
@@ -138,7 +150,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     const saveAction = async () => {
       lastSyncedPayloadRef.current = currentPayloadString;
-      await saveToCloud(user.id, todos, courses, quickLinks, onError);
+      await saveToCloud(user.id, todos, courses, quickLinks, hasQuickLinksColumnRef, onError);
     };
 
     saveTimerRef.current = setTimeout(saveAction, 400);
@@ -157,19 +169,32 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   }, [user, todos, courses, quickLinks, onError]);
 }
 
-async function saveToCloud(userId, todos, courses, quickLinks, onError) {
+async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColumnRef, onError) {
   try {
-    const { error } = await supabase.from("app_state").upsert(
-      {
-        user_id: userId,
-        todos: todos ?? [],
-        courses: courses ?? [],
-        quick_links: quickLinks ?? [],
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
-    if (error) onError?.(error.message);
+    const row = {
+      user_id: userId,
+      todos: todos ?? [],
+      courses: courses ?? [],
+      updated_at: new Date().toISOString(),
+    };
+
+    if (hasQuickLinksColumnRef.current) {
+      row.quick_links = quickLinks ?? [];
+    }
+
+    const { error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
+
+    if (error) {
+      // If error is missing column quick_links, toggle flag and retry without it
+      if (error.code === "42703" || error.message?.includes("quick_links")) {
+        hasQuickLinksColumnRef.current = false;
+        delete row.quick_links;
+        const retry = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
+        if (retry.error) onError?.(retry.error.message);
+        return;
+      }
+      onError?.(error.message);
+    }
   } catch (err) {
     onError?.(err?.message || "Failed to save data");
   }
