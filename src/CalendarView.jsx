@@ -354,7 +354,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
           <div className="sticky top-0 z-10 grid h-6 grid-cols-7 border-b border-slate-100 bg-white text-center text-xs font-medium">
             {days.map((day) => (
               <span key={toDateKey(day)} className="min-w-0 truncate text-slate-500">
-                {day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}
+                {day.toLocaleDateString(undefined, compact ? { weekday: "short" } : { weekday: "short", day: "numeric" })}
               </span>
             ))}
           </div>
