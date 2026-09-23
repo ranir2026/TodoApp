@@ -12,23 +12,33 @@ function timeRangeLabel(todo) {
   return todo.endTime ? `${formatTime(todo.startTime)} – ${formatTime(todo.endTime)}` : formatTime(todo.startTime);
 }
 
-function dueLabel(dueDate, isEvent) {
+function dueLabel(todo, isEvent) {
+  const { dueDate, startTime } = todo;
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
-  const dueEnd = new Date(due);
-  dueEnd.setHours(23, 59, 59, 999);
-  const diffDays = Math.ceil((dueEnd - now) / 86400000);
   if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
+
+  const hasExactTime = Boolean(startTime);
+  const dueMoment = hasExactTime ? new Date(due) : new Date(due.setHours(23, 59, 59, 999));
+  if (hasExactTime) {
+    const [hours, minutes] = startTime.split(":").map(Number);
+    dueMoment.setHours(hours, minutes, 0, 0);
+  }
+  const diffDays = hasExactTime
+    ? Math.ceil((dueMoment - now) / 86400000)
+    : Math.round((dueMoment.setHours(0, 0, 0, 0) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   if (diffDays === 0) return { text: "Due today", tone: "text-urgent-600 bg-urgent-500/10" };
-  if (diffDays <= 2) return { text: `Due in ${diffDays}d`, tone: "text-todo-700 bg-todo-500/10" };
+  if (diffDays === 1) return { text: "Due tmrw", tone: "text-todo-700 bg-todo-500/10" };
+  if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700 bg-todo-500/10" };
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
 export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, selected }) {
   const isEvent = todo.type === "event";
-  const due = dueLabel(todo.dueDate, isEvent);
+  const due = dueLabel(todo, isEvent);
   const timeRange = timeRangeLabel(todo);
 
   return (
