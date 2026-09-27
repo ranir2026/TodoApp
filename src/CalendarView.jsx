@@ -330,6 +330,15 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
   const scrollAnchorRef = useRef(null);
   const containerRef = useRef(null);
 
+  // Dynamic column count — fixes hardcoded grid-cols-7 breaking day view (1 col).
+  const colStyle = { gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` };
+
+  // Whether any visible day has all-day (no startTime) items — used to conditionally
+  // render the shared all-day row so the hour sidebar stays aligned when it's absent.
+  const hasAnyAllDay = days.some((day) =>
+    (occByDay[toDateKey(day)] || []).some((t) => !t.startTime && !isMultiDayEvent(t))
+  );
+
   useEffect(() => {
     if (scrollAnchorRef.current && containerRef.current) {
       scrollAnchorRef.current.scrollIntoView({ block: "center" });
@@ -342,6 +351,9 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
   return (
     <div ref={containerRef} className="h-full overflow-auto">
       <div className="flex" style={{ minWidth: compact ? 0 : days.length > 1 ? 640 : 320 }}>
+        {/* Hour-label sidebar — pt-6 accounts for the sticky day-name header (h-6 = 24px).
+            The all-day row is now a shared element outside the per-column flex, so the
+            sidebar never needs to know its height; the grid lines always stay in sync. */}
         <div className="w-14 shrink-0 pt-6 text-right text-[10px] text-slate-400">
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} style={{ height: hourHeight }} className="pr-2">
@@ -351,15 +363,18 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="sticky top-0 z-10 grid h-6 grid-cols-7 border-b border-slate-100 bg-white text-center text-xs font-medium">
+          {/* Day-name header */}
+          <div className="sticky top-0 z-10 grid h-6 border-b border-slate-100 bg-white text-center text-xs font-medium" style={colStyle}>
             {days.map((day) => (
               <span key={toDateKey(day)} className="min-w-0 truncate text-slate-500">
                 {day.toLocaleDateString(undefined, compact ? { weekday: "short" } : { weekday: "short", day: "numeric" })}
               </span>
             ))}
           </div>
+
+          {/* Multi-day event bar */}
           <div className="relative border-b border-slate-100" style={{ minHeight: 28 }}>
-            <div className="grid grid-cols-7 gap-0.5 p-1">
+            <div className="grid gap-0.5 p-1" style={colStyle}>
               {withLanes(getMultiDaySegments(todos, days)).map(({ item, start, end, lane }) => {
                 const startIndex = days.findIndex((day) => toDateKey(day) === toDateKey(start));
                 const endIndex = days.findIndex((day) => toDateKey(day) === toDateKey(end));
@@ -377,62 +392,80 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
               })}
             </div>
           </div>
-          <div className="flex">
-        {days.map((day) => {
-          const key = toDateKey(day);
-          const dayItems = (occByDay[key] || []).filter((t) => t.startTime && !isMultiDayEvent(t));
-          const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime && !isMultiDayEvent(t));
-          const isToday = key === todayKey;
 
-          return (
-            <div key={key} className="min-w-0 flex-1 border-l border-slate-100">
-              {allDayItems.length > 0 && (
-                <div className="sticky top-6 z-10 space-y-0.5 border-b border-slate-100 bg-white p-1">
-                  {allDayItems.map((t) => (
-                    <button key={t.id} onClick={() => onEdit(t)} className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`} style={courseChipStyle(courseMap[t.courseId], t.completed)}>
-                      {t.title}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="relative" style={{ height: hourHeight * 24 }}>
-                {Array.from({ length: 24 }, (_, h) => (
-                  <div key={h} className="border-b border-slate-50" style={{ height: hourHeight }} />
-                ))}
-
-                {dayItems.map((t) => {
-                  const start = timeToMinutes(t.startTime);
-                  const end = t.endTime ? timeToMinutes(t.endTime) : start + 30;
-                  const top = (start / 60) * hourHeight;
-                  const height = Math.max(((end - start) / 60) * hourHeight, 18);
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => onEdit(t)}
-                      className={`absolute left-0.5 right-0.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(t)}`}
-                      style={{ ...courseChipStyle(courseMap[t.courseId], t.completed), top, height }}
-                      title={t.title}
-                    >
-                      {t.title}
-                    </button>
-                  );
-                })}
-
-                {isToday && (
-                  <div
-                    ref={scrollAnchorRef}
-                    className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
-                    style={{ top: (nowMinutes / 60) * hourHeight }}
-                  >
-                    <div className="h-1.5 w-1.5 -translate-x-0.5 rounded-full bg-danger-500" />
-                    <div className="h-px flex-1 bg-danger-500" />
+          {/* All-day items — one shared sticky row spanning all columns.
+              Previously each column had its own sticky section, which caused the
+              timed event grid to start at different vertical offsets per column,
+              breaking the alignment between the hour-label sidebar and event chips. */}
+          {hasAnyAllDay && (
+            <div className="sticky top-6 z-10 grid border-b border-slate-100 bg-white" style={colStyle}>
+              {days.map((day) => {
+                const key = toDateKey(day);
+                const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime && !isMultiDayEvent(t));
+                return (
+                  <div key={key} className="space-y-0.5 border-l border-slate-100 p-1 first:border-l-0">
+                    {allDayItems.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => onEdit(t)}
+                        className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
+                        style={courseChipStyle(courseMap[t.courseId], t.completed)}
+                      >
+                        {t.title}
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
+          )}
+
+          {/* Timed event columns */}
+          <div className="flex">
+            {days.map((day) => {
+              const key = toDateKey(day);
+              const dayItems = (occByDay[key] || []).filter((t) => t.startTime && !isMultiDayEvent(t));
+              const isToday = key === todayKey;
+
+              return (
+                <div key={key} className="min-w-0 flex-1 border-l border-slate-100">
+                  <div className="relative" style={{ height: hourHeight * 24 }}>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <div key={h} className="border-b border-slate-50" style={{ height: hourHeight }} />
+                    ))}
+
+                    {dayItems.map((t) => {
+                      const start = timeToMinutes(t.startTime);
+                      const end = t.endTime ? timeToMinutes(t.endTime) : start + 30;
+                      const top = (start / 60) * hourHeight;
+                      const height = Math.max(((end - start) / 60) * hourHeight, 18);
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => onEdit(t)}
+                          className={`absolute left-0.5 right-0.5 overflow-hidden rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(t)}`}
+                          style={{ ...courseChipStyle(courseMap[t.courseId], t.completed), top, height }}
+                          title={t.title}
+                        >
+                          {t.title}
+                        </button>
+                      );
+                    })}
+
+                    {isToday && (
+                      <div
+                        ref={scrollAnchorRef}
+                        className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                        style={{ top: (nowMinutes / 60) * hourHeight }}
+                      >
+                        <div className="h-1.5 w-1.5 -translate-x-0.5 rounded-full bg-danger-500" />
+                        <div className="h-px flex-1 bg-danger-500" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
