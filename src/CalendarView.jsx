@@ -330,11 +330,8 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
   const scrollAnchorRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Dynamic column count — fixes hardcoded grid-cols-7 breaking day view (1 col).
   const colStyle = { gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` };
 
-  // Whether any visible day has all-day (no startTime) items — used to conditionally
-  // render the shared all-day row so the hour sidebar stays aligned when it's absent.
   const hasAnyAllDay = days.some((day) =>
     (occByDay[toDateKey(day)] || []).some((t) => !t.startTime && !isMultiDayEvent(t))
   );
@@ -350,55 +347,52 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
 
   return (
     <div ref={containerRef} className="h-full overflow-auto">
-      <div className="flex" style={{ minWidth: compact ? 0 : days.length > 1 ? 640 : 320 }}>
-        {/* Hour-label sidebar — pt-6 accounts for the sticky day-name header (h-6 = 24px).
-            The all-day row is now a shared element outside the per-column flex, so the
-            sidebar never needs to know its height; the grid lines always stay in sync. */}
-        <div className="w-14 shrink-0 pt-6 text-right text-[10px] text-slate-400">
-          {Array.from({ length: 24 }, (_, h) => (
-            <div key={h} style={{ height: hourHeight }} className="pr-2">
-              {formatHour(h)}
-            </div>
-          ))}
-        </div>
+      <div style={{ minWidth: compact ? 0 : days.length > 1 ? 640 : 320 }}>
 
-        <div className="min-w-0 flex-1">
-          {/* Day-name header */}
-          <div className="sticky top-0 z-10 grid h-6 border-b border-slate-100 bg-white text-center text-xs font-medium" style={colStyle}>
+        {/* ── Sticky day-name header ─────────────────────────────────────────
+            Includes a blank gutter cell (w-14) so it stays flush with the
+            hour-label column below without any padding tricks. */}
+        <div className="sticky top-0 z-10 flex h-6 border-b border-slate-100 bg-white text-center text-xs font-medium">
+          <div className="w-14 shrink-0" />
+          <div className="grid min-w-0 flex-1" style={colStyle}>
             {days.map((day) => (
               <span key={toDateKey(day)} className="min-w-0 truncate text-slate-500">
                 {day.toLocaleDateString(undefined, compact ? { weekday: "short" } : { weekday: "short", day: "numeric" })}
               </span>
             ))}
           </div>
+        </div>
 
-          {/* Multi-day event bar */}
-          <div className="relative border-b border-slate-100" style={{ minHeight: 28 }}>
-            <div className="grid gap-0.5 p-1" style={colStyle}>
-              {withLanes(getMultiDaySegments(todos, days)).map(({ item, start, end, lane }) => {
-                const startIndex = days.findIndex((day) => toDateKey(day) === toDateKey(start));
-                const endIndex = days.findIndex((day) => toDateKey(day) === toDateKey(end));
-                return (
-                  <button
-                    key={`${item.id}-${toDateKey(start)}`}
-                    onClick={() => onEdit(item)}
-                    className={`z-10 truncate rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(item)}`}
-                    style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: lane + 1 }}
-                    title={item.title}
-                  >
-                    {item.title}
-                  </button>
-                );
-              })}
-            </div>
+        {/* ── Multi-day event bar ────────────────────────────────────────────
+            Also includes a gutter spacer so column widths stay aligned. */}
+        <div className="flex border-b border-slate-100" style={{ minHeight: 28 }}>
+          <div className="w-14 shrink-0" />
+          <div className="grid min-w-0 flex-1 gap-0.5 p-1" style={colStyle}>
+            {withLanes(getMultiDaySegments(todos, days)).map(({ item, start, end, lane }) => {
+              const startIndex = days.findIndex((day) => toDateKey(day) === toDateKey(start));
+              const endIndex = days.findIndex((day) => toDateKey(day) === toDateKey(end));
+              return (
+                <button
+                  key={`${item.id}-${toDateKey(start)}`}
+                  onClick={() => onEdit(item)}
+                  className={`z-10 truncate rounded px-1 py-0.5 text-left text-[11px] shadow-sm ${chipClass(item)}`}
+                  style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: lane + 1 }}
+                  title={item.title}
+                >
+                  {item.title}
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          {/* All-day items — one shared sticky row spanning all columns.
-              Previously each column had its own sticky section, which caused the
-              timed event grid to start at different vertical offsets per column,
-              breaking the alignment between the hour-label sidebar and event chips. */}
-          {hasAnyAllDay && (
-            <div className="sticky top-6 z-10 grid border-b border-slate-100 bg-white" style={colStyle}>
+        {/* ── All-day items ──────────────────────────────────────────────────
+            One shared sticky row so every day column's timed grid starts at
+            the same Y — keeping the hour-label sidebar perfectly in sync. */}
+        {hasAnyAllDay && (
+          <div className="sticky top-6 z-10 flex border-b border-slate-100 bg-white">
+            <div className="w-14 shrink-0" />
+            <div className="grid min-w-0 flex-1" style={colStyle}>
               {days.map((day) => {
                 const key = toDateKey(day);
                 const allDayItems = (occByDay[key] || []).filter((t) => !t.startTime && !isMultiDayEvent(t));
@@ -418,10 +412,23 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
                 );
               })}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Timed event columns */}
-          <div className="flex">
+        {/* ── Timed grid ────────────────────────────────────────────────────
+            The hour-label column lives HERE, directly beside the event rows.
+            No padding offset needed — they're siblings at the same flex level,
+            so row 0 of the hour labels always lines up with 12 AM in the grid. */}
+        <div className="flex">
+          <div className="w-14 shrink-0 text-right text-[10px] text-slate-400">
+            {Array.from({ length: 24 }, (_, h) => (
+              <div key={h} style={{ height: hourHeight }} className="pr-2">
+                {formatHour(h)}
+              </div>
+            ))}
+          </div>
+
+          <div className="min-w-0 flex-1 flex">
             {days.map((day) => {
               const key = toDateKey(day);
               const dayItems = (occByDay[key] || []).filter((t) => t.startTime && !isMultiDayEvent(t));
@@ -468,6 +475,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
             })}
           </div>
         </div>
+
       </div>
     </div>
   );

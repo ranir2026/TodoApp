@@ -226,7 +226,6 @@ body {
   .mobile-calendar-shell .calendar-toolbar { gap: 6px; border-radius: 10px; padding: 6px 8px; }
   .mobile-calendar-shell .w-14 { width: 2.15rem; }
   .mobile-calendar-shell .w-14 > div { padding-right: .25rem; }
-  .mobile-calendar-shell .w-14.pt-6 { padding-top: 1.25rem; }
   .heatmap-desktop-grid { display: none !important; }
   .heatmap-mobile-grid { display: flex; flex-direction: column; gap: 3px; padding: 3px 0; }
   .heatmap-mobile-row { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
