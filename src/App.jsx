@@ -139,12 +139,7 @@ export default function App() {
     showUndo(() => setTodos((prev) => prev.map((t) => (t.id === id ? previous : t))));
   }
 
-  function deleteTodo(id, occurrenceDate) {
-    const recurringItem = todos.find((t) => t.id === id);
-    if (recurringItem?.repeat && recurringItem.repeat !== "none" && occurrenceDate) {
-      skipOccurrence(id, occurrenceDate);
-      return;
-    }
+  function deleteTodo(id) {
     const index = todos.findIndex((t) => t.id === id);
     const deleted = todos[index];
     if (!deleted) return;
