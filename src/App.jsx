@@ -197,12 +197,10 @@ export default function App() {
   function deleteCourse(id) {
     if (courses.length <= 1) return;
     if (!window.confirm("Delete this course? Its tasks will move to the first remaining course.")) return;
-    setCourses((prev) => {
-      const remaining = prev.filter((c) => c.id !== id);
-      const fallbackId = remaining[0]?.id ?? null;
-      setTodos((prevTodos) => prevTodos.map((t) => (t.courseId === id ? { ...t, courseId: fallbackId } : t)));
-      return remaining;
-    });
+    const remaining = courses.filter((course) => course.id !== id);
+    const fallbackId = remaining[0]?.id ?? null;
+    setCourses(remaining);
+    setTodos((prevTodos) => prevTodos.map((todo) => (todo.courseId === id ? { ...todo, courseId: fallbackId } : todo)));
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
