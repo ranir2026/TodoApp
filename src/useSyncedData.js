@@ -8,6 +8,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const lastSyncedPayloadRef = useRef(null);
   const latestDataRef = useRef({ todos, courses, quickLinks });
   const hasQuickLinksColumnRef = useRef(true);
+  const hasPendingSaveRef = useRef(false);
 
   useEffect(() => {
     latestDataRef.current = { todos, courses, quickLinks };
@@ -26,6 +27,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     function applyRemoteState(nextState) {
       if (!nextState) return;
+      // Don't let stale remote data overwrite local edits that haven't been saved yet
+      if (hasPendingSaveRef.current) return;
 
       const nextTodos = Array.isArray(nextState.todos) ? nextState.todos : [];
       const nextCourses = Array.isArray(nextState.courses) && nextState.courses.length
@@ -143,6 +146,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     const currentPayloadString = JSON.stringify({ todos, courses, quickLinks });
     if (currentPayloadString === lastSyncedPayloadRef.current) {
+      hasPendingSaveRef.current = false;
       return undefined;
     }
 
@@ -151,8 +155,10 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     const saveAction = async () => {
       lastSyncedPayloadRef.current = currentPayloadString;
       await saveToCloud(user.id, todos, courses, quickLinks, hasQuickLinksColumnRef, onError);
+      if (lastSyncedPayloadRef.current === currentPayloadString) hasPendingSaveRef.current = false;
     };
 
+    hasPendingSaveRef.current = true;
     saveTimerRef.current = setTimeout(saveAction, 400);
 
     // Save immediately before page unload / navigation on mobile or desktop
