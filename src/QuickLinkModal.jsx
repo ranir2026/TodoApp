@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import BottomSheet from "./BottomSheet";
+
+const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
 
 export default function QuickLinkModal({ open, onAdd, onClose }) {
   const [label, setLabel] = useState("");
@@ -11,14 +14,28 @@ export default function QuickLinkModal({ open, onAdd, onClose }) {
     }
   }, [open]);
 
-  if (!open) return null;
-
   function submit(e) {
     e.preventDefault();
     if (!label.trim() || !url.trim()) return;
     onAdd(label.trim(), url.trim());
     onClose();
   }
+
+  if (isMobile()) {
+    return (
+      <BottomSheet open={open} onClose={onClose} label="Add quick link" eyebrow="Quick link" title="Save a website">
+        {() => (
+          <form onSubmit={submit} className="space-y-3">
+            <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Link name" className="mobile-sheet-field" />
+            <input type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" enterKeyHint="done" className="mobile-sheet-field" />
+            <button type="submit" disabled={!label.trim() || !url.trim()} className="mobile-sheet-primary">Add link</button>
+          </form>
+        )}
+      </BottomSheet>
+    );
+  }
+
+  if (!open) return null;
 
   return (
     <div className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
