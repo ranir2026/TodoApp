@@ -1,4 +1,5 @@
 import { isOverdue, parseDateKey } from "./occurrences";
+import { extractLinks } from "./noteLinks";
 import { courseAccentStyle, courseChipStyle } from "./courseColors";
 
 function formatTime(t) {
@@ -31,6 +32,7 @@ function dueLabel(todo, isEvent) {
 
 export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, selected }) {
   const isEvent = todo.type === "event";
+  const links = extractLinks(todo.description);
   const due = dueLabel(todo, isEvent);
   const timeRange = timeRangeLabel(todo);
 
@@ -95,6 +97,28 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
           {todo.repeat && todo.repeat !== "none" && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
           )}
+          {links.map((link) => (
+            // Span instead of <a>: the whole card is already a button
+            <span
+              key={link.href}
+              role="link"
+              tabIndex={0}
+              title={link.href}
+              onClick={(event) => {
+                event.stopPropagation();
+                window.open(link.href, "_blank", "noopener,noreferrer");
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                event.stopPropagation();
+                window.open(link.href, "_blank", "noopener,noreferrer");
+              }}
+              className="cursor-pointer rounded-full bg-link-100 px-2 py-0.5 text-xs font-medium text-link-700 hover:bg-link-200"
+            >
+              ↗ {link.label}
+            </span>
+          ))}
         </div>
       </button>
 

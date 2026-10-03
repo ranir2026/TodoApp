@@ -30,6 +30,11 @@
   --color-urgent-600: #7c3aed;
   --color-urgent-700: #6d28d9;
 
+  /* Sky blue — links from task notes */
+  --color-link-100: #e0f2fe;
+  --color-link-200: #bae6fd;
+  --color-link-700: #0369a1;
+
   /* Neutral / status */
   --color-danger-500: #ef4444;
   --color-danger-600: #dc2626;
