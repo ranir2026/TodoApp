@@ -625,6 +625,7 @@ export default function App() {
         </div>
       )}
 
+      </div>
       <CommandPalette open={paletteOpen} commands={commands} keymap={resolvedKeymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <EditItemModal
@@ -645,7 +646,6 @@ export default function App() {
         onClose={() => setQuickAddOpen(false)}
       />
       <QuickLinkModal open={quickLinkOpen} onAdd={addQuickLink} onClose={() => setQuickLinkOpen(false)} />
-      </div>
     </>
   );
 }
