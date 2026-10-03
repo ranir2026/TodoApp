@@ -20,6 +20,11 @@ import EmailConfirmedScreen from "./EmailConfirmedScreen";
 import QuickLinkModal from "./QuickLinkModal";
 import MobileAddSheet from "./MobileAddSheet";
 
+const MOBILE_TABS = [
+  { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
+  { id: "calendar", label: "Calendar", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><rect className="tab-fill" x="3.5" y="5" width="17" height="15" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg> },
+  { id: "profile", label: "Profile", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="8.5" r="3.8" /><path className="tab-fill" d="M4.5 20c.9-3.6 3.9-5.8 7.5-5.8s6.6 2.2 7.5 5.8z" /></svg> },
+];
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
 const DEFAULT_QUICK_LINKS = [];
@@ -64,6 +69,8 @@ export default function App() {
   });
   const [syncError, setSyncError] = useState("");
   const [mobileTab, setMobileTab] = useState("tasks");
+  const [mobileTabDirection, setMobileTabDirection] = useState(0);
+  const [mobileScrolled, setMobileScrolled] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileAddOpen, setMobileAddOpen] = useState(false);
   const [mobileSelectedDate, setMobileSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
@@ -92,6 +99,13 @@ export default function App() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setMobileScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const handleSyncError = useCallback((message) => setSyncError(message), []);
@@ -153,6 +167,12 @@ export default function App() {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setUndoAction(() => undo);
     undoTimerRef.current = setTimeout(() => setUndoAction(null), 5000);
+  }
+
+  function switchMobileTab(id) {
+    if (id === mobileTab) return;
+    setMobileTabDirection(Math.sign(MOBILE_TABS.findIndex((tab) => tab.id === id) - MOBILE_TABS.findIndex((tab) => tab.id === mobileTab)));
+    setMobileTab(id);
   }
 
   function undoLastAction() {
@@ -342,17 +362,17 @@ export default function App() {
   return (
     <>
       <div className="mobile-app md:hidden">
-        <header className={`mobile-header ${mobileTab === "calendar" ? "mobile-calendar-header" : ""}`}>
+        <header className={`mobile-header ${mobileScrolled ? "is-scrolled" : ""} ${mobileTab === "calendar" ? "mobile-calendar-header" : ""}`}>
           {mobileTab !== "calendar" && <div><h1>Todo</h1><p className="mobile-date">{now.toLocaleDateString(undefined, { month: "short", day: "numeric" })} <span>•</span> {now.toLocaleDateString(undefined, { weekday: "long" })}</p></div>}
-          <button type="button" onClick={() => setMobileSearchOpen((value) => !value)} className="mobile-icon-button" aria-label="Toggle search">⌕</button>
+          <button type="button" onClick={() => setMobileSearchOpen((value) => !value)} className="mobile-icon-button mobile-hit" aria-label="Toggle search">⌕</button>
           {mobileSearchOpen && <div className="mobile-search-inline"><input ref={mobileSearchInputRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>}
         </header>
-        <main className={`mobile-content ${mobileTab === "calendar" ? "mobile-calendar-content" : ""}`}>
-          {mobileTab === "tasks" && <section><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Your workload</p><h2>Tasks</h2></div><button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-filter-button">{filter === "active" ? "Active" : "All"}</button></div><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={setEditingItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}</section>}
+        <main key={mobileTab} className={`mobile-content mobile-tab-enter ${mobileTab === "calendar" ? "mobile-calendar-content" : ""}`} style={{ "--tab-shift": `${mobileTabDirection * 14}px` }}>
+          {mobileTab === "tasks" && <section><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Your workload</p><h2>Tasks</h2></div><button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-filter-button mobile-hit">{filter === "active" ? "Active" : "All"}</button></div><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={setEditingItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}</section>}
           {mobileTab === "calendar" && <section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todos} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={setEditingItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section>}
-          {mobileTab === "profile" && <section className="space-y-3"><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Signed in as</p><h2 className="mobile-email-heading">{session?.user?.email || "Local account"}</h2></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button">Sign out</button>}</div><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><button type="button" onClick={() => setQuickLinkOpen(true)}>Add link</button></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}</section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700">{course.name}</button><span className="text-xs text-slate-400">{todos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section>}
+          {mobileTab === "profile" && <section className="mobile-profile space-y-3"><div className="mobile-section-heading"><div><p className="mobile-eyebrow">Signed in as</p><h2 className="mobile-email-heading">{session?.user?.email || "Local account"}</h2></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><button type="button" onClick={() => setQuickLinkOpen(true)}>Add link</button></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}</section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700">{course.name}</button><span className="text-xs text-slate-400">{todos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section>}
         </main>
-        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" onClick={() => setMobileAddOpen(true)}><span>+</span>Add</button>{[{ id: "tasks", label: "Tasks", icon: "✓" }, { id: "calendar", label: "Calendar", icon: "□" }, { id: "profile", label: "Profile", icon: "○" }].map((item) => <button type="button" key={item.id} onClick={() => setMobileTab(item.id)} className={mobileTab === item.id ? "mobile-nav-active" : ""}><span>{item.icon}</span>{item.label}</button>)}</nav>
+        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${(MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) + 1) * 100}%)` }} /><button type="button" onClick={() => setMobileAddOpen(true)}><span className="mobile-nav-add-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></span>Add</button>{MOBILE_TABS.map((item) => <button type="button" key={item.id} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav>
         <MobileAddSheet open={mobileAddOpen} courses={courses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
       </div>
 
