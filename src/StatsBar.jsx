@@ -39,7 +39,7 @@ export default function StatsBar({ todos }) {
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div>
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-slate-500">Week</p>
+          <p className="text-xs font-semibold text-slate-700">Week</p>
           <p className="text-sm font-bold text-slate-900">{completionPct}%</p>
         </div>
         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">

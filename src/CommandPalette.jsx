@@ -48,7 +48,7 @@ export default function CommandPalette({ open, commands, keymap, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
+    <div className="modal-scrim fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
       <div
         className="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}

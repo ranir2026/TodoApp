@@ -124,7 +124,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
 
       <button
         onClick={() => onDelete(todo.id, todo.occurrenceDate)}
-        className="shrink-0 rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:text-danger-500 group-hover:opacity-100"
+        className="shrink-0 rounded-md p-1 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
         aria-label="Delete"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

@@ -1,8 +1,12 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
+
+  /* Elevation: bigger / higher surfaces get deeper, softer shadows */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+  --shadow-lg: 0 8px 20px -6px rgb(15 23 42 / 0.14), 0 2px 6px -2px rgb(15 23 42 / 0.08);
+  --shadow-xl: 0 28px 56px -16px rgb(15 23 42 / 0.28), 0 10px 20px -10px rgb(15 23 42 / 0.12);
 
   /* Indigo — courses */
   --color-course-50: #eef2ff;
@@ -66,6 +70,7 @@ button, a, [role="button"] {
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-optical-sizing: auto;
   background: #f8fafc;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
@@ -117,6 +122,47 @@ body {
   animation: undo-toast-in 220ms var(--ease-out) both;
 }
 
+/* Size-specific tracking: small text opens up, large text tightens.
+   In the base layer so explicit tracking-* utilities still win. */
+@layer base {
+  .text-\[10px\], .text-\[11px\], .text-xs { letter-spacing: 0.012em; }
+  .text-xl, .text-2xl { letter-spacing: -0.015em; }
+  .text-3xl, .text-4xl { letter-spacing: -0.025em; line-height: 1.05; }
+}
+
+/* Instant press feedback on every button */
+button:not(:disabled):active { scale: 0.97; }
+
+/* Frosted backdrop behind modals */
+.modal-backdrop, .modal-scrim {
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+  backdrop-filter: blur(6px) saturate(140%);
+}
+
+/* Floating chrome: translucent material with a bright top edge */
+.glass-light {
+  background: rgb(255 255 255 / 0.72);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), var(--shadow-lg);
+}
+.glass-dark {
+  background: rgb(15 23 42 / 0.78);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), var(--shadow-lg);
+}
+
+/* Segmented control: the selected pill slides like iOS UISegmentedControl,
+   and shrinks slightly while the selected segment is pressed */
+.segmented-pill {
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1), scale 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.segmented-option { transition: color 200ms ease; }
+.segmented-option:active { scale: 1; }
+.segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 0.95; }
+
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-surface-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes undo-toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -127,6 +173,15 @@ body {
   .undo-toast { animation-name: modal-backdrop-in; }
   .task-complete-toggle { transition-duration: 100ms; }
   .task-complete-toggle:active { transform: none; }
+  button:not(:disabled):active { scale: 1; }
+  .segmented-pill { transition: none; }
+  .segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 1; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .modal-backdrop, .modal-scrim { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-light { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #e2e8f0; }
+  .glass-dark { background: #0f172a; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 .mobile-app {

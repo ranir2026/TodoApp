@@ -134,7 +134,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
   }
 
   return (
-    <div className={embedded ? "mobile-quick-content" : "fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"} onClick={embedded ? undefined : onClose}>
+    <div className={embedded ? "mobile-quick-content" : "modal-scrim fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"} onClick={embedded ? undefined : onClose}>
       <div
         className={embedded ? "w-full" : "w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl"}
         onClick={embedded ? undefined : (e) => e.stopPropagation()}

@@ -9,6 +9,7 @@ import KeybindSettings from "./KeybindSettings";
 import EditItemModal from "./EditItemModal";
 import QuickAddModal from "./QuickAddModal";
 import ActivityHeatmap from "./ActivityHeatmap";
+import SegmentedControl from "./SegmentedControl";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
 import { parseDateKey } from "./occurrences";
@@ -196,11 +197,16 @@ export default function App() {
 
   function deleteCourse(id) {
     if (courses.length <= 1) return;
-    if (!window.confirm("Delete this course? Its tasks will move to the first remaining course.")) return;
+    const previousCourses = courses;
+    const movedTaskIds = new Set(todos.filter((todo) => todo.courseId === id).map((todo) => todo.id));
     const remaining = courses.filter((course) => course.id !== id);
     const fallbackId = remaining[0]?.id ?? null;
     setCourses(remaining);
     setTodos((prevTodos) => prevTodos.map((todo) => (todo.courseId === id ? { ...todo, courseId: fallbackId } : todo)));
+    showUndo(() => {
+      setCourses(previousCourses);
+      setTodos((prevTodos) => prevTodos.map((todo) => (movedTaskIds.has(todo.id) ? { ...todo, courseId: id } : todo)));
+    });
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
@@ -368,7 +374,7 @@ export default function App() {
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <p className="mb-1.5 text-xs font-medium text-slate-500">Categories</p>
+          <p className="mb-1.5 text-xs font-semibold text-slate-700">Categories</p>
           <ul className="space-y-1">
             {courses.map((c) => (
               <li key={c.id} className="group flex items-center gap-1.5">
@@ -401,7 +407,7 @@ export default function App() {
                 <button
                   onClick={() => deleteCourse(c.id)}
                   disabled={courses.length <= 1}
-                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-0 hover:text-danger-500 group-hover:opacity-100 disabled:opacity-0"
+                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
                   aria-label="Delete category"
                 >
                   ×
@@ -552,7 +558,7 @@ export default function App() {
 
         <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Quick links</p>
+            <p className="text-xs font-semibold text-slate-700">Quick links</p>
             <span className="text-[10px] text-slate-300">{quickLinks.length}</span>
           </div>
           {quickLinks.length > 0 && (
@@ -562,7 +568,7 @@ export default function App() {
                   <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate rounded px-1 py-1 text-xs font-medium text-course-600 hover:bg-course-50 hover:text-course-700" title={link.url}>
                     {link.label}
                   </a>
-                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded px-1 text-xs text-slate-300 opacity-0 hover:text-danger-500 group-hover:opacity-100" aria-label={`Delete ${link.label}`}>
+                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded px-1 text-xs text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100" aria-label={`Delete ${link.label}`}>
                     ×
                   </button>
                 </li>
@@ -572,33 +578,9 @@ export default function App() {
           <button onClick={() => setQuickLinkOpen(true)} className="w-full rounded-lg border border-dashed border-course-300 px-2 py-1.5 text-xs font-medium text-course-600 hover:bg-course-50">Add quick link</button>
         </section>
 
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {["active", "completed", "all"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                filter === f ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="Filter" options={["active", "completed", "all"]} value={filter} onChange={setFilter} />
 
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {["list", "calendar"].map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
-                view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="View" options={["list", "calendar"]} value={view} onChange={setView} />
 
         <div className="mt-auto text-right leading-none">
           <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
@@ -609,22 +591,23 @@ export default function App() {
       <button
         onClick={() => setPaletteOpen(true)}
         title={`Open shortcuts (${comboLabel(resolvedKeymap.openSettings)} to edit)`}
-        className="fixed bottom-4 right-4 z-40 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-400 shadow-sm hover:border-slate-300"
+        className="glass-light fixed bottom-4 right-4 z-40 flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-slate-500 hover:text-slate-700"
       >
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span> Cmds
+        <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span> Cmds
       </button>
 
       {undoAction && (
-        <div className="undo-toast fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-3 py-2 text-xs text-white shadow-lg">
+        <div className="undo-toast glass-dark fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg px-3 py-2 text-xs text-white">
           <span>Action completed</span>
           <button onClick={undoLastAction} className="font-semibold text-todo-300 hover:text-todo-200">Undo</button>
         </div>
       )}
 
       {syncError && (
-        <div className="fixed bottom-4 left-4 z-50 max-w-sm rounded-lg bg-danger-600 px-3 py-2 text-xs text-white shadow-lg">
-          Sync error: {syncError}
-          <button onClick={() => setSyncError("")} className="ml-2 font-semibold underline">Dismiss</button>
+        <div role="status" title={syncError} className="glass-light fixed bottom-4 left-4 z-50 flex max-w-xs items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-600">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger-500" />
+          <span className="min-w-0 flex-1 truncate">{navigator.onLine === false ? "Offline. Changes will sync when you reconnect." : "Couldn't sync. Retrying automatically."}</span>
+          <button onClick={() => setSyncError("")} className="shrink-0 font-medium text-slate-400 hover:text-slate-600" aria-label="Dismiss sync error">×</button>
         </div>
       )}
 

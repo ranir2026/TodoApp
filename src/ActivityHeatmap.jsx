@@ -39,7 +39,7 @@ export default function ActivityHeatmap({ todos }) {
 
   return (
     <div className="activity-heatmap rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <p className="mb-2 text-xs font-medium text-slate-500">Activity</p>
+      <p className="mb-2 text-xs font-semibold text-slate-700">Activity</p>
       <div className="heatmap-mobile-grid" aria-label="Activity heatmap">
         {Array.from({ length: 7 }, (_, dayIndex) => (
           <div key={dayIndex} className="heatmap-mobile-row">
