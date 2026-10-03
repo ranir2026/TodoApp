@@ -112,13 +112,26 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       .subscribe();
 
     // Re-fetch data when window/tab regains focus or comes back online (e.g. switching back to phone or desktop)
+    // If a save failed (e.g. offline or expired session), push local data before pulling remote
+    const syncNow = async () => {
+      if (hasPendingSaveRef.current && loadedUserRef.current === user.id) {
+        const { todos: t, courses: c, quickLinks: q } = latestDataRef.current;
+        const payload = JSON.stringify({ todos: t, courses: c, quickLinks: q });
+        const ok = await saveToCloud(user.id, t, c, q, hasQuickLinksColumnRef, onError);
+        if (!ok || cancelled) return;
+        lastSyncedPayloadRef.current = payload;
+        if (JSON.stringify(latestDataRef.current) === payload) hasPendingSaveRef.current = false;
+      }
+      fetchRemoteState();
+    };
+
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
-        fetchRemoteState();
+        syncNow();
       }
     };
     const handleOnline = () => {
-      fetchRemoteState();
+      syncNow();
     };
 
     window.addEventListener("visibilitychange", handleVisibilityOrFocus);
@@ -154,7 +167,12 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     const saveAction = async () => {
       lastSyncedPayloadRef.current = currentPayloadString;
-      await saveToCloud(user.id, todos, courses, quickLinks, hasQuickLinksColumnRef, onError);
+      const ok = await saveToCloud(user.id, todos, courses, quickLinks, hasQuickLinksColumnRef, onError);
+      if (!ok) {
+        // Keep the change pending so it is retried instead of being overwritten by stale remote data
+        if (lastSyncedPayloadRef.current === currentPayloadString) lastSyncedPayloadRef.current = null;
+        return;
+      }
       if (lastSyncedPayloadRef.current === currentPayloadString) hasPendingSaveRef.current = false;
     };
 
@@ -175,8 +193,18 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   }, [user, todos, courses, quickLinks, onError]);
 }
 
+function isAuthError(error) {
+  return error?.code === "42501" || error?.code === "PGRST301" || error?.status === 401 || /row-level security|JWT/i.test(error?.message ?? "");
+}
+
+// Returns true when the data was saved
 async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColumnRef, onError) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   try {
+    // getSession refreshes an expired access token (e.g. after the computer slept)
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return false;
+
     const row = {
       user_id: userId,
       todos: todos ?? [],
@@ -188,7 +216,14 @@ async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColu
       row.quick_links = quickLinks ?? [];
     }
 
-    const { error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
+    let { error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
+
+    if (error && isAuthError(error)) {
+      // Token was stale: refresh once and retry
+      const refreshed = await supabase.auth.refreshSession();
+      if (refreshed.error) return false;
+      ({ error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" }));
+    }
 
     if (error) {
       // If error is missing column quick_links, toggle flag and retry without it
@@ -196,12 +231,20 @@ async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColu
         hasQuickLinksColumnRef.current = false;
         delete row.quick_links;
         const retry = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
-        if (retry.error) onError?.(retry.error.message);
-        return;
+        if (retry.error) {
+          onError?.(retry.error.message);
+          return false;
+        }
+        onError?.("");
+        return true;
       }
       onError?.(error.message);
+      return false;
     }
+    onError?.("");
+    return true;
   } catch (err) {
     onError?.(err?.message || "Failed to save data");
+    return false;
   }
 }
