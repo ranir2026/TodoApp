@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { extractLinks } from "./noteLinks";
 import { parseQuickAdd, SUGGESTION_KEYWORDS } from "./quickAdd";
 
 function getCurrentToken(text, cursorPos) {
@@ -233,6 +234,11 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
               {preview.priority === "urgent" && (
                 <span className="rounded-md border border-urgent-200 bg-urgent-100 px-2 py-1 text-xs font-medium text-urgent-700">Urgent</span>
               )}
+              {extractLinks(preview.description).map((link) => (
+                <span key={link.href} title={link.href} className="rounded-md border border-link-200 bg-link-100 px-2 py-1 text-xs font-medium text-link-700">
+                  ↗ {link.label}
+                </span>
+              ))}
             </div>
           </div>
         )}
