@@ -337,6 +337,8 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
   );
 
   useEffect(() => {
+    // Only auto-scroll to the current time on desktop; mobile stays at the top
+    if (window.matchMedia("(max-width: 767px)").matches) return;
     if (scrollAnchorRef.current && containerRef.current) {
       scrollAnchorRef.current.scrollIntoView({ block: "center" });
     } else if (containerRef.current) {
