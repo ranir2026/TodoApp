@@ -18,6 +18,23 @@ export function parseDateKey(dateStr) {
   return new Date(y, m - 1, d);
 }
 
+// Exact deadline for a task: its start time on the due date, or end of that day if untimed.
+export function getDueMoment(todo) {
+  const due = parseDateKey(todo.dueDate);
+  if (todo.startTime) {
+    const [hours, minutes] = todo.startTime.split(":").map(Number);
+    due.setHours(hours, minutes, 0, 0);
+  } else {
+    due.setHours(23, 59, 59, 999);
+  }
+  return due;
+}
+
+export function isOverdue(todo, now = new Date()) {
+  if (todo.completed || todo.type === "event" || !todo.dueDate) return false;
+  return getDueMoment(todo) < now;
+}
+
 function matchesRepeat(item, due, cursor) {
   if (item.skipDates?.includes(toDateKey(cursor))) return false;
   if (item.repeat !== "none") {

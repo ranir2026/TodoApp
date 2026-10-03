@@ -1,4 +1,4 @@
-import { parseDateKey } from "./occurrences";
+import { getDueMoment, isOverdue } from "./occurrences";
 
 function startOfWeek(d) {
   const date = new Date(d);
@@ -28,18 +28,12 @@ export default function StatsBar({ todos }) {
 
   const dueSoon = todos.filter((t) => {
     if (t.completed || t.type === "event" || !t.dueDate) return false;
-    const due = parseDateKey(t.dueDate);
-    due.setHours(23, 59, 59, 999);
+    const due = getDueMoment(t);
     const hoursUntil = (due - now) / 36e5;
     return hoursUntil >= 0 && hoursUntil <= 48;
   });
 
-  const overdue = todos.filter((t) => {
-    if (t.completed || t.type === "event" || !t.dueDate) return false;
-    const due = parseDateKey(t.dueDate);
-    due.setHours(23, 59, 59, 999);
-    return due < now;
-  });
+  const overdue = todos.filter((t) => isOverdue(t, now));
 
   return (
     <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">

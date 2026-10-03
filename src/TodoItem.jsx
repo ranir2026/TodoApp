@@ -1,4 +1,4 @@
-import { parseDateKey } from "./occurrences";
+import { isOverdue, parseDateKey } from "./occurrences";
 import { courseAccentStyle, courseChipStyle } from "./courseColors";
 
 function formatTime(t) {
@@ -13,21 +13,14 @@ function timeRangeLabel(todo) {
 }
 
 function dueLabel(todo, isEvent) {
-  const { dueDate, startTime } = todo;
+  const { dueDate } = todo;
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
   if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
 
-  const hasExactTime = Boolean(startTime);
-  const dueMoment = hasExactTime ? new Date(due) : new Date(due.setHours(23, 59, 59, 999));
-  if (hasExactTime) {
-    const [hours, minutes] = startTime.split(":").map(Number);
-    dueMoment.setHours(hours, minutes, 0, 0);
-  }
-  const diffDays = hasExactTime
-    ? Math.ceil((dueMoment - now) / 86400000)
-    : Math.round((dueMoment.setHours(0, 0, 0, 0) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  if (isOverdue(todo, now)) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
+  const diffDays = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   if (diffDays === 0) return { text: "Due today", tone: "text-urgent-600 bg-urgent-500/10" };
