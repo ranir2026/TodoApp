@@ -199,6 +199,15 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
 
 export default CalendarView;
 
+const FILLER_WORDS = new Set(["a", "an", "the", "and", "with", "for", "to", "of", "at", "on", "in", "my"]);
+
+// Short label for tiny month cells: drop filler words, keep the first two meaningful ones
+function abbreviateTitle(title) {
+  const words = title.trim().split(/\s+/);
+  const meaningful = words.filter((word) => !FILLER_WORDS.has(word.toLowerCase()));
+  return (meaningful.length ? meaningful : words).slice(0, 2).join(" ");
+}
+
 function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSelectDate }) {
   const [addingKey, setAddingKey] = useState(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -223,7 +232,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
         {Array.from({ length: rows }, (_, row) => {
           const week = cells.slice(row * 7, row * 7 + 7);
           const weekDates = week.filter(Boolean);
-          const segments = withLanes(getMultiDaySegments(todos, [
+          const segments = withLanes(getMultiDaySegments(compact ? todos.filter((t) => t.type === "event") : todos, [
             weekDates[0] ?? new Date(),
             weekDates[weekDates.length - 1] ?? new Date(),
           ]));
@@ -234,8 +243,9 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
           const i = row * 7 + dayIndex;
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
-          const dayItems = (occByDay[key] || []).filter((item) => !isMultiDayEvent(item));
-          const visibleItems = dayItems.slice(0, 4);
+          // Phones show events only, as condensed chips; tasks live in the Tasks tab
+          const dayItems = (occByDay[key] || []).filter((item) => !isMultiDayEvent(item) && (!compact || item.type === "event"));
+          const visibleItems = dayItems.slice(0, compact ? 3 : 4);
           const hiddenItemCount = dayItems.length - visibleItems.length;
           const isToday = key === todayKey;
           const isAdding = addingKey === key;
@@ -248,27 +258,28 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
-              <button onClick={() => setAddingKey(isAdding ? null : key)} className="absolute right-1.5 top-1 rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
+              <button onClick={() => setAddingKey(isAdding ? null : key)} className="month-quick-add absolute right-1.5 top-1 rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
                 +
               </button>
               <span className={`month-day-number absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
 
               <div
                 className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
-                style={segments.length ? { paddingTop: 24 + (Math.max(...segments.map((segment) => segment.lane), 0) + 1) * 20 } : undefined}
+                style={segments.length ? { paddingTop: compact ? (Math.max(...segments.map((segment) => segment.lane), 0) + 1) * 16 : 24 + (Math.max(...segments.map((segment) => segment.lane), 0) + 1) * 20 } : undefined}
               >
                 {visibleItems.map((t) => (
                   <button
                     key={t.id}
                     onClick={(event) => { event.stopPropagation(); onEdit(t); }}
-                    className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
+                    className={compact ? `month-chip ${chipClass(t)}` : `block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
                     style={courseChipStyle(courseMap[t.courseId], t.completed)}
                     title={courseMap[t.courseId]?.name ? `${t.title} (${courseMap[t.courseId].name})` : t.title}
+                    aria-label={t.title}
                   >
-                    {t.title}
+                    {compact ? abbreviateTitle(t.title) : t.title}
                   </button>
                 ))}
-                {hiddenItemCount > 0 && <p className="px-1 text-[10px] text-slate-400">+{hiddenItemCount} more</p>}
+                {hiddenItemCount > 0 && <p className={compact ? "month-more" : "px-1 text-[10px] text-slate-400"}>+{hiddenItemCount}{compact ? "" : " more"}</p>}
               </div>
 
               {isAdding && (
@@ -297,11 +308,12 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
                     <button
                       key={`${item.id}-${toDateKey(start)}`}
                       onClick={() => onEdit(item)}
-                      className={`pointer-events-auto z-10 mx-0.5 h-5 min-w-0 self-start overflow-hidden truncate rounded px-1 text-left text-[11px] shadow-sm ${chipClass(item)}`}
-                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: 1, transform: `translateY(${24 + lane * 20}px)` }}
+                      className={compact ? `month-chip month-span pointer-events-auto z-10 self-start ${chipClass(item)}` : `pointer-events-auto z-10 mx-0.5 h-5 min-w-0 self-start overflow-hidden truncate rounded px-1 text-left text-[11px] shadow-sm ${chipClass(item)}`}
+                      style={{ ...courseChipStyle(courseMap[item.courseId], item.completed), gridColumn: `${startIndex + 1} / ${endIndex + 2}`, gridRow: 1, transform: `translateY(${compact ? 28 + lane * 16 : 24 + lane * 20}px)` }}
                       title={item.title}
+                      aria-label={item.title}
                     >
-                      {item.title}
+                      {compact ? abbreviateTitle(item.title) : item.title}
                     </button>
                   );
                 })}
