@@ -176,7 +176,7 @@ button:not(:disabled):active { scale: 0.97; }
   button:not(:disabled):active { scale: 1; }
   .segmented-pill { transition: none; }
   .mobile-nav-indicator { transition: opacity 150ms ease; }
-  .mobile-tab-enter { animation: modal-backdrop-in 150ms ease both; }
+  .mobile-tab-enter, .calendar-page-enter { animation: modal-backdrop-in 150ms ease both; }
   .segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 1; }
 }
 
@@ -228,8 +228,9 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-calendar-header { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 16px; z-index: 25; min-height: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .mobile-calendar-header .mobile-search-inline { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 58px; bottom: auto; left: 16px; height: 38px; }
 .mobile-content { min-height: calc(100vh - 74px); padding: 22px 16px 100px; }
-.mobile-calendar-content { min-height: 100dvh; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
-.mobile-calendar-content .mobile-calendar-shell { margin: 0 -16px; }
+.mobile-calendar-content { display: flex; flex-direction: column; height: 100dvh; min-height: 0; padding: 0 16px calc(84px + env(safe-area-inset-bottom)); }
+.mobile-calendar-section { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.mobile-calendar-content .mobile-calendar-shell { flex: 1; height: auto; margin: 0 -16px; }
 .mobile-section-heading { display: flex; align-items: end; justify-content: space-between; margin-bottom: 18px; }
 .mobile-filter-button { border: 0; border-radius: 999px; background: #fff; padding: 8px 12px; color: #64748b; font-size: 11px; font-weight: 700; box-shadow: 0 1px 4px rgba(15, 23, 42, .08); }
 .mobile-pill-row { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 20px; padding: 0 16px 3px; }
@@ -245,9 +246,9 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-calendar-shell > div:first-child > div:last-child { width: 100%; margin-top: 6px; }
 .mobile-calendar-shell > div:first-child > div:last-child button { flex: 1; padding: 6px 2px; }
 .mobile-calendar-shell .min-h-0 { min-height: 0; height: auto; }
-.mobile-calendar-shell .mobile-month-grid { height: auto; }
-.mobile-calendar-shell .mobile-month-row { height: 58px; flex: none; }
-.mobile-calendar-shell .mobile-month-day { height: 58px; }
+.mobile-calendar-shell .mobile-month-grid { height: 100%; }
+.mobile-calendar-shell .mobile-month-row { height: auto; flex: 1 1 0%; min-height: 56px; }
+.mobile-calendar-shell .mobile-month-day { height: auto; }
 .mobile-calendar-shell .grid.grid-cols-7 { gap: 2px; }
 .mobile-calendar-shell .grid.grid-cols-7 > * { min-width: 0; }
 .mobile-calendar-shell .grid.grid-cols-7 .rounded-lg { border-radius: 6px; padding: 3px; }
@@ -331,6 +332,17 @@ button:not(:disabled):active { scale: 0.97; }
 @media (max-width: 767px) {
   input, textarea, select { font-size: 16px; }
   .mobile-calendar-shell .calendar-toolbar { gap: 6px; border-radius: 10px; padding: 6px 8px; }
+  /* Month view, iOS Calendar style: hairlines between weeks, no boxed cells, today as a filled circle */
+  .mobile-calendar-shell .mobile-month-grid > .grid { font-size: 11px; font-weight: 600; color: #94a3b8; }
+  .mobile-calendar-shell .month-rows { gap: 0; }
+  .mobile-calendar-shell .mobile-month-row { border-top: 1px solid #eef1f5; }
+  .mobile-calendar-shell .mobile-month-row > .grid { gap: 0; }
+  .mobile-calendar-shell .grid.grid-cols-7 .mobile-month-day { border: 0; border-radius: 0; background: transparent; padding: 28px 1px 2px; transition: background-color 120ms ease; }
+  .mobile-calendar-shell .grid.grid-cols-7 .mobile-month-day:active { background: rgba(15, 23, 42, .04); }
+  .mobile-calendar-shell .month-day-number { top: 4px; right: auto; bottom: auto; left: 50%; display: grid; width: 22px; height: 22px; place-items: center; translate: -50% 0; border-radius: 999px; color: #172033; font-size: 12px !important; font-weight: 600; transition: background-color 200ms ease, color 200ms ease; }
+  .mobile-calendar-shell .is-today .month-day-number { background: #4f46e5; color: #fff; }
+  .mobile-calendar-shell .mobile-month-day .rounded { border-radius: 4px; }
+  .calendar-page-enter { animation: mobile-tab-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
   .mobile-calendar-shell .w-14 { width: 2.15rem; }
   .mobile-calendar-shell .w-14 > div { padding-right: .25rem; }
 }

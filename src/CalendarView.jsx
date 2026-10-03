@@ -102,20 +102,24 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
     return d;
   });
   const [now, setNow] = useState(new Date());
+  const [pageDirection, setPageDirection] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
+  function moveCursor(delta) {
+    setPageDirection(Math.sign(delta));
+    setCursor((current) => {
+      const next = new Date(current);
+      if (mode === "month") next.setMonth(next.getMonth() + delta);
+      else if (mode === "week") next.setDate(next.getDate() + delta * 7);
+      else next.setDate(next.getDate() + delta);
+      return next;
+    });
+  }
+
   useImperativeHandle(ref, () => ({
-    shift(delta) {
-      setCursor((current) => {
-        const next = new Date(current);
-        if (mode === "month") next.setMonth(next.getMonth() + delta);
-        else if (mode === "week") next.setDate(next.getDate() + delta * 7);
-        else next.setDate(next.getDate() + delta);
-        return next;
-      });
-    },
-  }), [mode]);
+    shift: moveCursor,
+  }));
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
@@ -154,13 +158,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
     touchStartX.current = null;
     touchStartY.current = null;
     if (Math.abs(delta) >= 96 && Math.abs(delta) > Math.abs(verticalDelta) * 1.35) {
-      setCursor((current) => {
-        const next = new Date(current);
-        if (mode === "month") next.setMonth(next.getMonth() + (delta < 0 ? 1 : -1));
-        else if (mode === "week") next.setDate(next.getDate() + (delta < 0 ? 7 : -7));
-        else next.setDate(next.getDate() + (delta < 0 ? 1 : -1));
-        return next;
-      });
+      moveCursor(delta < 0 ? 1 : -1);
     }
   }
 
@@ -176,7 +174,11 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
             ›
           </button>
           <button
-            onClick={() => setCursor(new Date(new Date().setHours(0, 0, 0, 0)))}
+            onClick={() => {
+              const today = new Date(new Date().setHours(0, 0, 0, 0));
+              setPageDirection(Math.sign(today - cursor));
+              setCursor(today);
+            }}
             className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-500 hover:border-slate-300"
           >
             Today
@@ -185,9 +187,9 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
         <SegmentedControl label="Calendar view" className="inline-grid" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={onModeChange} />
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div key={compact ? title : undefined} className={`min-h-0 flex-1 ${compact ? "calendar-page-enter" : ""}`} style={compact ? { "--tab-shift": `${pageDirection * 24}px` } : undefined}>
         {mode === "month" && (
-          <MonthGrid cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={(key) => { setCursor(parseDateKey(key)); onSelectDate?.(key); }} />
+          <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={(key) => { setCursor(parseDateKey(key)); onSelectDate?.(key); }} />
         )}
         {mode !== "month" && <TimeGrid days={days} todos={todos} courseMap={courseMap} occByDay={occByDay} onEdit={onEdit} now={now} compact={compact} />}
       </div>
@@ -197,7 +199,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
 
 export default CalendarView;
 
-function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSelectDate }) {
+function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSelectDate }) {
   const [addingKey, setAddingKey] = useState(null);
   const [draftTitle, setDraftTitle] = useState("");
   const rows = cells.length / 7;
@@ -213,11 +215,11 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
     <div className="mobile-month-grid flex h-full flex-col">
       <div className="grid shrink-0 grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="py-1">{d}</div>
+          <div key={d} className="py-1">{compact ? d[0] : d}</div>
         ))}
       </div>
 
-      <div className="mt-1 flex min-h-0 flex-1 flex-col gap-1">
+      <div className="month-rows mt-1 flex min-h-0 flex-1 flex-col gap-1">
         {Array.from({ length: rows }, (_, row) => {
           const week = cells.slice(row * 7, row * 7 + 7);
           const weekDates = week.filter(Boolean);
@@ -242,14 +244,14 @@ function MonthGrid({ cells, todos, occByDay, courseMap, onEdit, onQuickAdd, onSe
             <div
               key={key}
               onClick={() => onSelectDate?.(key)}
-              className={`mobile-month-day relative z-0 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
+              className={`mobile-month-day ${isToday ? "is-today" : ""} relative z-0 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
             >
               <button onClick={() => setAddingKey(isAdding ? null : key)} className="absolute right-1.5 top-1 rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
                 +
               </button>
-              <span className={`absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
+              <span className={`month-day-number absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
 
               <div
                 className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
