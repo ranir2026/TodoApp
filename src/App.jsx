@@ -449,22 +449,16 @@ export default function App() {
                 <option value="normal">Normal</option>
               </select>
               <span className="shrink-0 font-medium">Sort by</span>
-              <div className="flex shrink-0 gap-1 rounded-lg bg-slate-100 p-1">
-                {[
+              <SegmentedControl
+                label="Sort by"
+                className="inline-grid shrink-0"
+                options={[
                   { id: "date", label: "Date" },
                   { id: "course", label: "Category" },
-                ].map((o) => (
-                  <button
-                    key={o.id}
-                    onClick={() => setSortBy(o.id)}
-                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      sortBy === o.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
+                ]}
+                value={sortBy}
+                onChange={setSortBy}
+              />
             </div>
 
             {orderedTasks.length === 0 ? (

@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import SegmentedControl from "./SegmentedControl";
 import { expandRange, parseDateKey } from "./occurrences";
 import { courseChipStyle } from "./courseColors";
 
@@ -181,19 +182,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
             Today
           </button>
         </div>
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {["month", "week", "day"].map((m) => (
-            <button
-              key={m}
-              onClick={() => onModeChange(m)}
-              className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="Calendar view" className="inline-grid" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={onModeChange} />
       </div>
 
       <div className="min-h-0 flex-1">
