@@ -23,7 +23,7 @@ export default function QuickLinkModal({ open, onAdd, onClose }) {
 
   if (isMobile()) {
     return (
-      <BottomSheet open={open} onClose={onClose} label="Add quick link" eyebrow="Quick link" title="Save a website">
+      <BottomSheet open={open} onClose={onClose} label="Add quick link" title="Save a website">
         {() => (
           <form onSubmit={submit} className="space-y-3">
             <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Link name" className="mobile-sheet-field" />

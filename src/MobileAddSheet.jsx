@@ -8,7 +8,7 @@ export default function MobileAddSheet({ open, courses, onAdd, onClose }) {
   const [mode, setMode] = useState("quick");
 
   return (
-    <BottomSheet open={open} onClose={onClose} label="Add task or event" eyebrow="New item" title="Add to your day">
+    <BottomSheet open={open} onClose={onClose} label="Add task or event" title="Add to your day">
       {() => (
         <>
           <SegmentedControl

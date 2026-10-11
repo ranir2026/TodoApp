@@ -5,7 +5,7 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
 
 // Mobile bottom sheet: springs in, follows the finger when dragged by its header,
 // and dismisses on a downward flick (momentum-projected). children(dismiss) renders the body.
-export default function BottomSheet({ open, onClose, label, eyebrow, title, children }) {
+export default function BottomSheet({ open, onClose, label, title, children }) {
   const [mounted, setMounted] = useState(open);
   const sheetRef = useRef(null);
   const backdropRef = useRef(null);
@@ -96,11 +96,9 @@ export default function BottomSheet({ open, onClose, label, eyebrow, title, chil
         <div className="mobile-sheet-grab" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div className="mobile-sheet-handle" />
           <div className="mb-4 flex items-center justify-between">
-            <div>
-              {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-todo-600">{eyebrow}</p>}
-              <h2 className="mt-1 text-lg font-bold text-slate-900">{title}</h2>
-            </div>
-            <button type="button" onClick={() => dismiss()} className="mobile-icon-button mobile-hit" aria-label={`Close ${label}`}>×</button>
+            <h2 className="mobile-sheet-title">{title}</h2>
+            {/* The grab handle is the visible dismiss affordance; keep a close button for assistive tech */}
+            <button type="button" onClick={() => dismiss()} className="sr-only" aria-label={`Close ${label}`}>Close</button>
           </div>
         </div>
         {children(dismiss)}
