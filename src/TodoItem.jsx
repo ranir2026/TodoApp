@@ -45,7 +45,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
       style={courseAccentStyle(course)}
     >
       <button
-        onClick={() => onToggle(todo.id)}
+        onClick={() => onToggle(todo.id, todo.occurrenceDate)}
         className={`task-complete-toggle mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
           todo.completed
             ? "border-success-500 bg-success-500 text-white"

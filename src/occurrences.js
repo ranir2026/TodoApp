@@ -76,11 +76,71 @@ export function expandRange(items, startDate, endDate) {
       if (!item.dueDate) continue;
       const due = parseDateKey(item.dueDate);
       if (matchesRepeat(item, due, cursor)) {
-        (map[key] ??= []).push({ ...item, occurrenceDate: key });
+        const occurrence = { ...item, occurrenceDate: key };
+        if (isRepeating(item)) occurrence.completed = isOccurrenceCompleted(item, key);
+        (map[key] ??= []).push(occurrence);
       }
     }
     cursor.setDate(cursor.getDate() + 1);
   }
 
   return map;
+}
+
+const MAX_LOOKAHEAD_DAYS = 3 * 366;
+
+export function isRepeating(item) {
+  return Boolean(item.dueDate) && (item.repeat ?? "none") !== "none";
+}
+
+// Map of occurrence dateKey -> ISO completion timestamp for a repeating item.
+function completionMap(item) {
+  if (item.completions) return item.completions;
+  // Legacy: before per-occurrence tracking, checking off a repeating task marked the whole
+  // series completed. Treat that as having completed only the first occurrence.
+  return item.completed ? { [item.dueDate]: item.completedAt ?? null } : {};
+}
+
+export function isOccurrenceCompleted(item, dateKey) {
+  return isRepeating(item) ? dateKey in completionMap(item) : Boolean(item.completed);
+}
+
+// ISO timestamps of every completion of this item (one per checked-off occurrence for repeating tasks).
+export function completionTimestamps(item) {
+  if (isRepeating(item)) return Object.values(completionMap(item)).filter(Boolean);
+  return item.completed && item.completedAt ? [item.completedAt] : [];
+}
+
+// First occurrence after the most recently completed one, or null once the series has ended.
+export function currentOccurrence(item) {
+  const due = parseDateKey(item.dueDate);
+  const lastDone = Object.keys(completionMap(item)).sort().at(-1);
+  const cursor = lastDone ? parseDateKey(lastDone) : new Date(due);
+  if (lastDone) cursor.setDate(cursor.getDate() + 1);
+  const until = item.repeatUntil ? parseDateKey(item.repeatUntil) : null;
+  for (let i = 0; i < MAX_LOOKAHEAD_DAYS; i++) {
+    if (until && cursor > until) return null;
+    if (matchesRepeat(item, due, cursor)) return toDateKey(cursor);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return null;
+}
+
+// A repeating task is presented as its current occurrence; it only reads as completed once
+// every occurrence is done.
+export function resolveTask(item) {
+  if (!isRepeating(item)) return item;
+  const next = currentOccurrence(item);
+  return next
+    ? { ...item, dueDate: next, occurrenceDate: next, completed: false, completedAt: null }
+    : { ...item, completed: true };
+}
+
+// Toggles one occurrence of a repeating item (the current one when no date is given).
+export function toggleOccurrence(item, dateKey, now = new Date()) {
+  const completions = { ...completionMap(item) };
+  const key = dateKey ?? currentOccurrence(item);
+  if (key && !(key in completions)) completions[key] = now.toISOString();
+  else delete completions[key ?? Object.keys(completions).sort().at(-1)];
+  return { ...item, completions, completed: false, completedAt: null };
 }

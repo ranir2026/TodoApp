@@ -1,3 +1,5 @@
+import { completionTimestamps } from "./occurrences";
+
 const WEEKS = 13;
 
 function toDateKey(d) {
@@ -18,9 +20,11 @@ export default function ActivityHeatmap({ todos }) {
 
   const countsByDay = {};
   for (const t of todos) {
-    if (!t.completed || t.type === "event" || !t.completedAt) continue;
-    const key = toDateKey(new Date(t.completedAt));
-    countsByDay[key] = (countsByDay[key] || 0) + 1;
+    if (t.type === "event") continue;
+    for (const completedAt of completionTimestamps(t)) {
+      const key = toDateKey(new Date(completedAt));
+      countsByDay[key] = (countsByDay[key] || 0) + 1;
+    }
   }
 
   const start = new Date(today);
