@@ -94,7 +94,7 @@ export function isRepeating(item) {
 }
 
 // Map of occurrence dateKey -> ISO completion timestamp for a repeating item.
-function completionMap(item) {
+export function completionMap(item) {
   if (item.completions) return item.completions;
   // Legacy: before per-occurrence tracking, checking off a repeating task marked the whole
   // series completed. Treat that as having completed only the first occurrence.

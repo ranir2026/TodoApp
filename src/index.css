@@ -272,28 +272,38 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-color-dot { position: relative; height: 15px; width: 15px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
 .mobile-color-dot input { position: absolute; inset: 0; height: 100%; width: 100%; opacity: 0; }
 .mobile-add-button { border: 0; border-radius: 10px; background: var(--tint); padding: 0 14px; color: white; font-size: 12px; font-weight: 700; }
-/* Floating tab bar: a translucent capsule above the content, with a lens that slides to the active tab */
+/* Bottom dock: the floating tab bar (navigation only) with the Add action as a separate circle
+   beside it, as in iOS 26. Its gap to the bottom edge roughly matches the 16px side margins so it
+   sits concentric with the screen corners, while staying clear of the home-indicator gesture area. */
+:root { --dock-bottom: max(12px, calc(env(safe-area-inset-bottom) - 14px)); --dock-height: 64px; }
+.mobile-dock {
+  position: fixed; right: 16px; bottom: var(--dock-bottom); left: 16px; z-index: 30;
+  display: flex; gap: 10px;
+}
 .mobile-bottom-nav {
-  position: fixed; right: 16px; bottom: max(12px, env(safe-area-inset-bottom)); left: 16px; z-index: 30;
-  display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px;
+  position: relative; flex: 1; height: var(--dock-height);
+  display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px;
   border: 1px solid rgba(255, 255, 255, .7); border-radius: 999px;
   background: rgba(255, 255, 255, .72);
   -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 10px 30px -8px rgba(15, 23, 42, .22), 0 2px 8px -2px rgba(15, 23, 42, .08);
 }
 .mobile-nav-indicator {
-  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 4);
+  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 3);
   border-radius: 999px; background: var(--tint-soft);
   transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-.mobile-bottom-nav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; border-radius: 999px; background: transparent; padding: 6px 0 5px; color: #94a3b8; font-size: 10px; font-weight: 700; transition: color 200ms ease; }
+.mobile-bottom-nav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; border-radius: 999px; background: transparent; padding: 6px 0 5px; color: #94a3b8; font-size: 10px; font-weight: 700; transition: color 200ms ease; }
 .mobile-bottom-nav button { font-size: 11px; }
 .mobile-bottom-nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mobile-bottom-nav .mobile-nav-active svg .tab-fill { fill: currentColor; fill-opacity: .18; }
-.mobile-nav-add-icon { display: grid; place-items: center; width: 26px; height: 22px; border-radius: 999px; background: #f59e0b; color: #fff; }
-.mobile-nav-add-icon svg { width: 16px; height: 16px; stroke-width: 2.4; }
 .mobile-bottom-nav .mobile-nav-active { color: var(--tint); }
-.mobile-bottom-nav button:first-of-type { color: #b45309; }
+.mobile-add-fab {
+  display: grid; flex: none; width: var(--dock-height); height: var(--dock-height); place-items: center;
+  border: 0; border-radius: 50%; background: #d97706; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 10px 30px -8px rgba(180, 83, 9, .45), 0 2px 8px -2px rgba(15, 23, 42, .1);
+}
+.mobile-add-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .3); -webkit-backdrop-filter: blur(6px) saturate(140%); backdrop-filter: blur(6px) saturate(140%); }
 .mobile-add-sheet { max-height: 92vh; overflow-y: auto; border-radius: 24px 24px 0 0; background: #fff; padding: 10px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(15, 23, 42, .2); position: fixed; right: 0; bottom: 0; left: 0; z-index: 61; will-change: transform; }
 .mobile-sheet-grab { touch-action: none; cursor: grab; }
@@ -312,7 +322,7 @@ button:not(:disabled):active { scale: 0.97; }
 .heatmap-legend-cell { width: 10px; height: 10px; border-radius: 3px; }
 /* Tab switch: tabs replace each other in place (as in iOS), so they cross-fade rather than slide */
 .mobile-tab-enter { animation: modal-backdrop-in 200ms ease both; }
-.mobile-filter-segmented { background: rgba(118, 118, 128, .12); }
+.mobile-show-completed { display: block; margin: 18px auto 0; border: 0; background: transparent; padding: 6px 10px; color: var(--tint); font-size: 15px; font-weight: 500; }
 @keyframes mobile-tab-in { from { opacity: 0; transform: translateX(var(--tab-shift, 0px)); } to { opacity: 1; transform: none; } }
 .mobile-hit { position: relative; }
 .mobile-hit::after { content: ""; position: absolute; top: 50%; left: 50%; width: max(100%, 44px); height: max(100%, 44px); translate: -50% -50%; }
@@ -351,7 +361,7 @@ button:not(:disabled):active { scale: 0.97; }
 
 @media (max-width: 767px) {
   input, textarea, select { font-size: 16px; }
-  .toast-layer { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 76px); }
+  .toast-layer { bottom: calc(var(--dock-bottom) + var(--dock-height) + 12px); }
   .undo-toast { gap: 16px; border-radius: 999px; padding: 6px 6px 6px 18px; font-size: 14px; white-space: nowrap; }
   .undo-toast button { min-height: 36px; padding: 0 12px; font-size: 14px; }
   .sync-status { right: 16px; left: 16px; max-width: none; border-radius: 14px; padding: 10px 14px; font-size: 13px; }

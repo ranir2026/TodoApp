@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "./supabase";
+import { hasRecoveredOutageEdits, markOutageEditsRecovered, mergeOutageEdits } from "./outageRecovery";
 
 export function useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, onError) {
   const loadedUserRef = useRef(null);
@@ -82,7 +83,17 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       }
 
       if (res.data) {
-        applyRemoteState(res.data);
+        const merged = hasRecoveredOutageEdits(user.id) ? null : mergeOutageEdits(res.data, latestDataRef.current);
+        if (merged) {
+          const quickLinksToSave = Array.isArray(res.data.quick_links) ? res.data.quick_links : latestDataRef.current.quickLinks;
+          applyRemoteState({ ...res.data, todos: merged.todos, courses: merged.courses });
+          const ok = await saveToCloud(user.id, merged.todos, merged.courses, quickLinksToSave, hasQuickLinksColumnRef, onError);
+          if (cancelled) return;
+          if (ok) markOutageEditsRecovered(user.id);
+        } else {
+          markOutageEditsRecovered(user.id);
+          applyRemoteState(res.data);
+        }
       } else {
         const payload = {
           todos: latestDataRef.current.todos,
