@@ -276,35 +276,35 @@ button:not(:disabled):active { scale: 0.97; }
    it, as in iOS 26; it sits on the left for a left thumb. The gap to the bottom edge roughly matches
    the 16px side margins so the dock sits concentric with the screen corners, while staying clear of
    the home-indicator gesture area. */
-:root { --dock-bottom: max(12px, calc(env(safe-area-inset-bottom) - 14px)); --dock-height: 64px; }
+:root { --dock-bottom: max(12px, calc(env(safe-area-inset-bottom) - 14px)); --dock-height: 54px; }
 .mobile-dock {
   position: fixed; right: 16px; bottom: var(--dock-bottom); left: 16px; z-index: 30;
-  display: flex; gap: 10px;
+  display: flex; gap: 8px;
 }
 .mobile-bottom-nav {
   position: relative; flex: 1; height: var(--dock-height);
-  display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px;
+  display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px;
   border: 1px solid rgba(255, 255, 255, .7); border-radius: 999px;
   background: rgba(255, 255, 255, .72);
   -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 10px 30px -8px rgba(15, 23, 42, .22), 0 2px 8px -2px rgba(15, 23, 42, .08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 8px 24px -8px rgba(15, 23, 42, .2), 0 2px 6px -2px rgba(15, 23, 42, .08);
 }
 .mobile-nav-indicator {
-  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 3);
+  position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3);
   border-radius: 999px; background: var(--tint-soft);
   transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-.mobile-bottom-nav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; border-radius: 999px; background: transparent; padding: 6px 0 5px; color: #94a3b8; font-size: 10px; font-weight: 700; transition: color 200ms ease; }
-.mobile-bottom-nav button { font-size: 11px; }
-.mobile-bottom-nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mobile-bottom-nav button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border: 0; border-radius: 999px; background: transparent; padding: 6px 0 5px; color: #94a3b8; font-size: 10px; font-weight: 700; transition: color 200ms ease; }
+.mobile-bottom-nav button { font-size: 10px; padding: 0; }
+.mobile-bottom-nav svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .mobile-bottom-nav .mobile-nav-active svg .tab-fill { fill: currentColor; fill-opacity: .18; }
 .mobile-bottom-nav .mobile-nav-active { color: var(--tint); }
 .mobile-add-fab {
   display: grid; flex: none; width: var(--dock-height); height: var(--dock-height); place-items: center;
   border: 0; border-radius: 50%; background: #d97706; color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 10px 30px -8px rgba(180, 83, 9, .45), 0 2px 8px -2px rgba(15, 23, 42, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 8px 24px -8px rgba(180, 83, 9, .4), 0 2px 6px -2px rgba(15, 23, 42, .1);
 }
-.mobile-add-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.mobile-add-fab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .3); -webkit-backdrop-filter: blur(6px) saturate(140%); backdrop-filter: blur(6px) saturate(140%); }
 .mobile-add-sheet { max-height: 92vh; overflow-y: auto; border-radius: 24px 24px 0 0; background: #fff; padding: 10px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(15, 23, 42, .2); position: fixed; right: 0; bottom: 0; left: 0; z-index: 61; will-change: transform; }
 .mobile-sheet-grab { touch-action: none; cursor: grab; }

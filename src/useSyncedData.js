@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { hasRecoveredOutageEdits, markOutageEditsRecovered, mergeOutageEdits } from "./outageRecovery";
 
@@ -10,6 +10,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const latestDataRef = useRef({ todos, courses, quickLinks });
   const hasQuickLinksColumnRef = useRef(true);
   const hasPendingSaveRef = useRef(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
   useEffect(() => {
     latestDataRef.current = { todos, courses, quickLinks };
@@ -82,6 +83,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         return;
       }
 
+      setLastSyncedAt(new Date());
       if (res.data) {
         const merged = hasRecoveredOutageEdits(user.id) ? null : mergeOutageEdits(res.data, latestDataRef.current);
         if (merged) {
@@ -185,6 +187,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         return;
       }
       if (lastSyncedPayloadRef.current === currentPayloadString) hasPendingSaveRef.current = false;
+      setLastSyncedAt(new Date());
     };
 
     hasPendingSaveRef.current = true;
@@ -202,6 +205,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, [user, todos, courses, quickLinks, onError]);
+
+  return { lastSyncedAt: user ? lastSyncedAt : null };
 }
 
 function isAuthError(error) {
