@@ -5,8 +5,10 @@ import { completionMap, isRepeating } from "./occurrences";
 // carry over what can be dated to that window: tasks created, tasks checked off, and repeating
 // occurrences checked off. Everything else defers to the cloud copy, because a device that was
 // merely out of date can't otherwise be told apart from one with real edits.
+// v2: tabs opened during the outage kept running the config-less build (it predates the
+// auto-reload), so recovery runs once more on every device to pick up edits made in them.
 const OUTAGE_START = Date.parse("2026-10-11T16:50:00Z");
-const FLAG_PREFIX = "outage-recovered-2026-10-11:";
+const FLAG_PREFIX = "outage-recovered-2026-10-11-v2:";
 
 const duringOutage = (iso) => Boolean(iso) && Date.parse(iso) >= OUTAGE_START;
 

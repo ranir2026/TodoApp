@@ -585,7 +585,7 @@ export default function App() {
       <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-6 pl-1">
         {session && (
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">
-            <span className="max-w-32 truncate" title={session.user.email}>{session.user.email}</span>
+            <span className="min-w-0"><span className="block max-w-32 truncate" title={session.user.email}>{session.user.email}</span><span className="block text-[10px] text-slate-400">{syncStatus}</span></span>
             <button onClick={() => supabase.auth.signOut()} className="font-medium text-course-600 hover:text-course-700">Sign out</button>
           </div>
         )}

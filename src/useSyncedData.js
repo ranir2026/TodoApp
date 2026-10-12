@@ -83,7 +83,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         return;
       }
 
-      setLastSyncedAt(new Date());
+      // Only claim "synced" when this device has nothing waiting to be saved
+      if (!hasPendingSaveRef.current) setLastSyncedAt(new Date());
       if (res.data) {
         const merged = hasRecoveredOutageEdits(user.id) ? null : mergeOutageEdits(res.data, latestDataRef.current);
         if (merged) {
@@ -215,11 +216,17 @@ function isAuthError(error) {
 
 // Returns true when the data was saved
 async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColumnRef, onError) {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    onError?.("Offline");
+    return false;
+  }
   try {
     // getSession refreshes an expired access token (e.g. after the computer slept)
     const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) return false;
+    if (!sessionData.session) {
+      onError?.("Signed out. Sign in again to sync.");
+      return false;
+    }
 
     const row = {
       user_id: userId,
@@ -237,7 +244,10 @@ async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColu
     if (error && isAuthError(error)) {
       // Token was stale: refresh once and retry
       const refreshed = await supabase.auth.refreshSession();
-      if (refreshed.error) return false;
+      if (refreshed.error) {
+        onError?.(refreshed.error.message || "Session expired. Sign in again to sync.");
+        return false;
+      }
       ({ error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" }));
     }
 
