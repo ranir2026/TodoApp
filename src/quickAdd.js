@@ -34,6 +34,17 @@ function combineTime(hStr, minStr, mer) {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTH_DATE_PATTERN = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i;
+
+// A date typed without a year means its next occurrence, so "sept 21" typed in October is next year
+function upcomingDate(today, month, day, year) {
+  const d = new Date(year ?? today.getFullYear(), month, day);
+  if (d.getMonth() !== month) return null;
+  if (year == null && d < today) d.setFullYear(d.getFullYear() + 1);
+  return d;
+}
+
 function stripMatch(text, match) {
   return text.slice(0, match.index) + " " + text.slice(match.index + match[0].length);
 }
@@ -68,6 +79,12 @@ function extractDate(text) {
     return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
+  m = text.match(MONTH_DATE_PATTERN);
+  if (m) {
+    const d = upcomingDate(today, MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()), Number(m[2]), m[3] ? Number(m[3]) : null);
+    if (d) return { dueDate: toDateKey(d), text: stripMatch(text, m) };
+  }
+
   const weekdayPattern = /\b(sunday|monday|tuesday|wednesday|thursday|thurs|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b/gi;
   const weekdayMatches = [...text.matchAll(weekdayPattern)];
   if (weekdayMatches.length) {
@@ -90,9 +107,9 @@ function extractDate(text) {
 
   m = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
   if (m) {
-    const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : today.getFullYear();
-    const d = new Date(year, Number(m[1]) - 1, Number(m[2]));
-    return { dueDate: toDateKey(d), text: stripMatch(text, m) };
+    const year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : null;
+    const d = upcomingDate(today, Number(m[1]) - 1, Number(m[2]), year);
+    if (d) return { dueDate: toDateKey(d), text: stripMatch(text, m) };
   }
 
   return { dueDate: null, repeatDays: [], text };
@@ -116,6 +133,32 @@ function extractTime(text) {
   }
 
   return { startTime: null, endTime: null, text };
+}
+
+// Category names can contain spaces, so take the most words after "@" that still start a category name
+function extractCourse(text, courses) {
+  const at = text.search(/@[A-Za-z0-9]/);
+  if (at === -1) return { courseId: null, courseName: null, text };
+  const words = [...text.slice(at + 1).matchAll(/[^\s@]+/g)].slice(0, 5);
+  const names = courses.map((c) => ({ course: c, name: c.name.toLowerCase().replace(/\s+/g, " ") }));
+
+  let found = null;
+  let end = at + 1 + words[0].index + words[0][0].length;
+  for (let n = words.length; n > 0 && !found; n -= 1) {
+    const last = words[n - 1];
+    const q = text.slice(at + 1, at + 1 + last.index + last[0].length).toLowerCase().replace(/\s+/g, " ");
+    const exact = names.find((c) => c.name === q) ?? names.find((c) => c.name.startsWith(q));
+    if (exact || n === 1) {
+      found = exact ?? names.find((c) => c.name.includes(q));
+      end = at + 1 + last.index + last[0].length;
+    }
+  }
+
+  return {
+    courseId: found?.course.id ?? null,
+    courseName: found?.course.name ?? null,
+    text: text.slice(0, at) + " " + text.slice(end),
+  };
 }
 
 export function parseQuickAdd(rawText, courses) {
@@ -165,16 +208,10 @@ export function parseQuickAdd(rawText, courses) {
     }
   }
 
-  m = text.match(/@([A-Za-z0-9][\w-]*)/);
-  if (m && courses.length) {
-    const q = m[1].toLowerCase();
-    const found = courses.find((c) => c.name.toLowerCase().startsWith(q)) || courses.find((c) => c.name.toLowerCase().includes(q));
-    if (found) {
-      courseId = found.id;
-      courseName = found.name;
-    }
-    text = stripMatch(text, m);
-  }
+  const courseResult = extractCourse(text, courses);
+  text = courseResult.text;
+  courseId = courseResult.courseId;
+  courseName = courseResult.courseName;
 
   const timeResult = extractTime(text);
   text = timeResult.text;

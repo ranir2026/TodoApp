@@ -14,11 +14,14 @@ function getSuggestions(text, cursorPos, courses) {
   if (!current) return [];
   const { token, start } = current;
 
-  if (token.startsWith("@")) {
-    const q = token.slice(1).toLowerCase();
-    return courses
-      .filter((c) => c.name.toLowerCase().startsWith(q))
-      .map((c) => ({ label: `@${c.name}`, hint: "category", color: c.color, insert: `@${c.name}`, start }));
+  // Keep suggesting categories past a space, since names like "Comp Sci" contain one
+  const mention = text.slice(0, cursorPos).match(/@([^@]*)$/);
+  if (mention) {
+    const q = mention[1].toLowerCase().replace(/\s+/g, " ");
+    const matches = courses.filter((c) => c.name.toLowerCase().startsWith(q) && c.name.toLowerCase() !== q.trimEnd());
+    if (matches.length || token.startsWith("@")) {
+      return matches.map((c) => ({ label: `@${c.name}`, hint: "category", color: c.color, insert: `@${c.name}`, start: mention.index }));
+    }
   }
 
   const q = token.toLowerCase();
@@ -33,7 +36,8 @@ function getSuggestions(text, cursorPos, courses) {
 
 function formatDate(dateKey) {
   const d = new Date(`${dateKey}T00:00:00`);
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const year = d.getFullYear() === new Date().getFullYear() ? undefined : "numeric";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year });
 }
 
 function formatTime(t) {
@@ -150,7 +154,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
               setError(null);
             }}
             onKeyDown={handleKeyDown}
-            inputMode="text"
+            inputMode="email"
             autoCapitalize="none"
             autoCorrect="off"
             enterKeyHint="done"
@@ -248,7 +252,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
         <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
           <p className="mb-1 font-semibold text-slate-600">Formatting guide</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Category</span> — assign a category, e.g. <span className="font-mono">@Math</span></p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">today / tomorrow / tmrw / mon / 9/20</span> — sets the due date</p>
+          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">today / tomorrow / mon / 9/20 / nov 11</span> — sets the due date</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">3pm / 9:30am / 3pm-4pm</span> — sets start (and end) time</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">daily / weekly / monthly</span> — sets how often it repeats</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">!</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">urgent</span> — marks it urgent</p>
