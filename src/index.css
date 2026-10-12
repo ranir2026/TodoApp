@@ -361,7 +361,8 @@ button:not(:disabled):active { scale: 0.97; }
 }
 
 @media (max-width: 767px) {
-  input, textarea, select { font-size: 16px; }
+  /* iOS zooms into any focused field under 16px; !important beats the smaller text classes */
+  input, textarea, select { font-size: 16px !important; }
   .toast-layer { bottom: calc(var(--dock-bottom) + var(--dock-height) + 12px); }
   .undo-toast { gap: 16px; border-radius: 999px; padding: 6px 6px 6px 18px; font-size: 14px; white-space: nowrap; }
   .undo-toast button { min-height: 36px; padding: 0 12px; font-size: 14px; }

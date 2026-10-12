@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { animateSpring, projectMomentum, rubberband } from "./spring";
 
 const ACTION_WIDTH = 88;
@@ -16,6 +16,16 @@ export function useSwipeToDelete(rowRef, onDelete) {
   const dragRef = useRef(null);
   const suppressClickRef = useRef(false);
   const [open, setOpen] = useState(false);
+
+  // While Delete is showing, touching anywhere outside the row slides it closed
+  useEffect(() => {
+    if (!open) return undefined;
+    const handlePointerDown = (event) => {
+      if (!rowRef.current?.contains(event.target)) springTo(0);
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [open]);
 
   function setX(x) {
     xRef.current = x;
