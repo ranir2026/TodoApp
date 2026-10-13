@@ -39,13 +39,13 @@ export default function QuickLinkModal({ open, onAdd, onClose }) {
 
   return (
     <div className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24" onClick={onClose}>
-      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="modal-surface w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="modal-surface w-full max-w-lg rounded-sheet border border-slate-200 bg-white p-4 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-900">Add quick link</h2>
             <p className="mt-1 text-xs text-slate-400">Save a website for fast access.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-full px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
             ×
           </button>
         </div>

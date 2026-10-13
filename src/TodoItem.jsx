@@ -194,7 +194,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
   return (
     <li
       data-task-id={todo.id}
-      className={`group flex items-start gap-3 rounded-lg border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
+      className={`group flex items-start gap-3 rounded-xl border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
         selected ? "border-todo-400 ring-2 ring-todo-400/30" : "border-slate-200"
       } border-l-4`}
       style={courseAccentStyle(course)}
@@ -203,7 +203,7 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
       {details}
       <button
         onClick={() => onDelete(todo.id, todo.occurrenceDate)}
-        className="shrink-0 rounded-md p-1 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="shrink-0 rounded-full p-1 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
         aria-label="Delete"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

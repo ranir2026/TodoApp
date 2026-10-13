@@ -26,7 +26,7 @@ export default function AuthScreen() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8">
-      <section className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="w-full max-w-sm rounded-dialog border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo sync</h1>
         <p className="mt-1 text-sm text-slate-500">Sign in to sync your tasks across devices.</p>
         <form onSubmit={submit} className="mt-5 space-y-3">

@@ -57,7 +57,7 @@ export default function StatsBar({ todos }) {
   const overdue = tasks.filter((t) => isOverdue(t, now));
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
       <div>
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-slate-700">Week</p>

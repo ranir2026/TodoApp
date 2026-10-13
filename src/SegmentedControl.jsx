@@ -8,7 +8,7 @@ export default function SegmentedControl({ options, value, onChange, label, clas
     <div role="radiogroup" aria-label={label} className={`segmented relative auto-cols-fr grid-flow-col rounded-lg bg-slate-100 p-1 ${className}`}>
       <div
         aria-hidden="true"
-        className="segmented-pill absolute inset-y-1 left-1 rounded-md bg-white shadow-sm"
+        className="segmented-pill absolute inset-y-1 left-1 rounded bg-white shadow-sm"
         style={{ width: `calc((100% - 0.5rem) / ${items.length})`, transform: `translateX(${index * 100}%)` }}
       />
       {items.map((item) => (
@@ -17,7 +17,7 @@ export default function SegmentedControl({ options, value, onChange, label, clas
           role="radio"
           aria-checked={item.id === value}
           onClick={() => onChange(item.id)}
-          className={`segmented-option relative z-10 rounded-md py-1 text-xs font-medium capitalize ${segmentClassName} ${
+          className={`segmented-option relative z-10 rounded py-1 text-xs font-medium capitalize ${segmentClassName} ${
             item.id === value ? "text-slate-900" : "text-slate-500 hover:text-slate-700"
           }`}
         >

@@ -3,6 +3,12 @@
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
 
+  /* Concentric corners: a container's radius is its controls' radius (lg) plus its padding,
+     so a control tucked into a corner shares the container's curve */
+  --radius-card: calc(var(--radius-lg) + var(--spacing) * 3);
+  --radius-sheet: calc(var(--radius-lg) + var(--spacing) * 4);
+  --radius-dialog: calc(var(--radius-lg) + var(--spacing) * 6);
+
   /* Elevation: bigger / higher surfaces get deeper, softer shadows */
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
   --shadow-lg: 0 8px 20px -6px rgb(15 23 42 / 0.14), 0 2px 6px -2px rgb(15 23 42 / 0.08);
@@ -189,6 +195,15 @@ button:not(:disabled):active { scale: 0.97; }
   .glass-dark { background: #0f172a; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
+/* Mobile concentric corners: controls are 12px, and anything holding them adds its inset.
+   Panels and task rows share one radius: 12px + 14px panel padding, which is also the task
+   toggle's 13px radius + its 13px inset. Sheets add their 16px side padding. */
+:root {
+  --mobile-radius-control: 12px;
+  --mobile-radius-panel: calc(var(--mobile-radius-control) + 14px);
+  --mobile-radius-sheet: calc(var(--mobile-radius-control) + 16px);
+}
+
 .mobile-app {
   --mobile-ink: #172033;
   --mobile-muted: #7b8494;
@@ -227,9 +242,9 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-date span { padding: 0 3px; color: #cbd5e1; }
 .mobile-icon-button { display: grid; height: 34px; width: 34px; place-items: center; border: 0; border-radius: 50%; background: rgba(118, 118, 128, .12); color: #475569; }
 .mobile-icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.mobile-quick-button { border: 0; border-radius: 11px; background: #f59e0b; padding: 10px 13px; color: #111827; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(217, 119, 6, .55); }
+.mobile-quick-button { border: 0; border-radius: var(--mobile-radius-control); background: #f59e0b; padding: 10px 13px; color: #111827; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(217, 119, 6, .55); }
 .mobile-search-inline { position: absolute; inset: 13px 58px 13px 18px; z-index: 1; transform-origin: right center; animation: mobile-search-in .18s var(--ease-out); }
-.mobile-search-inline input, .mobile-field { width: 100%; height: 100%; border: 1px solid #dbe2ea; border-radius: 11px; background: white; padding: 10px 12px; color: #172033; outline: none; }
+.mobile-search-inline input, .mobile-field { width: 100%; height: 100%; border: 1px solid #dbe2ea; border-radius: var(--mobile-radius-control); background: white; padding: 10px 12px; color: #172033; outline: none; }
 .mobile-search-inline input:focus, .mobile-field:focus { border-color: var(--tint); box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
 .mobile-calendar-header { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 16px; z-index: 25; min-height: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .mobile-calendar-header .mobile-search-inline { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 58px; bottom: auto; left: 16px; height: 38px; }
@@ -244,7 +259,7 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-pill span, .mobile-group-label span { display: inline-block; height: 7px; width: 7px; border-radius: 50%; }
 .mobile-pill-active { border-color: var(--tint); background: var(--tint); color: #fff; }
 .mobile-group-label { display: flex; align-items: center; gap: 7px; margin: 0 0 8px 4px; color: #5b6475; font-size: 13px; font-weight: 600; }
-.mobile-empty, .mobile-muted { border: 1px dashed #dbe2ea; border-radius: 14px; padding: 28px 16px; color: var(--mobile-muted); font-size: 13px; text-align: center; }
+.mobile-empty, .mobile-muted { border: 1px dashed #dbe2ea; border-radius: var(--mobile-radius-panel); padding: 28px 16px; color: var(--mobile-muted); font-size: 13px; text-align: center; }
 .mobile-calendar-shell { width: calc(100% + 32px); margin: -22px -16px 0; min-height: 0; border: 0; border-radius: 0; padding: 10px 16px 12px; box-shadow: none; }
 .mobile-calendar-shell > div:first-child { display: block; margin-bottom: 7px; }
 .mobile-calendar-shell > div:first-child > div:first-child { justify-content: space-between; width: 100%; }
@@ -257,21 +272,21 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-calendar-shell .mobile-month-day { height: auto; }
 .mobile-calendar-shell .grid.grid-cols-7 { gap: 2px; }
 .mobile-calendar-shell .grid.grid-cols-7 > * { min-width: 0; }
-.mobile-calendar-shell .grid.grid-cols-7 .rounded-lg { border-radius: 6px; padding: 3px; }
+.mobile-calendar-shell .grid.grid-cols-7 .rounded-lg { border-radius: 7px; padding: 3px; }
 .mobile-calendar-shell .grid.grid-cols-7 .text-\[11px\] { font-size: 10px; }
 .mobile-calendar-shell .grid.grid-cols-7 .text-xs { font-size: 11px; }
 .mobile-calendar-shell .month-quick-add { display: none; }
-.mobile-account { align-items: center; gap: 12px; border-radius: 16px; background: #fff; padding: 14px 16px; }
+.mobile-account { align-items: center; gap: 12px; border-radius: var(--mobile-radius-panel); background: #fff; padding: 14px 16px; }
 .mobile-email-heading { margin: 0; overflow: hidden; font-size: 16px; font-weight: 600; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-account-status { margin: 2px 0 0; color: var(--mobile-muted); font-size: 13px; }
-.mobile-agenda, .mobile-panel { margin-top: 14px; border: 0; border-radius: 16px; background: #fff; padding: 14px 16px; }
+.mobile-agenda, .mobile-panel { margin-top: 14px; border: 0; border-radius: var(--mobile-radius-panel); background: #fff; padding: 14px 16px; }
 .mobile-agenda-heading, .mobile-panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
 .mobile-agenda-heading h3, .mobile-panel-heading h3 { margin: 0; font-size: 13px; font-weight: 800; }
 .mobile-agenda-heading span, .mobile-panel-heading span { color: #94a3b8; font-size: 11px; }
 .mobile-panel-heading button { border: 0; background: transparent; color: var(--tint); font-size: 11px; font-weight: 800; }
 .mobile-color-dot { position: relative; height: 15px; width: 15px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
 .mobile-color-dot input { position: absolute; inset: 0; height: 100%; width: 100%; opacity: 0; }
-.mobile-add-button { border: 0; border-radius: 10px; background: var(--tint); padding: 0 14px; color: white; font-size: 12px; font-weight: 700; }
+.mobile-add-button { border: 0; border-radius: var(--mobile-radius-control); background: var(--tint); padding: 0 14px; color: white; font-size: 12px; font-weight: 700; }
 /* Bottom dock: the floating tab bar (navigation only) with the Add action as a separate circle beside
    it, as in iOS 26; it sits on the left for a left thumb. The gap to the bottom edge roughly matches
    the 16px side margins so the dock sits concentric with the screen corners, while staying clear of
@@ -306,20 +321,22 @@ button:not(:disabled):active { scale: 0.97; }
 }
 .mobile-add-fab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .3); -webkit-backdrop-filter: blur(6px) saturate(140%); backdrop-filter: blur(6px) saturate(140%); }
-.mobile-add-sheet { max-height: 92vh; overflow-y: auto; border-radius: 24px 24px 0 0; background: #fff; padding: 10px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(15, 23, 42, .2); position: fixed; right: 0; bottom: 0; left: 0; z-index: 61; will-change: transform; }
+.mobile-add-sheet { max-height: 92vh; overflow-y: auto; border-radius: var(--mobile-radius-sheet) var(--mobile-radius-sheet) 0 0; background: #fff; padding: 10px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(15, 23, 42, .2); position: fixed; right: 0; bottom: 0; left: 0; z-index: 61; will-change: transform; }
 .mobile-sheet-grab { touch-action: none; cursor: grab; }
 .mobile-sheet-handle { width: 42px; height: 5px; margin: 0 auto 14px; border-radius: 99px; background: #cbd5e1; }
 .mobile-sheet-title { margin: 0; color: var(--mobile-ink); font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -0.015em; }
-.mobile-segment { flex: 1; border: 0; border-radius: 9px; background: transparent; padding: 9px; color: #94a3b8; font-size: 12px; font-weight: 700; }
+.mobile-segment { flex: 1; border: 0; border-radius: calc(var(--mobile-radius-control) - 3px); background: transparent; padding: 9px; color: #94a3b8; font-size: 12px; font-weight: 700; }
 .mobile-segment-active { background: white; color: #172033; box-shadow: 0 1px 4px rgba(15,23,42,.08); }
-.mobile-quick-content .rounded-xl { border: 0; padding: 0; box-shadow: none; background: transparent; }
+.mobile-quick-content .rounded-card { border: 0; padding: 0; box-shadow: none; background: transparent; }
 .mobile-quick-content .mt-3 { display: none; }
 .mobile-quick-content input { padding: 13px; font-size: 15px; }
+.mobile-quick-content .rounded-lg { border-radius: var(--mobile-radius-control); }
 .heatmap-mobile-grid { display: flex; flex-direction: column; gap: 3px; padding: 3px 0; }
 .heatmap-mobile-row { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
 .heatmap-mobile-cell { aspect-ratio: 1; width: 100%; min-width: 7px; border-radius: 3px; }
 .heatmap-future { background: transparent; }
 .activity-heatmap { padding: 14px 16px; }
+.mobile-profile .rounded-card { border-radius: var(--mobile-radius-panel); }
 .heatmap-legend-cell { width: 10px; height: 10px; border-radius: 3px; }
 /* Tab switch: tabs replace each other in place (as in iOS), so they cross-fade rather than slide */
 .mobile-tab-enter { animation: modal-backdrop-in 200ms ease both; }
@@ -330,16 +347,16 @@ button:not(:disabled):active { scale: 0.97; }
 /* 10: profile groups */
 .mobile-group-title { margin: 22px 0 8px 2px; color: #172033; font-size: 13px; font-weight: 700; letter-spacing: -.005em; }
 .mobile-group-title:first-of-type { margin-top: 6px; }
-.mobile-panel-action { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; margin-top: 12px; border: 0; border-radius: 12px; background: var(--tint-soft); color: var(--tint); font-size: 14px; font-weight: 600; }
+.mobile-panel-action { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; margin-top: 12px; border: 0; border-radius: var(--mobile-radius-control); background: var(--tint-soft); color: var(--tint); font-size: 14px; font-weight: 600; }
 .mobile-panel-action span { font-size: 18px; line-height: 1; }
-.mobile-sheet-field { display: block; width: 100%; min-height: 48px; border: 1px solid #dbe2ea; border-radius: 12px; background: #fff; padding: 12px 14px; color: #172033; font-size: 16px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.mobile-sheet-field { display: block; width: 100%; min-height: 48px; border: 1px solid #dbe2ea; border-radius: var(--mobile-radius-control); background: #fff; padding: 12px 14px; color: #172033; font-size: 16px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
 .mobile-sheet-field:focus { border-color: var(--tint); box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
-.mobile-sheet-primary { width: 100%; min-height: 50px; border: 0; border-radius: 14px; background: var(--tint); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .6); transition: opacity 150ms ease; }
+.mobile-sheet-primary { width: 100%; min-height: 50px; border: 0; border-radius: 999px; background: var(--tint); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .6); transition: opacity 150ms ease; }
 .mobile-sheet-primary:disabled { opacity: .4; box-shadow: none; }
 /* Task rows: large check target, swipe left to reveal Delete */
-.task-swipe-row { position: relative; overflow: hidden; border-radius: 14px; }
-.task-swipe-delete { position: absolute; inset: 1px; border: 0; border-radius: 14px; background: #ff3b30; padding-right: 20px; color: #fff; font-size: 15px; font-weight: 600; text-align: right; }
-.task-row-mobile { position: relative; border-radius: 14px; background: #fff; padding: 13px 16px 13px 14px; touch-action: pan-y; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+.task-swipe-row { position: relative; overflow: hidden; border-radius: var(--mobile-radius-panel); }
+.task-swipe-delete { position: absolute; inset: 1px; border: 0; border-radius: calc(var(--mobile-radius-panel) - 1px); background: #ff3b30; padding-right: 20px; color: #fff; font-size: 15px; font-weight: 600; text-align: right; }
+.task-row-mobile { position: relative; border-radius: var(--mobile-radius-panel); background: #fff; padding: 13px 16px 13px 14px; touch-action: pan-y; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
 .task-row-mobile > button:last-child { padding-top: 1px; }
 .task-toggle-mobile { width: 26px; height: 26px; }
 .task-toggle-done { border-color: var(--tint); background: var(--tint); color: #fff; }
@@ -366,8 +383,11 @@ button:not(:disabled):active { scale: 0.97; }
   .toast-layer { bottom: calc(var(--dock-bottom) + var(--dock-height) + 12px); }
   .undo-toast { gap: 16px; border-radius: 999px; padding: 6px 6px 6px 18px; font-size: 14px; white-space: nowrap; }
   .undo-toast button { min-height: 36px; padding: 0 12px; font-size: 14px; }
-  .sync-status { right: 16px; left: 16px; max-width: none; border-radius: 14px; padding: 10px 14px; font-size: 13px; }
-  .mobile-calendar-shell .calendar-toolbar { gap: 6px; border-radius: 10px; padding: 6px 8px; }
+  .sync-status { right: 16px; left: 16px; max-width: none; border-radius: 999px; padding: 10px 16px; font-size: 13px; }
+  .mobile-calendar-shell .calendar-toolbar { gap: 6px; border-radius: calc(var(--mobile-radius-control) + 6px); padding: 6px 8px; }
+  /* Segmented controls sit among 12px controls; the highlight is inset 4px */
+  .segmented { border-radius: var(--mobile-radius-control); }
+  .segmented-pill, .segmented-option { border-radius: calc(var(--mobile-radius-control) - 4px); }
   /* Month view, iOS Calendar style: hairlines between weeks, no boxed cells, today as a filled circle */
   .mobile-calendar-shell .mobile-month-grid > .grid { font-size: 11px; font-weight: 600; color: #94a3b8; }
   .mobile-calendar-shell .month-rows { gap: 0; }

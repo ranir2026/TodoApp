@@ -45,14 +45,14 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
         {["task", "event"].map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setType(t)}
-            className={`flex-1 rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+            className={`flex-1 rounded px-2 py-1 text-xs font-medium capitalize transition-colors ${
               type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
           >

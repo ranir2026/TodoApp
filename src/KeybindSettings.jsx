@@ -25,7 +25,7 @@ export default function KeybindSettings({ open, keymap, setKeymap, onClose }) {
   return (
     <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

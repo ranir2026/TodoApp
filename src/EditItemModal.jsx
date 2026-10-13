@@ -54,7 +54,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="modal-surface w-full max-w-sm space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+        className="modal-surface w-full max-w-sm space-y-2 rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"
       >
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Edit {form.type}</h2>
@@ -64,7 +64,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
                 key={t}
                 type="button"
                 onClick={() => update("type", t)}
-                className={`rounded-md px-2 py-0.5 text-xs font-medium capitalize transition-colors ${
+                className={`rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors ${
                   form.type === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >

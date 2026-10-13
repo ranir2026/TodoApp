@@ -140,7 +140,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
   return (
     <div className={embedded ? "mobile-quick-content" : "modal-scrim fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"} onClick={embedded ? undefined : onClose}>
       <div
-        className={embedded ? "w-full" : "w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl"}
+        className={embedded ? "w-full" : "w-full max-w-lg rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"}
         onClick={embedded ? undefined : (e) => e.stopPropagation()}
       >
         <h2 className="mb-2 text-sm font-semibold text-slate-900">Quick add</h2>
@@ -193,7 +193,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
             {preview.description && <p className="mt-1 text-xs text-slate-500">{preview.description}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
-                className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                className={`rounded-full border px-2 py-1 text-xs font-medium ${
                   preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
                 }`}
               >
@@ -202,44 +202,44 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
 
               {previewCourse ? (
                 <span
-                  className="rounded-md border px-2 py-1 text-xs font-medium"
+                  className="rounded-full border px-2 py-1 text-xs font-medium"
                   style={{ backgroundColor: `${previewCourse.color}1f`, borderColor: `${previewCourse.color}55`, color: previewCourse.color }}
                 >
                   @{previewCourse.name}
                 </span>
               ) : (
-                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no category</span>
+                <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no category</span>
               )}
 
               {preview.dueDate ? (
-                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
                   {preview.repeatDays?.length > 1
                     ? formatRepeatDays(preview.repeatDays)
                     : formatDate(preview.dueDate)}
                 </span>
               ) : (
-                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no date</span>
+                <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no date</span>
               )}
 
               {preview.startTime ? (
-                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
                   {formatTime(preview.startTime)}
                   {preview.endTime ? ` – ${formatTime(preview.endTime)}` : ""}
                 </span>
               ) : (
-                <span className="rounded-md border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no time</span>
+                <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no time</span>
               )}
 
               {preview.repeat !== "none" && (
-                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 capitalize">
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 capitalize">
                   ↻ {preview.repeat}{preview.repeat === "weekly" && preview.repeatDays?.length ? ` (${preview.repeatDays.join(", ")})` : ""}
                 </span>
               )}
               {preview.priority === "urgent" && (
-                <span className="rounded-md border border-urgent-200 bg-urgent-100 px-2 py-1 text-xs font-medium text-urgent-700">Urgent</span>
+                <span className="rounded-full border border-urgent-200 bg-urgent-100 px-2 py-1 text-xs font-medium text-urgent-700">Urgent</span>
               )}
               {extractLinks(preview.description).map((link) => (
-                <span key={link.href} title={link.href} className="rounded-md border border-link-200 bg-link-100 px-2 py-1 text-xs font-medium text-link-700">
+                <span key={link.href} title={link.href} className="rounded-full border border-link-200 bg-link-100 px-2 py-1 text-xs font-medium text-link-700">
                   ↗ {link.label}
                 </span>
               ))}

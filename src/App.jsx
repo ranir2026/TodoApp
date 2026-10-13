@@ -416,7 +416,7 @@ export default function App() {
 
         <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
 
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
           <p className="mb-1.5 text-xs font-semibold text-slate-700">Categories</p>
           <ul className="space-y-1">
             {courses.map((c) => (
@@ -450,7 +450,7 @@ export default function App() {
                 <button
                   onClick={() => deleteCourse(c.id)}
                   disabled={courses.length <= 1}
-                  className="shrink-0 rounded p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
                   aria-label="Delete category"
                 >
                   ×
@@ -584,7 +584,7 @@ export default function App() {
 
       <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-6 pl-1">
         {session && (
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">
             <span className="min-w-0"><span className="block max-w-32 truncate" title={session.user.email}>{session.user.email}</span><span className="block text-[10px] text-slate-400">{syncStatus}</span></span>
             <button onClick={() => supabase.auth.signOut()} className="font-medium text-course-600 hover:text-course-700">Sign out</button>
           </div>
@@ -593,7 +593,7 @@ export default function App() {
 
         <ActivityHeatmap todos={todos} />
 
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-700">Quick links</p>
             <span className="text-[10px] text-slate-300">{quickLinks.length}</span>
@@ -602,10 +602,10 @@ export default function App() {
             <ul className="mb-2 space-y-1">
               {quickLinks.map((link) => (
                 <li key={link.id} className="group flex min-w-0 items-center gap-1">
-                  <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate rounded px-1 py-1 text-xs font-medium text-course-600 hover:bg-course-50 hover:text-course-700" title={link.url}>
+                  <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate rounded-lg px-1 py-1 text-xs font-medium text-course-600 hover:bg-course-50 hover:text-course-700" title={link.url}>
                     {link.label}
                   </a>
-                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded px-1 text-xs text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100" aria-label={`Delete ${link.label}`}>
+                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded-full px-1 text-xs text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100" aria-label={`Delete ${link.label}`}>
                     ×
                   </button>
                 </li>
@@ -636,14 +636,14 @@ export default function App() {
 
       </div>
       {undoAction && (
-        <div className="undo-toast toast-layer glass-dark fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg px-3 py-2 text-xs text-white">
+        <div className="undo-toast toast-layer glass-dark fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-xs text-white">
           <span>Action completed</span>
           <button onClick={undoLastAction} className="font-semibold text-todo-300 hover:text-todo-200">Undo</button>
         </div>
       )}
 
       {syncError && (
-        <div role="status" title={syncError} className="sync-status toast-layer glass-light fixed bottom-4 left-4 z-50 flex max-w-xs items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-600">
+        <div role="status" title={syncError} className="sync-status toast-layer glass-light fixed bottom-4 left-4 z-50 flex max-w-xs items-center gap-2 rounded-full px-4 py-2 text-xs text-slate-600">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger-500" />
           <span className="min-w-0 flex-1 truncate">{navigator.onLine === false ? "Offline. Changes will sync when you reconnect." : "Couldn't sync. Retrying automatically."}</span>
           <button onClick={() => setSyncError("")} className="shrink-0 font-medium text-slate-400 hover:text-slate-600" aria-label="Dismiss sync error">×</button>
