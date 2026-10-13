@@ -341,8 +341,13 @@ button:not(:disabled):active { scale: 0.97; }
 /* Tab switch: content arrives from the side the nav indicator is travelling toward (--tab-shift is signed by direction) */
 .mobile-tab-panel[hidden] { display: none; }
 .mobile-tab-panel:not([hidden]) { animation: mobile-tab-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+/* The outgoing page leaves the flow and slides off the opposite way, offset so it doesn't jump with the scroll restore */
+.mobile-tab-panel.is-leaving { position: absolute; top: var(--leave-offset, 0px); right: 0; left: 0; pointer-events: none; animation: mobile-tab-out 170ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes mobile-tab-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(calc(var(--tab-shift, 0px) * -1)); } }
+@keyframes tab-fade-out { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .mobile-tab-panel:not([hidden]) { animation: modal-backdrop-in 150ms ease both; }
+  .mobile-tab-panel.is-leaving { animation: tab-fade-out 100ms ease both; }
 }
 .mobile-show-completed { display: block; margin: 18px auto 0; border: 0; background: transparent; padding: 6px 10px; color: var(--tint); font-size: 15px; font-weight: 500; }
 @keyframes mobile-tab-in { from { opacity: 0; transform: translateX(var(--tab-shift, 0px)); } to { opacity: 1; transform: none; } }
