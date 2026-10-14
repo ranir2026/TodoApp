@@ -429,13 +429,18 @@ button:not(:disabled):active { scale: 0.97; }
   .month-chip { display: block; width: 100%; min-width: 0; height: 14px; overflow: hidden; border-radius: 3px; padding: 0 2px; font-size: 10px !important; font-weight: 600; line-height: 14px; letter-spacing: -0.01em; text-align: left; white-space: nowrap; text-overflow: clip; box-shadow: none; }
   .month-span { width: auto; margin: 0 1px; }
   .month-more { margin: 1px 0 0; padding: 0 2px; color: #94a3b8; font-size: 10px; font-weight: 600; line-height: 12px; }
-  .calendar-page-enter { animation: mobile-tab-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+  /* Prev/next arrives from the side being navigated toward. The fade runs on its own slower
+     curve: on the spring curve it finished in a few frames, which hid the change on the month
+     grid, where every page has the same hairline layout. */
+  .calendar-page-enter { animation: calendar-page-slide 380ms cubic-bezier(0.32, 0.72, 0, 1) both, calendar-page-fade 240ms ease-out both; }
   /* View changes zoom: in grows out of the tapped day (or the top), out settles down from slightly larger */
   .calendar-zoom-in { animation: calendar-zoom-in 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
   .calendar-zoom-out { animation: calendar-zoom-out 360ms cubic-bezier(0.32, 0.72, 0, 1) both; }
   .mobile-calendar-shell .w-14 { width: 2.15rem; }
   .mobile-calendar-shell .w-14 > div { padding-right: .25rem; }
 }
+@keyframes calendar-page-slide { from { transform: translateX(var(--page-shift, 0px)); } to { transform: none; } }
+@keyframes calendar-page-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes calendar-zoom-in { from { opacity: 0; transform: scale(.9); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
 @keyframes calendar-zoom-out { from { opacity: 0; transform: scale(1.06); } 55% { opacity: 1; } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {

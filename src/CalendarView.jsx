@@ -215,7 +215,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
         ref={pageRef}
         key={compact ? `${mode}:${title}` : undefined}
         className={`min-h-0 flex-1 ${compact ? (zoom > 0 ? "calendar-zoom-in" : zoom < 0 ? "calendar-zoom-out" : "calendar-page-enter") : ""}`}
-        style={compact ? { "--tab-shift": `${pageDirection * 24}px`, transformOrigin: zoom > 0 && zoomOrigin ? zoomOrigin : "50% 0" } : undefined}
+        style={compact ? { "--page-shift": `${pageDirection * 72}px`, transformOrigin: zoom > 0 && zoomOrigin ? zoomOrigin : "50% 0" } : undefined}
       >
         {mode === "month" && (
           <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={selectMonthDate} />
