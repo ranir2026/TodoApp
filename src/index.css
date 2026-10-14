@@ -243,11 +243,28 @@ button:not(:disabled):active { scale: 0.97; }
 .mobile-icon-button { display: grid; height: 34px; width: 34px; place-items: center; border: 0; border-radius: 50%; background: rgba(118, 118, 128, .12); color: #475569; }
 .mobile-icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .mobile-quick-button { border: 0; border-radius: var(--mobile-radius-control); background: #f59e0b; padding: 10px 13px; color: #111827; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(217, 119, 6, .55); }
-.mobile-search-inline { position: absolute; inset: 13px 58px 13px 18px; z-index: 1; transform-origin: right center; animation: mobile-search-in .18s var(--ease-out); }
+/* Search grows leftward out of the search button and collapses back into it. Closed, it's
+   clipped to a button-sized pill at its right edge; the clip transition retargets from the
+   current shape, so a second tap mid-reveal reverses it smoothly. */
+.mobile-search-inline {
+  --search-pill-inset: 7px;
+  position: absolute; inset: 13px 58px 13px 18px; z-index: 1;
+  opacity: 0; transform: translateX(10px); pointer-events: none;
+  clip-path: inset(var(--search-pill-inset) 0 var(--search-pill-inset) calc(100% - 34px) round 17px);
+  transition: clip-path 240ms cubic-bezier(0.4, 0, 0.2, 1), transform 240ms cubic-bezier(0.4, 0, 0.2, 1), opacity 160ms ease 60ms;
+}
+.mobile-search-inline.is-open {
+  opacity: 1; transform: none; pointer-events: auto;
+  /* Outset so the focus ring isn't clipped */
+  clip-path: inset(-4px round calc(var(--mobile-radius-control) + 4px));
+  transition: clip-path 380ms cubic-bezier(0.32, 0.72, 0, 1), transform 380ms cubic-bezier(0.32, 0.72, 0, 1), opacity 120ms ease;
+}
+.mobile-title { transition: opacity 200ms ease; }
+.mobile-header.is-searching .mobile-title { opacity: 0; transition-duration: 140ms; }
 .mobile-search-inline input, .mobile-field { width: 100%; height: 100%; border: 1px solid #dbe2ea; border-radius: var(--mobile-radius-control); background: white; padding: 10px 12px; color: #172033; outline: none; }
 .mobile-search-inline input:focus, .mobile-field:focus { border-color: var(--tint); box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
 .mobile-calendar-header { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 16px; z-index: 25; min-height: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
-.mobile-calendar-header .mobile-search-inline { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 58px; bottom: auto; left: 16px; height: 38px; }
+.mobile-calendar-header .mobile-search-inline { --search-pill-inset: 2px; position: fixed; top: max(10px, env(safe-area-inset-top)); right: 58px; bottom: auto; left: 16px; height: 38px; }
 .mobile-content { min-height: calc(100vh - 74px); padding: 12px 16px 100px; }
 .mobile-calendar-content { display: flex; flex-direction: column; height: 100dvh; min-height: 0; padding: 0 16px calc(84px + env(safe-area-inset-bottom)); }
 .mobile-calendar-section { display: flex; flex: 1; flex-direction: column; min-height: 0; }
@@ -348,6 +365,7 @@ button:not(:disabled):active { scale: 0.97; }
 @media (prefers-reduced-motion: reduce) {
   .mobile-tab-panel:not([hidden]) { animation: modal-backdrop-in 150ms ease both; }
   .mobile-tab-panel.is-leaving { animation: tab-fade-out 100ms ease both; }
+  .mobile-search-inline, .mobile-search-inline.is-open { clip-path: none; transform: none; transition: opacity 150ms ease; }
 }
 .mobile-show-completed { display: block; margin: 18px auto 0; border: 0; background: transparent; padding: 6px 10px; color: var(--tint); font-size: 15px; font-weight: 500; }
 @keyframes mobile-tab-in { from { opacity: 0; transform: translateX(var(--tab-shift, 0px)); } to { opacity: 1; transform: none; } }
@@ -373,7 +391,6 @@ button:not(:disabled):active { scale: 0.97; }
 .task-check-pop { animation: task-check-pop 320ms cubic-bezier(0.32, 0.72, 0, 1); }
 @keyframes task-check-pop { 0% { transform: scale(.8); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes mobile-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
-@keyframes mobile-search-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
 
 @media (min-width: 768px) {
   .mobile-app { display: none; }

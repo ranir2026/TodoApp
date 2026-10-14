@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useLocalStorage } from "./useLocalStorage";
 import StatsBar from "./StatsBar";
 import AddTodoForm from "./AddTodoForm";
@@ -206,6 +207,19 @@ export default function App() {
   const tabPanelHidden = (id) => mobileTab !== id && leavingTab !== id;
   const tabPanelClass = (id) => `mobile-tab-panel ${mobileTab !== id && leavingTab === id ? "is-leaving" : ""}`;
 
+  // The search field stays mounted so it can animate out as well as in. Opening commits
+  // synchronously so the field is no longer inert when it's focused inside the tap, which is
+  // what lets iOS raise the keyboard.
+  function toggleMobileSearch() {
+    if (mobileSearchOpen) {
+      mobileSearchInputRef.current?.blur();
+      setMobileSearchOpen(false);
+      return;
+    }
+    flushSync(() => setMobileSearchOpen(true));
+    mobileSearchInputRef.current?.focus({ preventScroll: true });
+  }
+
   function switchMobileTab(id) {
     if (id === mobileTab) return;
     tabScrollRef.current[mobileTab] = window.scrollY;
@@ -408,10 +422,10 @@ export default function App() {
   return (
     <>
       <div className="mobile-app md:hidden">
-        <header className={`mobile-header ${mobileScrolled ? "is-scrolled" : ""} ${mobileTab === "calendar" ? "mobile-calendar-header" : ""}`}>
-          {mobileTab !== "calendar" && <div><h1>{MOBILE_TABS.find((tab) => tab.id === mobileTab)?.label}</h1><p className="mobile-date">{now.toLocaleDateString(undefined, { month: "short", day: "numeric" })} <span>•</span> {now.toLocaleDateString(undefined, { weekday: "long" })}</p></div>}
-          <button type="button" onClick={() => setMobileSearchOpen((value) => !value)} className="mobile-icon-button mobile-hit" aria-label="Toggle search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg></button>
-          {mobileSearchOpen && <div className="mobile-search-inline"><input ref={mobileSearchInputRef} autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>}
+        <header className={`mobile-header ${mobileScrolled ? "is-scrolled" : ""} ${mobileTab === "calendar" ? "mobile-calendar-header" : ""} ${mobileSearchOpen ? "is-searching" : ""}`}>
+          {mobileTab !== "calendar" && <div className="mobile-title"><h1>{MOBILE_TABS.find((tab) => tab.id === mobileTab)?.label}</h1><p className="mobile-date">{now.toLocaleDateString(undefined, { month: "short", day: "numeric" })} <span>•</span> {now.toLocaleDateString(undefined, { weekday: "long" })}</p></div>}
+          <button type="button" onClick={toggleMobileSearch} className="mobile-icon-button mobile-hit" aria-label="Toggle search" aria-expanded={mobileSearchOpen}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5L20 20" /></svg></button>
+          <div className={`mobile-search-inline ${mobileSearchOpen ? "is-open" : ""}`} inert={!mobileSearchOpen}><input ref={mobileSearchInputRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>
         </header>
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
           <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
