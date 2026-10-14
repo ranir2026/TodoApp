@@ -95,6 +95,8 @@ function withLanes(segments) {
     });
 }
 
+const MODE_DEPTH = { month: 0, week: 1, day: 2 };
+
 const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, compact = false, onModeChange, onEdit, onQuickAdd, onSelectDate }, ref) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
@@ -103,10 +105,31 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
   });
   const [now, setNow] = useState(new Date());
   const [pageDirection, setPageDirection] = useState(0);
+  // Changing view is a change of zoom, not of page: deeper views (month → week → day) zoom in,
+  // shallower ones zoom out. A tapped month cell becomes the origin the day view grows from.
+  const [shownMode, setShownMode] = useState(mode);
+  const [zoom, setZoom] = useState(0);
+  const [zoomOrigin, setZoomOrigin] = useState(null);
+  const pageRef = useRef(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
+  if (mode !== shownMode) {
+    setShownMode(mode);
+    setZoom(Math.sign(MODE_DEPTH[mode] - MODE_DEPTH[shownMode]));
+  }
+
+  function selectMonthDate(key, cell) {
+    const page = pageRef.current?.getBoundingClientRect();
+    const rect = cell?.getBoundingClientRect();
+    setZoomOrigin(page && rect ? `${rect.left + rect.width / 2 - page.left}px ${rect.top + rect.height / 2 - page.top}px` : null);
+    setCursor(parseDateKey(key));
+    onSelectDate?.(key);
+  }
+
   function moveCursor(delta) {
+    setZoom(0);
+    setZoomOrigin(null);
     setPageDirection(Math.sign(delta));
     setCursor((current) => {
       const next = new Date(current);
@@ -176,6 +199,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
           <button
             onClick={() => {
               const today = new Date(new Date().setHours(0, 0, 0, 0));
+              setZoom(0);
               setPageDirection(Math.sign(today - cursor));
               setCursor(today);
             }}
@@ -184,12 +208,17 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
             Today
           </button>
         </div>
-        <SegmentedControl label="Calendar view" className="inline-grid" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={onModeChange} />
+        <SegmentedControl label="Calendar view" className="inline-grid" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={(next) => { setZoomOrigin(null); onModeChange(next); }} />
       </div>
 
-      <div key={compact ? title : undefined} className={`min-h-0 flex-1 ${compact ? "calendar-page-enter" : ""}`} style={compact ? { "--tab-shift": `${pageDirection * 24}px` } : undefined}>
+      <div
+        ref={pageRef}
+        key={compact ? `${mode}:${title}` : undefined}
+        className={`min-h-0 flex-1 ${compact ? (zoom > 0 ? "calendar-zoom-in" : zoom < 0 ? "calendar-zoom-out" : "calendar-page-enter") : ""}`}
+        style={compact ? { "--tab-shift": `${pageDirection * 24}px`, transformOrigin: zoom > 0 && zoomOrigin ? zoomOrigin : "50% 0" } : undefined}
+      >
         {mode === "month" && (
-          <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={(key) => { setCursor(parseDateKey(key)); onSelectDate?.(key); }} />
+          <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={selectMonthDate} />
         )}
         {mode !== "month" && <TimeGrid days={days} todos={todos} courseMap={courseMap} occByDay={occByDay} onEdit={onEdit} now={now} compact={compact} />}
       </div>
@@ -253,7 +282,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
           return (
             <div
               key={key}
-              onClick={() => onSelectDate?.(key)}
+              onClick={(event) => onSelectDate?.(key, event.currentTarget)}
               className={`mobile-month-day ${isToday ? "is-today" : ""} relative z-0 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border p-1.5 pb-6 text-left align-top ${
                 isToday ? "border-todo-400 bg-todo-50/40" : "border-slate-100"
               }`}
