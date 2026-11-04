@@ -20,6 +20,7 @@ import AuthScreen from "./AuthScreen";
 import EmailConfirmedScreen from "./EmailConfirmedScreen";
 import QuickLinkModal from "./QuickLinkModal";
 import MobileAddSheet from "./MobileAddSheet";
+import Collapsible, { Chevron } from "./Collapsible";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -29,6 +30,15 @@ const MOBILE_TABS = [
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
 const DEFAULT_QUICK_LINKS = [];
+
+function ArchiveIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="12" height="3" rx="1" />
+      <path d="M3 6v6.5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6M6.5 9h3" />
+    </svg>
+  );
+}
 
 function dateGroupLabel(dateKey, today) {
   if (dateKey === "undated") return "No date";
@@ -45,6 +55,8 @@ export default function App() {
   const [todos, setTodos] = useLocalStorage("todos", []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
   const [quickLinks, setQuickLinks] = useLocalStorage("quickLinks", DEFAULT_QUICK_LINKS);
+  const [addFormCollapsed, setAddFormCollapsed] = useLocalStorage("addFormCollapsed", false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [filter, setFilter] = useState("active"); // active | completed | all
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("all");
@@ -92,6 +104,9 @@ export default function App() {
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
   const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const resolvedKeymap = useMemo(() => ({ ...DEFAULT_KEYMAP, ...keymap }), [keymap]);
+  // Archived categories keep their tasks but are hidden from everywhere new items are created
+  const activeCourses = useMemo(() => courses.filter((c) => !c.archived), [courses]);
+  const archivedCourses = useMemo(() => courses.filter((c) => c.archived), [courses]);
 
   useEffect(() => {
     if (keymap.moveUp === "k") setKeymap((current) => ({ ...current, moveUp: DEFAULT_KEYMAP.moveUp }));
@@ -132,7 +147,7 @@ export default function App() {
         id: crypto.randomUUID(),
         type: type ?? "task",
         title,
-        courseId: courseId ?? courses[0]?.id ?? null,
+        courseId: courseId ?? activeCourses[0]?.id ?? courses[0]?.id ?? null,
         dueDate: eventDate,
         endDate: independentDates.length > 1 ? null : endDate ?? null,
         startTime: startTime ?? null,
@@ -273,12 +288,26 @@ export default function App() {
     setEditingCourseId(null);
   }
 
+  // At least one active category must remain so new items always have somewhere to go
+  function isLastActiveCourse(course) {
+    return !course.archived && activeCourses.length <= 1;
+  }
+
+  function setCourseArchived(id, archived) {
+    const course = courses.find((c) => c.id === id);
+    if (!course || (archived && isLastActiveCourse(course))) return;
+    if (editingCourseId === id) setEditingCourseId(null);
+    setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, archived } : c)));
+    showUndo(() => setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, archived: course.archived } : c))));
+  }
+
   function deleteCourse(id) {
-    if (courses.length <= 1) return;
+    const course = courses.find((c) => c.id === id);
+    if (!course || courses.length <= 1 || isLastActiveCourse(course)) return;
     const previousCourses = courses;
     const movedTaskIds = new Set(todos.filter((todo) => todo.courseId === id).map((todo) => todo.id));
     const remaining = courses.filter((course) => course.id !== id);
-    const fallbackId = remaining[0]?.id ?? null;
+    const fallbackId = (remaining.find((c) => !c.archived) ?? remaining[0])?.id ?? null;
     setCourses(remaining);
     setTodos((prevTodos) => prevTodos.map((todo) => (todo.courseId === id ? { ...todo, courseId: fallbackId } : todo)));
     showUndo(() => {
@@ -340,6 +369,12 @@ export default function App() {
     document.querySelector(`[data-task-id="${selectedId}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selectedId, view, orderedTasks]);
 
+  // The form's fields are inert while collapsed, so open it (a no-op if already open) before focusing
+  function focusNewTask() {
+    flushSync(() => setAddFormCollapsed(false));
+    addInputRef.current?.focus();
+  }
+
   function moveSelection(delta) {
     if (view !== "list") return;
     if (orderedTasks.length === 0) return;
@@ -356,7 +391,7 @@ export default function App() {
       openPalette: () => setPaletteOpen((v) => !v),
       openSettings: () => setSettingsOpen(true),
       quickAdd: () => setQuickAddOpen(true),
-      newTask: () => addInputRef.current?.focus(),
+      newTask: focusNewTask,
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
       moveDown: () => moveSelection(1),
       moveUp: () => moveSelection(-1),
@@ -386,7 +421,7 @@ export default function App() {
   const commands = useMemo(
     () => [
       { id: "quickAdd", label: "Quick add task/event", run: () => setQuickAddOpen(true) },
-      { id: "newTask", label: "Focus new task form", run: () => addInputRef.current?.focus() },
+      { id: "newTask", label: "Focus new task form", run: () => focusNewTask() },
       { id: "toggleView", label: "Toggle list / calendar view", run: () => setView((v) => (v === "list" ? "calendar" : "list")) },
       { id: "filterActive", label: "Show active tasks", run: () => setFilter("active") },
       { id: "filterCompleted", label: "Show completed tasks", run: () => setFilter("completed") },
@@ -430,10 +465,10 @@ export default function App() {
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
           <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
           <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todos} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
-          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700">{course.name}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
+          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
         </main>
         <div className="mobile-dock"><button type="button" onClick={() => setMobileAddOpen(true)} className="mobile-add-fab" aria-label="Add task or event"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) * 100}%)` }} />{MOBILE_TABS.map((item) => <button type="button" key={item.id} onPointerDown={(event) => event.isPrimary && event.button === 0 && switchMobileTab(item.id)} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav></div>
-        <MobileAddSheet open={mobileAddOpen} courses={courses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
+        <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
       </div>
 
       <div className="mx-auto hidden h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 md:flex sm:px-6">
@@ -451,12 +486,18 @@ export default function App() {
           <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-todo-600">{comboLabel(resolvedKeymap.quickAdd)}</span>
         </button>
 
-        <AddTodoForm ref={addInputRef} courses={courses} onAdd={addTodo} />
+        <AddTodoForm
+          ref={addInputRef}
+          courses={activeCourses}
+          onAdd={addTodo}
+          collapsed={addFormCollapsed}
+          onToggleCollapsed={() => setAddFormCollapsed((v) => !v)}
+        />
 
         <div className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
           <p className="mb-1.5 text-xs font-semibold text-slate-700">Categories</p>
           <ul className="space-y-1">
-            {courses.map((c) => (
+            {activeCourses.map((c) => (
               <li key={c.id} className="group flex items-center gap-1.5">
                 <label className="relative h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-inset ring-black/10" style={{ backgroundColor: c.color || "#94a3b8" }}>
                   <input
@@ -485,8 +526,17 @@ export default function App() {
                   </button>
                 )}
                 <button
+                  onClick={() => setCourseArchived(c.id, true)}
+                  disabled={isLastActiveCourse(c)}
+                  title="Archive category"
+                  className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-slate-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  aria-label={`Archive ${c.name}`}
+                >
+                  <ArchiveIcon />
+                </button>
+                <button
                   onClick={() => deleteCourse(c.id)}
-                  disabled={courses.length <= 1}
+                  disabled={isLastActiveCourse(c)}
                   className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
                   aria-label="Delete category"
                 >
@@ -507,6 +557,46 @@ export default function App() {
             </button>
           </form>
         </div>
+
+        {archivedCourses.length > 0 && (
+          <div className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setArchivedOpen((v) => !v)}
+              aria-expanded={archivedOpen}
+              aria-controls="archived-categories"
+              className="-m-1 flex w-[calc(100%+0.5rem)] items-center gap-1 rounded-lg p-1 text-left text-xs font-semibold text-slate-700 hover:text-slate-900"
+            >
+              <Chevron open={archivedOpen} />
+              Archived categories
+              <span className="ml-auto text-[10px] font-normal text-slate-300">{archivedCourses.length}</span>
+            </button>
+            <Collapsible open={archivedOpen} id="archived-categories">
+              <ul className="space-y-1 pt-2">
+                {archivedCourses.map((c) => (
+                  <li key={c.id} className="group flex items-center gap-1.5">
+                    <span className="h-3.5 w-3.5 shrink-0 rounded-full opacity-50 ring-1 ring-inset ring-black/10" style={{ backgroundColor: c.color || "#94a3b8" }} />
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-400">{c.name}</span>
+                    <button
+                      onClick={() => setCourseArchived(c.id, false)}
+                      className="shrink-0 rounded px-1 text-[11px] font-medium text-course-600 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      aria-label={`Restore ${c.name}`}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      onClick={() => deleteCourse(c.id)}
+                      className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      aria-label={`Delete ${c.name}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Collapsible>
+          </div>
+        )}
       </aside>
 
       <main ref={taskListRef} className="min-h-0 flex-1 overflow-hidden">
@@ -690,7 +780,7 @@ export default function App() {
       <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <EditItemModal
         item={editingItem}
-        courses={courses}
+        courses={courses.filter((c) => !c.archived || c.id === editingItem?.courseId)}
         onSave={(id, patch) => {
           updateTodo(id, patch);
           setEditingItem(null);
@@ -701,7 +791,7 @@ export default function App() {
       />
       <QuickAddModal
         open={quickAddOpen}
-        courses={courses}
+        courses={activeCourses}
         onAdd={(item) => addTodo(item)}
         onClose={() => setQuickAddOpen(false)}
       />

@@ -1,7 +1,9 @@
 import { forwardRef, useState } from "react";
 import { REPEAT_OPTIONS } from "./occurrences";
+import Collapsible, { Chevron } from "./Collapsible";
 
-const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
+// Pass onToggleCollapsed to give the form a header that collapses it; without it the form is always open
+const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed = false, onToggleCollapsed }, ref) {
   const [type, setType] = useState("task");
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
@@ -14,6 +16,9 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   const [repeat, setRepeat] = useState("none");
   const [repeatUntil, setRepeatUntil] = useState("");
   const [repeatCount, setRepeatCount] = useState("");
+  // The remembered category may have been archived or deleted since it was picked
+  const selectedCourseId = courses.some((c) => c.id === courseId) ? courseId : courses[0]?.id ?? "";
+  const open = !onToggleCollapsed || !collapsed;
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -21,7 +26,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
     onAdd({
       type,
       title: title.trim(),
-      courseId: courseId || courses[0]?.id || null,
+      courseId: selectedCourseId || null,
       dueDate: dueDate || null,
       endDate: type === "event" ? endDate || null : null,
       startTime: startTime || null,
@@ -45,7 +50,21 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
+    <form onSubmit={handleSubmit} className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
+      {onToggleCollapsed && (
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={open}
+          aria-controls="add-todo-fields"
+          className="-m-1 flex w-[calc(100%+0.5rem)] items-center gap-1 rounded-lg p-1 text-left text-xs font-semibold text-slate-700 hover:text-slate-900"
+        >
+          <Chevron open={open} />
+          Add manually
+        </button>
+      )}
+      <Collapsible open={open} id={onToggleCollapsed ? "add-todo-fields" : undefined}>
+      <div className={`space-y-2 ${onToggleCollapsed ? "pt-2.5" : ""}`}>
       <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
         {["task", "event"].map((t) => (
           <button
@@ -69,7 +88,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
       />
       <select
-        value={courseId}
+        value={selectedCourseId}
         onChange={(e) => setCourseId(e.target.value)}
         className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
       >
@@ -154,6 +173,8 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd }, ref) {
           Add
         </button>
       </div>
+      </div>
+      </Collapsible>
     </form>
   );
 });
