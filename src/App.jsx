@@ -21,6 +21,9 @@ import EmailConfirmedScreen from "./EmailConfirmedScreen";
 import QuickLinkModal from "./QuickLinkModal";
 import MobileAddSheet from "./MobileAddSheet";
 import Collapsible, { Chevron } from "./Collapsible";
+import PlannerModal from "./PlannerModal";
+import { withMilestoneStatus } from "./milestones";
+import { EMPTY_PLANNER, normalizePlanner } from "./planner";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -55,6 +58,9 @@ export default function App() {
   const [todos, setTodos] = useLocalStorage("todos", []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
   const [quickLinks, setQuickLinks] = useLocalStorage("quickLinks", DEFAULT_QUICK_LINKS);
+  const [storedPlanner, setPlanner] = useLocalStorage("planner", EMPTY_PLANNER);
+  const planner = useMemo(() => normalizePlanner(storedPlanner), [storedPlanner]);
+  const updatePlanner = useCallback((change) => setPlanner((current) => change(normalizePlanner(current))), [setPlanner]);
   const [addFormCollapsed, setAddFormCollapsed] = useLocalStorage("addFormCollapsed", false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [filter, setFilter] = useState("active"); // active | completed | all
@@ -74,6 +80,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [emailConfirmed, setEmailConfirmed] = useState(() => {
@@ -130,7 +137,7 @@ export default function App() {
   }, []);
 
   const handleSyncError = useCallback((message) => setSyncError(message), []);
-  const { lastSyncedAt } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, handleSyncError);
+  const { lastSyncedAt } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, storedPlanner, setPlanner, handleSyncError);
   const syncStatus = !session
     ? "Saved on this device only"
     : syncError
@@ -139,7 +146,7 @@ export default function App() {
     ? `Synced at ${lastSyncedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
     : "Connecting…";
 
-  function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays }) {
+  function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays, projectId, milestoneId }) {
     const independentDates = type === "event" && repeat === "none" && dueDates?.length > 1 ? dueDates : [dueDate];
     setTodos((prev) => [
       ...prev,
@@ -158,6 +165,8 @@ export default function App() {
         repeatDays: independentDates.length > 1 ? null : repeatDays?.length ? repeatDays : null,
         repeatUntil: independentDates.length > 1 ? null : repeatUntil ?? null,
         repeatCount: independentDates.length > 1 ? null : repeatCount ? Number(repeatCount) : null,
+        ...(projectId ? { projectId } : {}),
+        ...(milestoneId ? { milestoneId } : {}),
         completed: false,
         createdAt: new Date().toISOString(),
       })),
@@ -176,7 +185,8 @@ export default function App() {
 
   function toggleTodo(id, occurrenceDate) {
     const previous = todos.find((t) => t.id === id);
-    if (!previous) return;
+    // Milestones complete on their own when their tasks do
+    if (!previous || previous.type === "milestone") return;
     const next = isRepeating(previous)
       ? toggleOccurrence(previous, occurrenceDate)
       : { ...previous, completed: !previous.completed, completedAt: !previous.completed ? new Date().toISOString() : null };
@@ -205,6 +215,20 @@ export default function App() {
     setTodos((prev) => prev.filter((t) => t.id !== id));
     showUndo(() => setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]));
     setEditingItem(null);
+  }
+
+  // A project takes its milestones and tasks with it; undo puts all of them back
+  function deleteProject(id) {
+    const index = planner.projects.findIndex((project) => project.id === id);
+    const project = planner.projects[index];
+    if (!project) return;
+    const removedTodos = todos.filter((todo) => todo.projectId === id);
+    updatePlanner((current) => ({ ...current, projects: current.projects.filter((item) => item.id !== id) }));
+    setTodos((prev) => prev.filter((todo) => todo.projectId !== id));
+    showUndo(() => {
+      updatePlanner((current) => ({ ...current, projects: [...current.projects.slice(0, index), project, ...current.projects.slice(index)] }));
+      setTodos((prev) => [...prev, ...removedTodos]);
+    });
   }
 
   function showUndo(undo) {
@@ -317,8 +341,11 @@ export default function App() {
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
+  const projectMap = useMemo(() => Object.fromEntries(planner.projects.map((p) => [p.id, p])), [planner.projects]);
 
-  const resolvedTodos = useMemo(() => todos.map(resolveTask), [todos]);
+  // Milestones get their completion from their tasks; everything that displays todos reads this
+  const todosView = useMemo(() => withMilestoneStatus(todos), [todos]);
+  const resolvedTodos = useMemo(() => todosView.map(resolveTask), [todosView]);
 
   const visibleTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -329,7 +356,9 @@ export default function App() {
     }).filter((t) => {
       const matchesSearch = !query || `${t.title} ${t.description ?? ""}`.toLowerCase().includes(query);
       const matchesCourse = courseFilter === "all" || t.courseId === courseFilter;
-      const matchesType = typeFilter === "all" || (t.type ?? "task") === typeFilter;
+      const type = t.type ?? "task";
+      // Milestones are deadlines for tasks, so they sit alongside them
+      const matchesType = typeFilter === "all" || type === typeFilter || (typeFilter === "task" && type === "milestone");
       const matchesPriority = priorityFilter === "all" || t.priority === priorityFilter;
       return matchesSearch && matchesCourse && matchesType && matchesPriority;
     });
@@ -408,6 +437,7 @@ export default function App() {
       focusSearch: () => searchInputRef.current?.focus(),
       toggleSort: () => setSortBy((current) => current === "course" ? "date" : "course"),
       quickLink: () => setQuickLinkOpen(true),
+      openPlanner: () => setPlannerOpen(true),
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -415,7 +445,7 @@ export default function App() {
         else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen && !editingItem && !quickAddOpen,
+    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen,
   );
 
   const commands = useMemo(
@@ -434,6 +464,7 @@ export default function App() {
       { id: "focusSearch", label: "Focus task search", run: () => searchInputRef.current?.focus() },
       { id: "toggleSort", label: "Toggle date/category sort", run: () => setSortBy((current) => current === "course" ? "date" : "course") },
       { id: "quickLink", label: "Add quick link", run: () => setQuickLinkOpen(true) },
+      { id: "openPlanner", label: "Open planner", run: () => setPlannerOpen(true) },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
     ],
     [view],
@@ -463,9 +494,9 @@ export default function App() {
           <div className={`mobile-search-inline ${mobileSearchOpen ? "is-open" : ""}`} inert={!mobileSearchOpen}><input ref={mobileSearchInputRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>
         </header>
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
-          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
-          <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todos} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
-          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todos} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
+          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
+          <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todosView} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
+          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
         </main>
         <div className="mobile-dock"><button type="button" onClick={() => setMobileAddOpen(true)} className="mobile-add-fab" aria-label="Add task or event"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) * 100}%)` }} />{MOBILE_TABS.map((item) => <button type="button" key={item.id} onPointerDown={(event) => event.isPrimary && event.button === 0 && switchMobileTab(item.id)} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav></div>
         <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
@@ -484,6 +515,14 @@ export default function App() {
         >
           Quick add
           <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-todo-600">{comboLabel(resolvedKeymap.quickAdd)}</span>
+        </button>
+
+        <button
+          onClick={() => setPlannerOpen(true)}
+          className="flex items-center justify-between rounded-xl border border-course-100 bg-course-50 px-3 py-2 text-sm font-medium text-course-700 hover:border-course-300"
+        >
+          Planner
+          <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-course-600">{comboLabel(resolvedKeymap.openPlanner)}</span>
         </button>
 
         <AddTodoForm
@@ -611,6 +650,7 @@ export default function App() {
               <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
                 <option value="task">Tasks</option>
                 <option value="event">Events</option>
+                <option value="milestone">Milestones</option>
                 <option value="all">Everything</option>
               </select>
               <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
@@ -649,6 +689,7 @@ export default function App() {
                           key={todo.id}
                           todo={todo}
                           course={courseMap[todo.courseId]}
+                          project={projectMap[todo.projectId]}
                           onToggle={toggleTodo}
                           onDelete={deleteTodo}
                           onEdit={editItem}
@@ -670,6 +711,7 @@ export default function App() {
                           key={todo.id}
                           todo={todo}
                           course={courseMap[todo.courseId]}
+                          project={projectMap[todo.projectId]}
                           onToggle={toggleTodo}
                           onDelete={deleteTodo}
                           onEdit={editItem}
@@ -687,6 +729,7 @@ export default function App() {
                     key={todo.id}
                     todo={todo}
                     course={courseMap[todo.courseId]}
+                    project={projectMap[todo.projectId]}
                     onToggle={toggleTodo}
                     onDelete={deleteTodo}
                     onEdit={editItem}
@@ -699,7 +742,7 @@ export default function App() {
         ) : (
           <CalendarView
             ref={calendarRef}
-            todos={todos}
+            todos={todosView}
             courseMap={courseMap}
             mode={calendarMode}
             onModeChange={setCalendarMode}
@@ -716,7 +759,7 @@ export default function App() {
             <button onClick={() => supabase.auth.signOut()} className="font-medium text-course-600 hover:text-course-700">Sign out</button>
           </div>
         )}
-        <StatsBar todos={todos} />
+        <StatsBar todos={todosView} />
 
         <ActivityHeatmap todos={todos} />
 
@@ -778,9 +821,26 @@ export default function App() {
       )}
       <CommandPalette open={paletteOpen} commands={commands} keymap={resolvedKeymap} onClose={() => setPaletteOpen(false)} />
       <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
+      <PlannerModal
+        open={plannerOpen}
+        suspended={Boolean(editingItem)}
+        onClose={() => setPlannerOpen(false)}
+        todos={todosView}
+        courses={activeCourses}
+        courseMap={courseMap}
+        planner={planner}
+        updatePlanner={updatePlanner}
+        onToggleTodo={toggleTodo}
+        onAddTodo={addTodo}
+        onUpdateTodo={updateTodo}
+        onEdit={editItem}
+        onDeleteProject={deleteProject}
+      />
       <EditItemModal
         item={editingItem}
         courses={courses.filter((c) => !c.archived || c.id === editingItem?.courseId)}
+        projects={planner.projects}
+        milestones={todos.filter((todo) => todo.type === "milestone")}
         onSave={(id, patch) => {
           updateTodo(id, patch);
           setEditingItem(null);

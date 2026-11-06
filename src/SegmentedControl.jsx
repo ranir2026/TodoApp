@@ -14,6 +14,7 @@ export default function SegmentedControl({ options, value, onChange, label, clas
       {items.map((item) => (
         <button
           key={item.id}
+          type="button"
           role="radio"
           aria-checked={item.id === value}
           onClick={() => onChange(item.id)}

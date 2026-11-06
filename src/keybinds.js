@@ -19,6 +19,7 @@ export const DEFAULT_KEYMAP = {
   focusSearch: "ctrl+space",
   toggleSort: "c",
   quickLink: "shift+l",
+  openPlanner: "p",
 };
 
 export const ACTION_LABELS = {
@@ -42,6 +43,7 @@ export const ACTION_LABELS = {
   focusSearch: "Focus task search",
   toggleSort: "Toggle date/category sort",
   quickLink: "Add quick link",
+  openPlanner: "Open planner",
 };
 
 export function normalizeCombo(e) {

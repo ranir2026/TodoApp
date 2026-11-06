@@ -31,6 +31,17 @@ function chipClass(t) {
   return "";
 }
 
+// Milestones carry a diamond so they read as deadlines rather than work items
+function chipTitle(t, compact = false) {
+  const title = compact ? abbreviateTitle(t.title) : t.title;
+  return t.type === "milestone" ? `◆ ${title}` : title;
+}
+
+// Phones show only fixed points in time (events and milestones); tasks live in the Tasks tab
+function showsInCompact(t) {
+  return t.type === "event" || t.type === "milestone";
+}
+
 function weekDays(cursor) {
   const start = startOfWeek(cursor);
   return Array.from({ length: 7 }, (_, i) => {
@@ -272,8 +283,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
           const i = row * 7 + dayIndex;
           if (!date) return <div key={i} />;
           const key = toDateKey(date);
-          // Phones show events only, as condensed chips; tasks live in the Tasks tab
-          const dayItems = (occByDay[key] || []).filter((item) => !isMultiDayEvent(item) && (!compact || item.type === "event"));
+          const dayItems = (occByDay[key] || []).filter((item) => !isMultiDayEvent(item) && (!compact || showsInCompact(item)));
           const visibleItems = dayItems.slice(0, compact ? 3 : 4);
           const hiddenItemCount = dayItems.length - visibleItems.length;
           const isToday = key === todayKey;
@@ -305,7 +315,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
                     title={courseMap[t.courseId]?.name ? `${t.title} (${courseMap[t.courseId].name})` : t.title}
                     aria-label={t.title}
                   >
-                    {compact ? abbreviateTitle(t.title) : t.title}
+                    {chipTitle(t, compact)}
                   </button>
                 ))}
                 {hiddenItemCount > 0 && <p className={compact ? "month-more" : "px-1 text-[10px] text-slate-400"}>+{hiddenItemCount}{compact ? "" : " more"}</p>}
@@ -439,7 +449,7 @@ function TimeGrid({ days, todos, courseMap, occByDay, onEdit, now, compact }) {
                         className={`block w-full truncate rounded px-1 py-0.5 text-left text-[11px] ${chipClass(t)}`}
                         style={courseChipStyle(courseMap[t.courseId], t.completed)}
                       >
-                        {t.title}
+                        {chipTitle(t)}
                       </button>
                     ))}
                   </div>

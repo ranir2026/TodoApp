@@ -20,7 +20,8 @@ export default function ActivityHeatmap({ todos }) {
 
   const countsByDay = {};
   for (const t of todos) {
-    if (t.type === "event") continue;
+    // Milestones complete with their tasks, which are already counted
+    if (t.type === "event" || t.type === "milestone") continue;
     for (const completedAt of completionTimestamps(t)) {
       const key = toDateKey(new Date(completedAt));
       countsByDay[key] = (countsByDay[key] || 0) + 1;

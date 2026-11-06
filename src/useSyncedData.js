@@ -2,19 +2,37 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { hasRecoveredOutageEdits, markOutageEditsRecovered, mergeOutageEdits } from "./outageRecovery";
 
-export function useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, onError) {
+// Columns added after launch. A Supabase project that hasn't run the latest schema yet is missing
+// some of them; those are switched off and the rest of the data keeps syncing.
+const OPTIONAL_COLUMNS = ["quick_links", "planner"];
+
+function missingColumn(error, columns) {
+  if (!error) return null;
+  const named = Object.keys(columns).find((column) => columns[column] && error.message?.includes(column));
+  if (named) return named;
+  // Unknown column without a name in the message: drop the optional columns still enabled, one at a time
+  if (error.code === "42703" || error.code === "PGRST204") return Object.keys(columns).find((column) => columns[column]) ?? null;
+  return null;
+}
+
+// The planner column defaults to {} for rows that predate it; that means "never synced", not "cleared"
+function hasPlannerData(planner) {
+  return Boolean(planner) && typeof planner === "object" && !Array.isArray(planner) && Object.keys(planner).length > 0;
+}
+
+export function useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, planner, setPlanner, onError) {
   const loadedUserRef = useRef(null);
   const saveTimerRef = useRef(null);
   const isRemoteUpdateRef = useRef(false);
   const lastSyncedPayloadRef = useRef(null);
-  const latestDataRef = useRef({ todos, courses, quickLinks });
-  const hasQuickLinksColumnRef = useRef(true);
+  const latestDataRef = useRef({ todos, courses, quickLinks, planner });
+  const columnsRef = useRef(Object.fromEntries(OPTIONAL_COLUMNS.map((column) => [column, true])));
   const hasPendingSaveRef = useRef(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
   useEffect(() => {
-    latestDataRef.current = { todos, courses, quickLinks };
-  }, [todos, courses, quickLinks]);
+    latestDataRef.current = { todos, courses, quickLinks, planner };
+  }, [todos, courses, quickLinks, planner]);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +45,10 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     loadedUserRef.current = null;
 
+    function remotePlanner(nextState) {
+      return columnsRef.current.planner && hasPlannerData(nextState.planner) ? nextState.planner : latestDataRef.current.planner;
+    }
+
     function applyRemoteState(nextState) {
       if (!nextState) return;
       // Don't let stale remote data overwrite local edits that haven't been saved yet
@@ -36,45 +58,45 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       const nextCourses = Array.isArray(nextState.courses) && nextState.courses.length
         ? nextState.courses
         : latestDataRef.current.courses;
-      const nextQuickLinks = Array.isArray(nextState.quick_links)
+      const nextQuickLinks = columnsRef.current.quick_links && Array.isArray(nextState.quick_links)
         ? nextState.quick_links
         : latestDataRef.current.quickLinks;
+      const nextPlanner = remotePlanner(nextState);
 
       const current = latestDataRef.current;
       const hasTodosDiff = JSON.stringify(nextTodos) !== JSON.stringify(current.todos);
       const hasCoursesDiff = JSON.stringify(nextCourses) !== JSON.stringify(current.courses);
-      const hasQuickLinksDiff = hasQuickLinksColumnRef.current && JSON.stringify(nextQuickLinks) !== JSON.stringify(current.quickLinks);
+      const hasQuickLinksDiff = JSON.stringify(nextQuickLinks) !== JSON.stringify(current.quickLinks);
+      const hasPlannerDiff = JSON.stringify(nextPlanner) !== JSON.stringify(current.planner);
 
-      if (hasTodosDiff || hasCoursesDiff || hasQuickLinksDiff) {
+      if (hasTodosDiff || hasCoursesDiff || hasQuickLinksDiff || hasPlannerDiff) {
         isRemoteUpdateRef.current = true;
         lastSyncedPayloadRef.current = JSON.stringify({
           todos: nextTodos,
           courses: nextCourses,
-          quickLinks: hasQuickLinksColumnRef.current ? nextQuickLinks : current.quickLinks,
+          quickLinks: nextQuickLinks,
+          planner: nextPlanner,
         });
 
         if (hasTodosDiff) setTodos(nextTodos);
         if (hasCoursesDiff) setCourses(nextCourses);
         if (hasQuickLinksDiff) setQuickLinks(nextQuickLinks);
+        if (hasPlannerDiff) setPlanner(nextPlanner);
       }
     }
 
     const fetchRemoteState = async () => {
-      // First attempt querying with quick_links
-      let res = await supabase
-        .from("app_state")
-        .select("todos, courses, quick_links")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      // If column doesn't exist yet in Supabase (error 42703), fall back to todos & courses gracefully
-      if (res.error && (res.error.code === "42703" || res.error.message?.includes("quick_links"))) {
-        hasQuickLinksColumnRef.current = false;
+      let res;
+      for (;;) {
+        const enabled = OPTIONAL_COLUMNS.filter((column) => columnsRef.current[column]);
         res = await supabase
           .from("app_state")
-          .select("todos, courses")
+          .select(["todos", "courses", ...enabled].join(", "))
           .eq("user_id", user.id)
           .maybeSingle();
+        const missing = missingColumn(res.error, columnsRef.current);
+        if (!missing) break;
+        columnsRef.current[missing] = false;
       }
 
       if (cancelled) return;
@@ -89,8 +111,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         const merged = hasRecoveredOutageEdits(user.id) ? null : mergeOutageEdits(res.data, latestDataRef.current);
         if (merged) {
           const quickLinksToSave = Array.isArray(res.data.quick_links) ? res.data.quick_links : latestDataRef.current.quickLinks;
+          const plannerToSave = remotePlanner(res.data);
           applyRemoteState({ ...res.data, todos: merged.todos, courses: merged.courses });
-          const ok = await saveToCloud(user.id, merged.todos, merged.courses, quickLinksToSave, hasQuickLinksColumnRef, onError);
+          const ok = await saveToCloud(user.id, { todos: merged.todos, courses: merged.courses, quickLinks: quickLinksToSave, planner: plannerToSave }, columnsRef, onError);
           if (cancelled) return;
           if (ok) markOutageEditsRecovered(user.id);
         } else {
@@ -98,13 +121,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
           applyRemoteState(res.data);
         }
       } else {
-        const payload = {
-          todos: latestDataRef.current.todos,
-          courses: latestDataRef.current.courses,
-          quickLinks: latestDataRef.current.quickLinks,
-        };
+        const payload = { ...latestDataRef.current };
         lastSyncedPayloadRef.current = JSON.stringify(payload);
-        saveToCloud(user.id, payload.todos, payload.courses, payload.quickLinks, hasQuickLinksColumnRef, onError);
+        saveToCloud(user.id, payload, columnsRef, onError);
       }
       loadedUserRef.current = user.id;
     };
@@ -129,9 +148,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     // If a save failed (e.g. offline or expired session), push local data before pulling remote
     const syncNow = async () => {
       if (hasPendingSaveRef.current && loadedUserRef.current === user.id) {
-        const { todos: t, courses: c, quickLinks: q } = latestDataRef.current;
-        const payload = JSON.stringify({ todos: t, courses: c, quickLinks: q });
-        const ok = await saveToCloud(user.id, t, c, q, hasQuickLinksColumnRef, onError);
+        const data = latestDataRef.current;
+        const payload = JSON.stringify(data);
+        const ok = await saveToCloud(user.id, data, columnsRef, onError);
         if (!ok || cancelled) return;
         lastSyncedPayloadRef.current = payload;
         if (JSON.stringify(latestDataRef.current) === payload) hasPendingSaveRef.current = false;
@@ -159,7 +178,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       window.removeEventListener("focus", handleVisibilityOrFocus);
       window.removeEventListener("online", handleOnline);
     };
-  }, [user, setTodos, setCourses, setQuickLinks, onError]);
+  }, [user, setTodos, setCourses, setQuickLinks, setPlanner, onError]);
 
   // Debounced save to Supabase
   useEffect(() => {
@@ -171,7 +190,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       return undefined;
     }
 
-    const currentPayloadString = JSON.stringify({ todos, courses, quickLinks });
+    const data = { todos, courses, quickLinks, planner };
+    const currentPayloadString = JSON.stringify(data);
     if (currentPayloadString === lastSyncedPayloadRef.current) {
       hasPendingSaveRef.current = false;
       return undefined;
@@ -181,7 +201,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
 
     const saveAction = async () => {
       lastSyncedPayloadRef.current = currentPayloadString;
-      const ok = await saveToCloud(user.id, todos, courses, quickLinks, hasQuickLinksColumnRef, onError);
+      const ok = await saveToCloud(user.id, data, columnsRef, onError);
       if (!ok) {
         // Keep the change pending so it is retried instead of being overwritten by stale remote data
         if (lastSyncedPayloadRef.current === currentPayloadString) lastSyncedPayloadRef.current = null;
@@ -205,7 +225,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       clearTimeout(saveTimerRef.current);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [user, todos, courses, quickLinks, onError]);
+  }, [user, todos, courses, quickLinks, planner, onError]);
 
   return { lastSyncedAt: user ? lastSyncedAt : null };
 }
@@ -215,7 +235,7 @@ function isAuthError(error) {
 }
 
 // Returns true when the data was saved
-async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColumnRef, onError) {
+async function saveToCloud(userId, { todos, courses, quickLinks, planner }, columnsRef, onError) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     onError?.("Offline");
     return false;
@@ -234,9 +254,9 @@ async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColu
       courses: courses ?? [],
       updated_at: new Date().toISOString(),
     };
-
-    if (hasQuickLinksColumnRef.current) {
-      row.quick_links = quickLinks ?? [];
+    const optionalValues = { quick_links: quickLinks ?? [], planner: planner ?? {} };
+    for (const column of OPTIONAL_COLUMNS) {
+      if (columnsRef.current[column]) row[column] = optionalValues[column];
     }
 
     let { error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
@@ -251,19 +271,16 @@ async function saveToCloud(userId, todos, courses, quickLinks, hasQuickLinksColu
       ({ error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" }));
     }
 
+    // A column this project doesn't have yet: stop sending it and retry with the rest
+    let missing = missingColumn(error, columnsRef.current);
+    while (missing) {
+      columnsRef.current[missing] = false;
+      delete row[missing];
+      ({ error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" }));
+      missing = missingColumn(error, columnsRef.current);
+    }
+
     if (error) {
-      // If error is missing column quick_links, toggle flag and retry without it
-      if (error.code === "42703" || error.message?.includes("quick_links")) {
-        hasQuickLinksColumnRef.current = false;
-        delete row.quick_links;
-        const retry = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
-        if (retry.error) {
-          onError?.(retry.error.message);
-          return false;
-        }
-        onError?.("");
-        return true;
-      }
       onError?.(error.message);
       return false;
     }

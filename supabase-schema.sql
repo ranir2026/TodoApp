@@ -3,10 +3,12 @@ create table if not exists public.app_state (
   todos jsonb not null default '[]'::jsonb,
   courses jsonb not null default '[]'::jsonb,
   quick_links jsonb not null default '[]'::jsonb,
+  planner jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
 alter table public.app_state add column if not exists quick_links jsonb not null default '[]'::jsonb;
+alter table public.app_state add column if not exists planner jsonb not null default '{}'::jsonb;
 
 do $$
 begin

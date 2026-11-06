@@ -32,8 +32,9 @@ function dueLabel(todo, isEvent) {
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
-export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false }) {
+export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false }) {
   const isEvent = todo.type === "event";
+  const isMilestone = todo.type === "milestone";
   const links = extractLinks(todo.description);
   const due = dueLabel(todo, isEvent);
   const timeRange = timeRangeLabel(todo);
@@ -90,7 +91,15 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
     }, 320);
   }
 
-  const toggleButton = (
+  // Milestones complete themselves once their tasks are done, so they get a status mark instead of a checkbox
+  const toggleButton = isMilestone ? (
+    <span
+      title={todo.completed ? "Milestone reached" : "Reached automatically when its tasks are done"}
+      className={`flex shrink-0 items-center justify-center ${mobile ? "task-toggle-mobile" : "mt-0.5 h-5 w-5"}`}
+    >
+      <span className={`block h-3 w-3 rotate-45 rounded-[2px] border-2 ${done ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
+    </span>
+  ) : (
     <button
       onClick={handleToggle}
       className={`task-complete-toggle flex shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
@@ -125,6 +134,19 @@ export default function TodoItem({ todo, course, onToggle, onDelete, onEdit, sel
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {isEvent && (
           <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={courseChipStyle(course)}>Event</span>
+        )}
+        {isMilestone && (
+          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
+            {todo.completed ? "Milestone reached" : "Milestone"}
+          </span>
+        )}
+        {isMilestone && todo.progress && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+            {todo.progress.total ? `${todo.progress.done}/${todo.progress.total} tasks` : "No tasks linked"}
+          </span>
+        )}
+        {project && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">▸ {project.name}</span>
         )}
         {course && (
           <span

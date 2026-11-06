@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { REPEAT_OPTIONS } from "./occurrences";
 
-export default function EditItemModal({ item, courses, onSave, onDelete, onSkipOccurrence, onClose }) {
+export default function EditItemModal({ item, courses, projects = [], milestones = [], onSave, onDelete, onSkipOccurrence, onClose }) {
   const [form, setForm] = useState(null);
 
   useEffect(() => {
@@ -20,6 +20,8 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
         repeatDays: item.repeatDays ?? [],
         repeatUntil: item.repeatUntil ?? "",
         repeatCount: item.repeatCount ?? "",
+        projectId: item.projectId ?? "",
+        milestoneId: item.milestoneId ?? "",
       });
     } else {
       setForm(null);
@@ -28,15 +30,41 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
 
   if (!item || !form) return null;
 
+  const isMilestone = form.type === "milestone";
+  const projectMilestones = milestones.filter((m) => m.projectId === form.projectId && m.id !== item.id);
+
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  // A task moved into a project takes on the project's category; leaving the project drops its milestone
+  function changeProject(projectId) {
+    const project = projects.find((p) => p.id === projectId);
+    setForm((f) => ({
+      ...f,
+      projectId,
+      milestoneId: "",
+      courseId: project?.courseId && courses.some((c) => c.id === project.courseId) ? project.courseId : f.courseId,
+    }));
   }
 
   function handleSubmit(e) {
     e.preventDefault();
     if (!form.title.trim()) return;
+    if (isMilestone) {
+      onSave(item.id, {
+        title: form.title.trim(),
+        courseId: form.courseId,
+        dueDate: form.dueDate || null,
+        description: form.description.trim() || null,
+        projectId: form.projectId || null,
+      });
+      return;
+    }
     onSave(item.id, {
       ...form,
+      projectId: form.projectId || null,
+      milestoneId: form.projectId ? form.milestoneId || null : null,
       title: form.title.trim(),
       dueDate: form.dueDate || null,
       endDate: form.type === "event" ? form.endDate || null : null,
@@ -58,6 +86,9 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
       >
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Edit {form.type}</h2>
+          {isMilestone ? (
+            <span className="text-[11px] text-slate-400">Reached when its tasks are done</span>
+          ) : (
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
             {["task", "event"].map((t) => (
               <button
@@ -72,6 +103,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
               </button>
             ))}
           </div>
+          )}
         </div>
 
         <input
@@ -89,12 +121,36 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+        {projects.length > 0 && (form.type === "task" || isMilestone) && (
+          <div className="flex items-center gap-1.5">
+            <select
+              value={form.projectId}
+              onChange={(e) => changeProject(e.target.value)}
+              aria-label="Project"
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+            >
+              <option value="">No project</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            {!isMilestone && form.projectId && (
+              <select
+                value={form.milestoneId}
+                onChange={(e) => update("milestoneId", e.target.value)}
+                aria-label="Milestone"
+                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+              >
+                <option value="">No milestone</option>
+                {projectMilestones.map((m) => <option key={m.id} value={m.id}>◆ {m.title}</option>)}
+              </select>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <input
             type="date"
             value={form.dueDate ?? ""}
             onChange={(e) => update("dueDate", e.target.value)}
-            title={form.type === "event" ? "Event date" : "Due date"}
+            title={form.type === "event" ? "Event date" : form.type === "milestone" ? "Milestone date" : "Due date"}
             className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
           />
           {form.type === "event" && (
@@ -110,6 +166,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
             </>
           )}
         </div>
+        {!isMilestone && (
         <div className="flex items-center gap-1.5">
           <input
             type="time"
@@ -125,6 +182,7 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
             className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
           />
         </div>
+        )}
         <textarea
           value={form.description}
           onChange={(e) => update("description", e.target.value)}
@@ -132,6 +190,8 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
           rows={3}
           className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
         />
+        {!isMilestone && (
+        <>
         <select
           value={form.repeat}
           onChange={(e) => update("repeat", e.target.value)}
@@ -156,6 +216,8 @@ export default function EditItemModal({ item, courses, onSave, onDelete, onSkipO
         >
           Urgent
         </button>
+        </>
+        )}
 
         <div className="mt-2 flex items-center gap-2">
           {form.repeat !== "none" && item.occurrenceDate && (
