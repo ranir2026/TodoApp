@@ -1,5 +1,7 @@
 # Todo App
 
+**Live demo:** https://ranir2026.github.io/TodoApp
+
 The app works locally with browser storage. To enable cross-device sync:
 
 1. Create a Supabase project.
