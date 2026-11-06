@@ -825,6 +825,7 @@ export default function App() {
         open={plannerOpen}
         suspended={Boolean(editingItem)}
         onClose={() => setPlannerOpen(false)}
+        keymap={resolvedKeymap}
         todos={todosView}
         courses={activeCourses}
         courseMap={courseMap}

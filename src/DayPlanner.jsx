@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { expandRange, isOccurrenceCompleted, parseDateKey, resolveTask } from "./occurrences";
 import { courseChipStyle, getCourseColor } from "./courseColors";
-import { Chevron } from "./Collapsible";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon } from "./icons";
 import { EMPTY_DAY, addDays, formatClock, layoutColumns, minutesToTime, timeToMinutes, toDateKey } from "./planner";
 
@@ -11,7 +10,6 @@ const SNAP = 15;
 const DEFAULT_LENGTH = 60;
 const DAY_MINUTES = 24 * 60;
 const DRAG_THRESHOLD = 4;
-const UPCOMING_PREVIEW = 5;
 const GHOST_WIDTH = 256;
 
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -37,6 +35,18 @@ function shortDue(dueDate) {
   return parseDateKey(dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function trayMeta(sectionId, todo) {
+  if (sectionId === "overdue" || sectionId === "upcoming") return shortDue(todo.dueDate);
+  if (sectionId === "today" && todo.startTime) return formatClock(timeToMinutes(todo.startTime));
+  return todo.priority === "urgent" ? "Urgent" : null;
+}
+
+// Fade the list only at an edge where more content is hidden behind it
+function edgeMask({ top, bottom }) {
+  if (!top && !bottom) return undefined;
+  return `linear-gradient(to bottom, ${top ? "transparent 0, black 16px" : "black 0"}, ${bottom ? "black calc(100% - 16px), transparent 100%" : "black 100%"})`;
+}
+
 export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit }) {
   const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
   const [dateKey, setDateKey] = useState(todayKey);
@@ -47,11 +57,12 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const [flashId, setFlashId] = useState(null);
   const [draftItem, setDraftItem] = useState("");
   const [query, setQuery] = useState("");
-  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [listEdges, setListEdges] = useState({ top: false, bottom: false });
   const rootRef = useRef(null);
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
   const trayRef = useRef(null);
+  const listRef = useRef(null);
   const dragRef = useRef(null);
   const returnRef = useRef(null);
 
@@ -100,6 +111,16 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     return () => clearTimeout(id);
   }, [flashId]);
 
+  function measureListEdges() {
+    const list = listRef.current;
+    if (!list) return;
+    const top = list.scrollTop > 1;
+    const bottom = list.scrollTop + list.clientHeight < list.scrollHeight - 1;
+    setListEdges((current) => (current.top === top && current.bottom === bottom ? current : { top, bottom }));
+  }
+
+  useLayoutEffect(measureListEdges);
+
   const todoById = useMemo(() => new Map(todos.map((todo) => [todo.id, todo])), [todos]);
   const day = { ...EMPTY_DAY, ...planner.days[dateKey] };
 
@@ -121,8 +142,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     });
   const scheduledIds = new Set(blocks.map((block) => block.todoId).filter(Boolean));
 
-  // Every open task can be planned. Tasks already pinned to a time this day show on the grid
-  // instead, unless you search for them.
+  // Every open task can be planned, grouped by when it's due
   const needle = query.trim().toLowerCase();
   const searching = needle.length > 0;
   const openTasks = todos
@@ -131,14 +151,12 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     .filter((todo) => !todo.completed && !scheduledIds.has(todo.id))
     .filter((todo) => !searching || todo.title.toLowerCase().includes(needle));
   const byDue = (a, b) => a.dueDate.localeCompare(b.dueDate) || (a.startTime ?? "").localeCompare(b.startTime ?? "");
-  const upcoming = openTasks.filter((todo) => todo.dueDate > dateKey).sort(byDue);
   const tray = {
     overdue: openTasks.filter((todo) => todo.dueDate && todo.dueDate < dateKey).sort(byDue),
-    dueToday: openTasks.filter((todo) => todo.dueDate === dateKey && (searching || !todo.startTime)),
+    dueToday: openTasks.filter((todo) => todo.dueDate === dateKey).sort(byDue),
     undated: openTasks.filter((todo) => !todo.dueDate),
-    upcoming: searching || showAllUpcoming ? upcoming : upcoming.slice(0, UPCOMING_PREVIEW),
+    upcoming: openTasks.filter((todo) => todo.dueDate > dateKey).sort(byDue),
   };
-  const hiddenUpcoming = upcoming.length - tray.upcoming.length;
   const inboxItems = searching ? day.inbox.filter((item) => item.title.toLowerCase().includes(needle)) : day.inbox;
 
   // Things already pinned to a time that day (events, timed tasks): shown so you can plan around them
@@ -211,6 +229,11 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     if (!title) return;
     updateDay((current) => ({ ...current, inbox: [...current.inbox, { id: crypto.randomUUID(), title, done: false }] }));
     setDraftItem("");
+    // New planner items land at the end of the list, right above the box they were typed into
+    requestAnimationFrame(() => {
+      const list = listRef.current;
+      list?.scrollTo({ top: list.scrollHeight, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    });
   }
 
   function removeInboxItem(id) {
@@ -424,26 +447,33 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     <div ref={rootRef} className={`relative flex h-full min-h-0 select-none ${drag ? "cursor-grabbing" : ""}`}>
       {toolbar && createPortal(controls, toolbar)}
       <aside ref={trayRef} className={`flex w-72 shrink-0 flex-col border-r border-slate-100 transition-colors ${drag?.kind === "move" && drag.overTray ? "bg-slate-50" : ""}`}>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-          <div>
-            <p className="text-xs font-semibold text-slate-700">Unscheduled</p>
-            <p className="mt-0.5 text-[11px] text-slate-500">Drag onto the schedule to plan when you'll do it.</p>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && query) {
-                  event.stopPropagation();
-                  setQuery("");
-                }
-              }}
-              placeholder="Find any task…"
-              aria-label="Find any task"
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:bg-white"
-            />
-          </div>
+        <div className="shrink-0 px-4 pt-4 pb-2">
+          <p className="text-xs font-semibold text-slate-700">Unscheduled</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Drag onto the schedule to plan when you'll do it.</p>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.stopPropagation();
+                setQuery("");
+              }
+            }}
+            placeholder="Find any task…"
+            aria-label="Find any task"
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:bg-white"
+          />
+        </div>
+
+        <div
+          ref={listRef}
+          onScroll={measureListEdges}
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-2"
+          style={{ maskImage: edgeMask(listEdges), WebkitMaskImage: edgeMask(listEdges) }}
+        >
           {nothingFound && <p className="text-[11px] text-slate-500">No open tasks match “{query.trim()}”.</p>}
+          {!searching && openTasks.length === 0 && inboxItems.length === 0 && <p className="text-[11px] text-slate-500">Nothing left to plan. Every task is done or on the schedule.</p>}
           {traySections.map((section) => section.items.length > 0 && (
             <section key={section.id}>
               <SectionLabel className={section.tone}>{section.title}</SectionLabel>
@@ -458,30 +488,19 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
                       lifted={liftedKey === todo.id}
                       title={todo.title}
                       color={getCourseColor(course)}
-                      meta={section.id === "overdue" || section.id === "upcoming" ? shortDue(todo.dueDate) : todo.priority === "urgent" ? "Urgent" : null}
+                      meta={trayMeta(section.id, todo)}
                       onPointerDown={(event) => dragFromTray(event, source, todo.id)}
                       onSchedule={() => scheduleNext(source)}
                     />
                   );
                 })}
               </ul>
-              {section.id === "upcoming" && !searching && (hiddenUpcoming > 0 || showAllUpcoming) && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllUpcoming((value) => !value)}
-                  aria-expanded={showAllUpcoming}
-                  className="mt-1 flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-slate-500 hover:text-slate-800"
-                >
-                  <Chevron open={showAllUpcoming} />
-                  {showAllUpcoming ? "Show fewer" : `${hiddenUpcoming} more`}
-                </button>
-              )}
             </section>
           ))}
-          {(!searching || inboxItems.length > 0) && <section>
-            <SectionLabel className="text-slate-500">Planner items</SectionLabel>
-            {inboxItems.length > 0 && (
-              <ul className="mb-1.5 space-y-1">
+          {inboxItems.length > 0 && (
+            <section>
+              <SectionLabel className="text-slate-500">Planner items</SectionLabel>
+              <ul className="space-y-1">
                 {inboxItems.map((item) => (
                   <TrayRow
                     key={item.id}
@@ -495,18 +514,21 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
                   />
                 ))}
               </ul>
-            )}
-            <form onSubmit={addInboxItem}>
-              <input
-                value={draftItem}
-                onChange={(event) => setDraftItem(event.target.value)}
-                placeholder="Add something just for today…"
-                className="w-full rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:border-solid"
-              />
-            </form>
-            <p className="mt-1 text-[11px] text-slate-400">Planner items stay here and never show up in your task list.</p>
-          </section>}
+            </section>
+          )}
         </div>
+
+        {/* Pinned under the list so adding a planner item never means scrolling to the end */}
+        <form onSubmit={addInboxItem} className="shrink-0 px-4 pt-2 pb-4">
+          <input
+            value={draftItem}
+            onChange={(event) => setDraftItem(event.target.value)}
+            placeholder="Add something just for today…"
+            aria-label="Add a planner item"
+            className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:border-solid"
+          />
+          <p className="mt-1 text-[11px] text-slate-400">Planner items stay here and never show up in your task list.</p>
+        </form>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -602,22 +624,18 @@ function SectionLabel({ className = "", children }) {
   return <h3 className={`mb-1.5 text-[11px] font-semibold tracking-wide uppercase ${className}`}>{children}</h3>;
 }
 
-// Category dot for real tasks, an empty square for planner-only items
-function TrayMarker({ color, plannerOnly }) {
-  return plannerOnly
-    ? <span className="h-2 w-2 shrink-0 rounded-sm border border-slate-400" />
-    : <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />;
-}
+// The category shows as a left stripe, the same as rows in the task list; planner-only items get a neutral one
+const PLANNER_ONLY_STRIPE = "var(--color-slate-300)";
 
 function TrayRow({ title, color, meta, plannerOnly = false, pressed, lifted, onPointerDown, onSchedule, onRemove }) {
   return (
     <li
       onPointerDown={onPointerDown}
-      className={`group flex cursor-grab touch-none items-center gap-2 rounded-lg border bg-white py-1 pr-1 pl-2 text-xs text-slate-700 transition-[scale,box-shadow,opacity,border-color] duration-150 ease-out ${
+      className={`group flex cursor-grab touch-none items-center gap-2 rounded-lg border border-l-4 bg-white py-1 pr-1 pl-2 text-xs text-slate-700 transition-[scale,box-shadow,opacity,border-color] duration-150 ease-out ${
         pressed ? "scale-[0.98] border-slate-300 shadow-md" : "border-slate-200 shadow-sm hover:border-slate-300 hover:shadow"
       } ${lifted ? "opacity-40" : ""}`}
+      style={{ borderLeftColor: plannerOnly ? PLANNER_ONLY_STRIPE : color }}
     >
-      <TrayMarker color={color} plannerOnly={plannerOnly} />
       <span className="min-w-0 flex-1 truncate">{title}</span>
       {meta && <span className="shrink-0 text-[11px] text-slate-400">{meta}</span>}
       <button
@@ -650,10 +668,9 @@ function DragGhost({ ref, title, course, plannerOnly, style }) {
   return (
     <div
       ref={ref}
-      className="pointer-events-none absolute z-50 flex scale-[1.02] items-center gap-2 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 shadow-lg"
-      style={style}
+      className="pointer-events-none absolute z-50 flex scale-[1.02] items-center gap-2 rounded-lg border border-l-4 border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 shadow-lg"
+      style={{ ...style, borderLeftColor: plannerOnly ? PLANNER_ONLY_STRIPE : getCourseColor(course) }}
     >
-      <TrayMarker color={getCourseColor(course)} plannerOnly={plannerOnly} />
       <span className="min-w-0 flex-1 truncate">{title}</span>
     </div>
   );

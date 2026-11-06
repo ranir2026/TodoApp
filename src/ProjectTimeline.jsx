@@ -721,7 +721,8 @@ function NewProjectForm({ courses, todayKey, canCancel, onCreate, onCancel }) {
   return (
     <form onSubmit={submit} className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
       <input
-        autoFocus
+        // Focus only when asked for with "+ Project": on the empty state it would swallow the tab shortcut
+        autoFocus={canCancel}
         value={name}
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => {

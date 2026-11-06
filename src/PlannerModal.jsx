@@ -4,6 +4,7 @@ import DayPlanner from "./DayPlanner";
 import ProjectTimeline from "./ProjectTimeline";
 import { useLocalStorage } from "./useLocalStorage";
 import { CloseIcon } from "./icons";
+import { comboLabel, normalizeCombo } from "./keybinds";
 
 const TABS = [
   { id: "today", label: "Today" },
@@ -12,20 +13,30 @@ const TABS = [
 
 // Desktop planner: plan the hours of a day, or lay projects out over weeks.
 // `suspended` is set while another dialog (the item editor) sits on top, so Escape closes that one first.
-export default function PlannerModal({ open, suspended, onClose, todos, courses, courseMap, planner, updatePlanner, onToggleTodo, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
+export default function PlannerModal({ open, suspended, onClose, keymap, todos, courses, courseMap, planner, updatePlanner, onToggleTodo, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
   const [tab, setTab] = useLocalStorage("plannerTab", "today");
   const pressStartedOnBackdrop = useRef(false);
+  const switchCombo = keymap?.plannerSwitchTab;
   // Each tab renders its own controls into the header (through a portal) instead of a second toolbar row
   const [toolbar, setToolbar] = useState(null);
 
   useEffect(() => {
     if (!open || suspended) return undefined;
     const handleKey = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      // The tab shortcut only fires when you aren't typing, and holding it down doesn't flicker between tabs
+      const target = event.target;
+      const typing = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
+      if (typing || event.repeat || !switchCombo || normalizeCombo(event) !== switchCombo) return;
+      event.preventDefault();
+      setTab((current) => (current === "timeline" ? "today" : "timeline"));
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, suspended, onClose]);
+  }, [open, suspended, onClose, switchCombo, setTab]);
 
   if (!open) return null;
 
@@ -39,7 +50,9 @@ export default function PlannerModal({ open, suspended, onClose, todos, courses,
       <div role="dialog" aria-modal="true" aria-label="Planner" className="modal-surface flex h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-dialog border border-slate-200 bg-white shadow-xl">
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
           <h2 className="text-sm font-semibold text-slate-900">Planner</h2>
-          <SegmentedControl label="Planner view" className="inline-grid shrink-0" segmentClassName="px-4" options={TABS} value={tab} onChange={setTab} />
+          <div className="shrink-0" title={switchCombo ? `Switch views (${comboLabel(switchCombo)})` : undefined}>
+            <SegmentedControl label="Planner view" className="inline-grid" segmentClassName="px-4" options={TABS} value={tab} onChange={setTab} />
+          </div>
           <span aria-hidden="true" className="h-5 w-px shrink-0 bg-slate-200" />
           <div ref={setToolbar} className="flex min-w-0 flex-1 items-center gap-2" />
           <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close planner">

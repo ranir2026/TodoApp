@@ -20,6 +20,7 @@ export const DEFAULT_KEYMAP = {
   toggleSort: "c",
   quickLink: "shift+l",
   openPlanner: "p",
+  plannerSwitchTab: "t",
 };
 
 export const ACTION_LABELS = {
@@ -44,6 +45,7 @@ export const ACTION_LABELS = {
   toggleSort: "Toggle date/category sort",
   quickLink: "Add quick link",
   openPlanner: "Open planner",
+  plannerSwitchTab: "Switch planner between Today and Timeline",
 };
 
 export function normalizeCombo(e) {
