@@ -1,16 +1,22 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import SegmentedControl from "./SegmentedControl";
 import { Chevron } from "./Collapsible";
 import { useLocalStorage } from "./useLocalStorage";
 import { getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, toDateKey } from "./planner";
+import { animateSpring } from "./spring";
+import { CloseIcon, PlusIcon } from "./icons";
 
 const LABEL_WIDTH = 232;
 const DAY_WIDTH = { weeks: 30, months: 10 };
 const PROJECT_ROW = 44;
 const ROW = 32;
 const DRAG_THRESHOLD = 4;
+const VELOCITY_WINDOW = 100;
+
+const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 function startOfWeekKey(key) {
   const date = parseDateKey(key);
@@ -46,15 +52,18 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   const [creating, setCreating] = useState(false);
   const [popover, setPopover] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [drag, setDrag] = useState(null);
+  const [pressed, setPressed] = useState(null);
   const rootRef = useRef(null);
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
+  const settleRef = useRef(null);
+  const runningSettleRef = useRef(null);
 
   const dayWidth = DAY_WIDTH[zoom] ?? DAY_WIDTH.weeks;
   const todayKey = toDateKey(new Date());
@@ -83,6 +92,34 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
     previousStartRef.current = rangeStart;
     if (previous !== rangeStart && scrollRef.current) scrollRef.current.scrollLeft += daysBetween(rangeStart, previous) * dayWidth;
   }, [rangeStart, dayWidth]);
+
+  // After a drop, the item glides from where the pointer let go into the day it snapped to,
+  // carrying the pointer's speed so there is no seam between dragging and settling
+  useLayoutEffect(() => {
+    const settle = settleRef.current;
+    if (!settle) return;
+    settleRef.current = null;
+    const elements = [...rootRef.current.querySelectorAll(`[data-drag-key="${settle.key}"]`)].map((element) => ({
+      element,
+      left: parseFloat(element.style.left),
+      width: parseFloat(element.style.width),
+    }));
+    const distance = settle.point || Math.abs(settle.dLeft) >= Math.abs(settle.dWidth) ? settle.dLeft : settle.dWidth;
+    if (!elements.length || Math.abs(distance) < 1 || prefersReducedMotion()) return;
+    const apply = (offset) => {
+      const t = offset / distance;
+      for (const { element, left, width } of elements) {
+        element.style.left = `${left + settle.dLeft * t}px`;
+        if (!settle.point) element.style.width = `${width + settle.dWidth * t}px`;
+      }
+    };
+    apply(distance);
+    const cancel = animateSpring({ from: distance, to: 0, velocity: settle.velocity, damping: 1, response: 0.3, onUpdate: apply, onComplete: () => { runningSettleRef.current = null; } });
+    runningSettleRef.current = () => {
+      cancel();
+      apply(0);
+    };
+  });
 
   useLayoutEffect(() => {
     scrollToToday();
@@ -159,29 +196,50 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
   }
 
   // ── Dragging (horizontal, whole days) ───────────────────────────────────
+  // Pixel offsets of where the item was let go, relative to where it snaps
+  function releaseOffsets({ range, mode, delta, dx }) {
+    const width = (daysBetween(range.start, range.end) + 1) * dayWidth;
+    const snapped = shiftRange(range, mode, delta);
+    const snappedShift = daysBetween(range.start, snapped.start) * dayWidth;
+    const snappedWidth = (daysBetween(snapped.start, snapped.end) + 1) * dayWidth;
+    let left = dx;
+    let releasedWidth = width;
+    if (mode === "start") {
+      left = Math.min(dx, width - dayWidth);
+      releasedWidth = width - left;
+    } else if (mode === "end") {
+      left = 0;
+      releasedWidth = Math.max(width + dx, dayWidth);
+    }
+    return { dLeft: left - snappedShift, dWidth: releasedWidth - snappedWidth };
+  }
+
   function beginDrag(event, state) {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    dragRef.current = { ...state, originX: event.clientX, active: false, delta: 0 };
+    runningSettleRef.current?.();
+    runningSettleRef.current = null;
+    dragRef.current = { ...state, originX: event.clientX, active: false, delta: 0, dx: 0, samples: [] };
+    setPressed(`${state.kind}:${state.id}`);
 
     const handleMove = (moveEvent) => {
       const current = dragRef.current;
       if (!current) return;
       const dx = moveEvent.clientX - current.originX;
       if (!current.active && Math.abs(dx) < DRAG_THRESHOLD) return;
-      const delta = Math.round(dx / dayWidth);
-      // Re-render only when the drag starts or crosses into another day
-      if (!current.active || delta !== current.delta) {
-        current.active = true;
-        current.delta = delta;
-        setDrag({ ...current });
-      }
+      const now = performance.now();
+      current.samples = [...current.samples.filter((sample) => now - sample.time < VELOCITY_WINDOW), { x: moveEvent.clientX, time: now }];
+      current.active = true;
+      current.dx = dx;
+      current.delta = Math.round(dx / dayWidth);
+      setDrag({ ...current });
     };
     const stop = () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleCancel);
+      setPressed(null);
     };
     const handleUp = () => {
       stop();
@@ -193,6 +251,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
         current.onClick?.();
         return;
       }
+      const [first, last] = [current.samples[0], current.samples.at(-1)];
+      const velocity = first && last && last.time > first.time ? ((last.x - first.x) / (last.time - first.time)) * 1000 : 0;
+      settleRef.current = { key: `${current.kind}:${current.id}`, point: current.kind === "todo", velocity, ...releaseOffsets(current) };
       if (current.delta !== 0) commitDrag(current);
     };
     const handleCancel = () => {
@@ -223,6 +284,29 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
     return drag && drag.kind === kind && drag.id === id ? shiftRange(range, drag.mode, drag.delta) : range;
   }
 
+  const isDragging = (kind, id) => Boolean(drag?.active && drag.kind === kind && drag.id === id);
+
+  // While dragged, a bar follows the pointer exactly; `landing` outlines the days it will snap to
+  function barGeometry(kind, id, range) {
+    const left = xOf(range.start);
+    const width = (daysBetween(range.start, range.end) + 1) * dayWidth;
+    if (!isDragging(kind, id)) return { left, width, landing: null };
+    const snapped = shiftRange(range, drag.mode, drag.delta);
+    const landing = { left: xOf(snapped.start), width: (daysBetween(snapped.start, snapped.end) + 1) * dayWidth };
+    if (drag.mode === "start") {
+      const shift = Math.min(drag.dx, width - dayWidth);
+      return { left: left + shift, width: width - shift, landing };
+    }
+    if (drag.mode === "end") return { left, width: Math.max(width + drag.dx, dayWidth), landing };
+    return { left: left + drag.dx, width, landing };
+  }
+
+  function pointGeometry(todo) {
+    const left = xOf(todo.dueDate) + dayWidth / 2;
+    if (!isDragging("todo", todo.id)) return { left, landing: null };
+    return { left: left + drag.dx, landing: xOf(addDays(todo.dueDate, drag.delta)) + dayWidth / 2 };
+  }
+
   function barHandlers(kind, id, projectId, range, onClick) {
     const start = (mode) => (event) => beginDrag(event, { kind, id, projectId, mode, range, onClick: mode === "move" ? onClick : undefined });
     return { move: start("move"), start: start("start"), end: start("end") };
@@ -235,13 +319,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
       const cell = event.currentTarget.getBoundingClientRect();
       key = addDays(rangeStart, Math.floor((event.clientX - cell.left) / dayWidth));
     }
-    setPopover({
-      projectId: project.id,
-      kind,
-      date: key,
-      x: Math.min(event.clientX - root.left, root.width - 300),
-      y: Math.min(event.clientY - root.top + 8, root.height - 260),
-    });
+    const clickX = event.clientX - root.left;
+    const clickY = event.clientY - root.top;
+    const x = Math.max(Math.min(clickX, root.width - 300), 8);
+    const y = Math.max(Math.min(clickY + 8, root.height - 260), 8);
+    // The popover grows out of the point that was clicked
+    setPopover({ projectId: project.id, kind, date: key, x, y, originX: clickX - x, originY: clickY - y });
   }
 
   // ── Header ──────────────────────────────────────────────────────────────
@@ -253,24 +336,31 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
     months.at(-1).days += 1;
   }
   const weekendShading = zoom === "weeks"
-    ? `repeating-linear-gradient(to right, rgb(248 250 252) 0 ${dayWidth}px, transparent ${dayWidth}px ${dayWidth * 6}px, rgb(248 250 252) ${dayWidth * 6}px ${dayWidth * 7}px)`
-    : `repeating-linear-gradient(to right, rgb(241 245 249) 0 1px, transparent 1px ${dayWidth * 7}px)`;
+    ? `repeating-linear-gradient(to right, var(--color-slate-50) 0 ${dayWidth}px, transparent ${dayWidth}px ${dayWidth * 6}px, var(--color-slate-50) ${dayWidth * 6}px ${dayWidth * 7}px)`
+    : `repeating-linear-gradient(to right, var(--color-slate-100) 0 1px, transparent 1px ${dayWidth * 7}px)`;
 
   const activeProject = popover ? projects.find((project) => project.id === popover.projectId) : null;
 
+  const controls = (
+    <>
+      <button type="button" onClick={() => setCreating(true)} className="flex shrink-0 items-center gap-1 rounded-lg bg-course-500 py-1 pr-2.5 pl-2 text-xs font-medium text-white hover:bg-course-600">
+        <PlusIcon className="h-3.5 w-3.5" />
+        Project
+      </button>
+      <button type="button" onClick={scrollToToday} className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300">
+        Today
+      </button>
+      <p className="ml-1 hidden min-w-0 truncate text-[11px] text-slate-500 lg:block" title="Double-click a project's row to add a phase, milestone, or task. Drag bars and points to reschedule.">
+        Double-click a project's row to add a phase, milestone, or task. Drag bars and points to reschedule.
+      </p>
+      <div className="flex-1" />
+      <SegmentedControl label="Timeline zoom" className="inline-grid shrink-0" segmentClassName="px-3" options={[{ id: "weeks", label: "Weeks" }, { id: "months", label: "Months" }]} value={zoom} onChange={setZoom} />
+    </>
+  );
+
   return (
     <div ref={rootRef} className={`relative flex h-full min-h-0 flex-col select-none ${drag ? "cursor-grabbing" : ""}`}>
-      <div className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-        <button type="button" onClick={() => setCreating(true)} className="rounded-lg bg-course-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-course-600">
-          + Project
-        </button>
-        <button type="button" onClick={scrollToToday} className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 hover:border-slate-300">
-          Today
-        </button>
-        <p className="ml-2 hidden text-[11px] text-slate-400 lg:block">Double-click a project's row to add a phase, milestone, or task. Drag bars and points to reschedule.</p>
-        <div className="flex-1" />
-        <SegmentedControl label="Timeline zoom" className="inline-grid" segmentClassName="px-3" options={[{ id: "weeks", label: "Weeks" }, { id: "months", label: "Months" }]} value={zoom} onChange={setZoom} />
-      </div>
+      {toolbar && createPortal(controls, toolbar)}
 
       {(creating || projects.length === 0) && (
         <NewProjectForm courses={courses} todayKey={todayKey} canCancel={projects.length > 0} onCreate={createProject} onCancel={() => setCreating(false)} />
@@ -282,7 +372,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
           <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-danger-500/60" style={{ left: LABEL_WIDTH + xOf(todayKey) + dayWidth / 2 }} />
 
           <div className="sticky top-0 z-30 flex border-b border-slate-200 bg-white">
-            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase" style={{ width: LABEL_WIDTH }}>
+            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase" style={{ width: LABEL_WIDTH }}>
               Projects
             </div>
             <div className="relative shrink-0" style={{ width: timelineWidth, height: 40 }}>
@@ -297,7 +387,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                 if (zoom === "months" && date.getDay() !== 0) return null;
                 const isToday = key === todayKey;
                 return (
-                  <div key={key} className={`absolute bottom-1 text-center text-[10px] ${isToday ? "font-bold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-300" : "text-slate-400"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
+                  <div key={key} className={`absolute bottom-1 text-center text-[11px] ${isToday ? "font-bold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-400" : "text-slate-500"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
                     {date.getDate()}
                   </div>
                 );
@@ -314,22 +404,30 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
             const looseTasks = tasks.filter((task) => !milestoneIds.has(task.raw.milestoneId));
             const doneCount = tasks.filter((task) => task.resolved.completed).length;
             const span = liveRange("project", project.id, { start: project.startDate, end: project.endDate });
+            const spanGeometry = barGeometry("project", project.id, { start: project.startDate, end: project.endDate });
             const spanHandlers = barHandlers("project", project.id, project.id, { start: project.startDate, end: project.endDate });
             const phases = project.phases ?? [];
             const isEmpty = !phases.length && !items.length;
 
             const renderPoint = (todo, kind) => {
-              const range = liveRange("todo", todo.id, { start: todo.dueDate, end: todo.dueDate });
+              const { left, landing } = pointGeometry(todo);
               const handlers = barHandlers("todo", todo.id, project.id, { start: todo.dueDate, end: todo.dueDate }, () => onEdit(todo));
-              return kind === "milestone"
-                ? <Diamond key={todo.id} milestone={todo} tone={milestoneTone(todo, todayKey)} color={color} left={xOf(range.start) + dayWidth / 2} onPointerDown={handlers.move} />
-                : <TaskDot key={todo.id} task={todo} done={resolveTask(todo).completed} overdue={!resolveTask(todo).completed && todo.dueDate < todayKey} color={color} left={xOf(range.start) + dayWidth / 2} onPointerDown={handlers.move} />;
+              const dragKey = `todo:${todo.id}`;
+              const state = { dragKey, pressed: pressed === dragKey, onPointerDown: handlers.move };
+              return (
+                <span key={todo.id} className="contents">
+                  {landing !== null && <PointLanding left={landing} diamond={kind === "milestone"} color={color} />}
+                  {kind === "milestone"
+                    ? <Diamond milestone={todo} tone={milestoneTone(todo, todayKey)} color={color} left={left} {...state} />
+                    : <TaskDot task={todo} done={resolveTask(todo).completed} overdue={!resolveTask(todo).completed && todo.dueDate < todayKey} color={color} left={left} {...state} />}
+                </span>
+              );
             };
 
             const pointRow = (key, label, rowTasks, milestone) => {
               const dated = rowTasks.filter((task) => task.raw.dueDate);
               const undated = rowTasks.length - dated.length;
-              const lineKeys = [...dated.map((task) => liveRange("todo", task.raw.id, { start: task.raw.dueDate, end: task.raw.dueDate }).start), ...(milestone?.dueDate ? [liveRange("todo", milestone.id, { start: milestone.dueDate, end: milestone.dueDate }).start] : [])];
+              const lineXs = [...dated.map((task) => pointGeometry(task.raw).left), ...(milestone?.dueDate ? [pointGeometry(milestone).left] : [])];
               return (
                 <Row
                   key={key}
@@ -338,8 +436,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                   sublabel={undated ? `${undated} undated` : null}
                   onTimelineDoubleClick={(event) => openPopover(event, project, { kind: "task" })}
                 >
-                  {lineKeys.length > 1 && (
-                    <div className="absolute top-1/2 h-px -translate-y-1/2" style={{ left: xOf(earliest(lineKeys)) + dayWidth / 2, width: xOf(latest(lineKeys)) - xOf(earliest(lineKeys)), backgroundColor: `${color}66` }} />
+                  {lineXs.length > 1 && (
+                    <div className="absolute top-1/2 h-px -translate-y-1/2" style={{ left: Math.min(...lineXs), width: Math.max(...lineXs) - Math.min(...lineXs), backgroundColor: `${color}66` }} />
                   )}
                   {dated.map((task) => renderPoint(task.raw, "task"))}
                   {milestone?.dueDate && renderPoint(milestone, "milestone")}
@@ -353,7 +451,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                   height={PROJECT_ROW}
                   label={
                     <div className="group/label flex min-w-0 items-center gap-1.5">
-                      <button type="button" onClick={() => updateProject(project.id, { collapsed: !project.collapsed })} className="-ml-1 rounded p-0.5 text-slate-400 hover:text-slate-700" aria-label={project.collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`} aria-expanded={!project.collapsed}>
+                      <button type="button" onClick={() => updateProject(project.id, { collapsed: !project.collapsed })} className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={project.collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`} aria-expanded={!project.collapsed}>
                         <Chevron open={!project.collapsed} />
                       </button>
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
@@ -364,27 +462,30 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                           {project.name}
                         </button>
                       )}
-                      {tasks.length > 0 && <span className="shrink-0 text-[10px] text-slate-400">{doneCount}/{tasks.length}</span>}
+                      {tasks.length > 0 && <span className="shrink-0 text-[11px] text-slate-500">{doneCount}/{tasks.length}</span>}
                       <span className="flex-1" />
-                      <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="shrink-0 rounded px-1 text-sm leading-none text-slate-300 opacity-0 transition-opacity hover:text-course-600 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Add to ${project.name}`} title="Add phase, milestone, or task">
-                        +
+                      <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-course-600 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Add to ${project.name}`} title="Add phase, milestone, or task">
+                        <PlusIcon className="h-3.5 w-3.5" />
                       </button>
-                      <button type="button" onClick={() => onDeleteProject(project.id)} className="shrink-0 rounded px-1 text-sm leading-none text-slate-300 opacity-0 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
-                        ×
+                      <button type="button" onClick={() => onDeleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
+                        <CloseIcon className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   }
-                  sublabel={`${shortDate(project.startDate)} – ${shortDate(project.endDate)}`}
+                  sublabel={`${shortDate(span.start)} – ${shortDate(span.end)}`}
                   onTimelineDoubleClick={(event) => openPopover(event, project)}
                 >
+                  {spanGeometry.landing && <BarLanding {...spanGeometry.landing} height={14} color={color} />}
                   <Bar
-                    left={xOf(span.start)}
-                    width={(daysBetween(span.start, span.end) + 1) * dayWidth}
+                    dragKey={`project:${project.id}`}
+                    left={spanGeometry.left}
+                    width={spanGeometry.width}
                     height={10}
-                    style={{ backgroundColor: `${color}33`, boxShadow: `inset 0 0 0 1px ${color}55` }}
+                    style={{ backgroundColor: `${color}33`, color, boxShadow: `inset 0 0 0 1px ${color}55` }}
                     title={`${project.name}: ${shortDate(span.start)} – ${shortDate(span.end)}`}
                     handlers={spanHandlers}
-                    active={drag?.kind === "project" && drag.id === project.id}
+                    active={isDragging("project", project.id)}
+                    pressed={pressed === `project:${project.id}`}
                   >
                     <div className="h-full rounded-full" style={{ width: `${tasks.length ? (doneCount / tasks.length) * 100 : 0}%`, backgroundColor: `${color}99` }} />
                   </Bar>
@@ -395,7 +496,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                   <>
                     {phases.map((phase) => {
                       const range = liveRange("phase", phase.id, { start: phase.start, end: phase.end });
-                      const width = (daysBetween(range.start, range.end) + 1) * dayWidth;
+                      const geometry = barGeometry("phase", phase.id, { start: phase.start, end: phase.end });
+                      const width = geometry.width;
                       return (
                         <Row
                           key={phase.id}
@@ -411,22 +513,25 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                                 </button>
                               )}
                               <span className="flex-1" />
-                              <button type="button" onClick={() => deletePhase(project.id, phase.id)} className="shrink-0 rounded px-1 text-xs leading-none text-slate-300 opacity-0 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete phase ${phase.name}`}>
-                                ×
+                              <button type="button" onClick={() => deletePhase(project.id, phase.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete phase ${phase.name}`}>
+                                <CloseIcon className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           }
                           onTimelineDoubleClick={(event) => openPopover(event, project, { kind: "phase" })}
                         >
+                          {geometry.landing && <BarLanding {...geometry.landing} height={24} rounded="rounded-lg" color={color} />}
                           <Bar
-                            left={xOf(range.start)}
+                            dragKey={`phase:${phase.id}`}
+                            left={geometry.left}
                             width={width}
                             height={20}
                             rounded="rounded-md"
                             style={{ backgroundColor: `${color}2e`, color, boxShadow: `inset 0 0 0 1px ${color}44` }}
                             title={`${phase.name}: ${shortDate(range.start)} – ${shortDate(range.end)}`}
                             handlers={barHandlers("phase", phase.id, project.id, { start: phase.start, end: phase.end })}
-                            active={drag?.kind === "phase" && drag.id === phase.id}
+                            active={isDragging("phase", phase.id)}
+                            pressed={pressed === `phase:${phase.id}`}
                           >
                             {width > 60 && <span className="block truncate px-2 text-[11px] font-medium leading-5">{phase.name}</span>}
                           </Bar>
@@ -440,18 +545,18 @@ export default function ProjectTimeline({ todos, courses, courseMap, planner, up
                         <button type="button" onClick={() => onEdit(milestone)} className="flex min-w-0 items-center gap-1.5 text-left text-xs text-slate-700 hover:text-course-600">
                           <span className={`h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
                           <span className="min-w-0 truncate">{milestone.title}</span>
-                          <span className="shrink-0 text-[10px] text-slate-400">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
+                          <span className="shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
                         </button>,
                         tasks.filter((task) => task.raw.milestoneId === milestone.id),
                         milestone,
                       ),
                     )}
 
-                    {looseTasks.length > 0 && pointRow("loose", <span className="text-xs text-slate-400">Other tasks</span>, looseTasks, null)}
+                    {looseTasks.length > 0 && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
 
                     {isEmpty && (
-                      <Row height={ROW} indent label={<span className="text-[11px] text-slate-300">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)}>
-                        <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-[11px] whitespace-nowrap text-slate-300" style={{ left: xOf(project.startDate) + 4 }}>
+                      <Row height={ROW} indent label={<span className="text-[11px] text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)}>
+                        <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-[11px] whitespace-nowrap text-slate-400" style={{ left: xOf(project.startDate) + 4 }}>
                           Double-click to add a phase, milestone, or task
                         </span>
                       </Row>
@@ -491,7 +596,7 @@ function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, c
     <div className="flex" style={{ height }}>
       <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 bg-white pr-2 ${indent ? "pl-8" : "pl-3"}`} style={{ width: LABEL_WIDTH }}>
         {label}
-        {sublabel && <span className="truncate text-[10px] leading-tight text-slate-400">{sublabel}</span>}
+        {sublabel && <span className="truncate text-[11px] leading-tight text-slate-500">{sublabel}</span>}
       </div>
       <div className="relative min-w-0 flex-1" onDoubleClick={onTimelineDoubleClick}>
         {children}
@@ -500,19 +605,46 @@ function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, c
   );
 }
 
-function Bar({ left, width, height, rounded = "rounded-full", style, title, handlers, active, children }) {
+function Bar({ dragKey, left, width, height, rounded = "rounded-full", style, title, handlers, active, pressed, children }) {
+  // Narrow bars keep thin edge handles so there is still a middle to grab and move
+  const handleWidth = width >= 48 ? 10 : 4;
   return (
     <div
+      data-drag-key={dragKey}
       onPointerDown={handlers.move}
       onDoubleClick={(event) => event.stopPropagation()}
       title={title}
-      className={`group/bar absolute top-1/2 -translate-y-1/2 cursor-grab touch-none overflow-hidden ${rounded} ${active ? "shadow-lg" : "hover:shadow-sm"}`}
+      className={`group/bar absolute top-1/2 z-[1] -translate-y-1/2 cursor-grab touch-none overflow-hidden transition-shadow duration-150 ${rounded} ${active ? "shadow-lg" : pressed ? "shadow-md" : "hover:shadow-sm"}`}
       style={{ left, width, height, ...style }}
     >
       {children}
-      <span onPointerDown={handlers.start} className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize" aria-hidden="true" />
-      <span onPointerDown={handlers.end} className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize" aria-hidden="true" />
+      {["start", "end"].map((edge) => (
+        <span
+          key={edge}
+          onPointerDown={handlers[edge]}
+          className={`absolute inset-y-0 flex cursor-ew-resize items-center justify-center ${edge === "start" ? "left-0" : "right-0"}`}
+          style={{ width: handleWidth }}
+          aria-hidden="true"
+        >
+          {handleWidth > 4 && <span className="h-[60%] max-h-3 w-0.5 rounded-full bg-current opacity-0 transition-opacity group-hover/bar:opacity-40" />}
+        </span>
+      ))}
     </div>
+  );
+}
+
+// Dashed outline of the days a dragged bar will snap to
+function BarLanding({ left, width, height, rounded = "rounded-full", color }) {
+  return <div aria-hidden="true" className={`pointer-events-none absolute top-1/2 -translate-y-1/2 border border-dashed ${rounded}`} style={{ left, width, height, borderColor: color }} />;
+}
+
+function PointLanding({ left, diamond, color }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 border border-dashed ${diamond ? "h-4 w-4 rotate-45 rounded-[3px]" : "h-3.5 w-3.5 rounded-full"}`}
+      style={{ left, borderColor: color }}
+    />
   );
 }
 
@@ -523,32 +655,34 @@ const DIAMOND_TONES = {
   open: "bg-white",
 };
 
-function Diamond({ milestone, tone, color, left, onPointerDown }) {
+function Diamond({ milestone, tone, color, left, dragKey, pressed, onPointerDown }) {
   const status = tone === "reached" ? "reached" : tone === "overdue" ? "overdue" : tone === "soon" ? "due soon" : "upcoming";
   const progress = milestone.progress?.total ? ` · ${milestone.progress.done}/${milestone.progress.total} tasks` : " · no tasks linked";
   return (
     <button
       type="button"
+      data-drag-key={dragKey}
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
       title={`◆ ${milestone.title} · ${shortDate(milestone.dueDate)} · ${status}${progress}`}
       aria-label={`Milestone ${milestone.title}, ${status}`}
-      className={`absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-grab touch-none rounded-[3px] border-2 shadow-sm ${DIAMOND_TONES[tone]}`}
+      className={`absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-grab touch-none rounded-[3px] border-2 transition-[scale,box-shadow] duration-150 ${pressed ? "scale-110 shadow-md" : "shadow-sm"} ${DIAMOND_TONES[tone]}`}
       style={{ left, ...(tone === "open" ? { borderColor: color } : null) }}
     />
   );
 }
 
-function TaskDot({ task, done, overdue, color, left, onPointerDown }) {
+function TaskDot({ task, done, overdue, color, left, dragKey, pressed, onPointerDown }) {
   return (
     <button
       type="button"
+      data-drag-key={dragKey}
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
       title={`${task.title} · ${shortDate(task.dueDate)}${done ? " · done" : overdue ? " · overdue" : ""}`}
       aria-label={`Task ${task.title}`}
-      className="absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-transform hover:scale-125"
-      style={{ left, borderColor: overdue ? "#ef4444" : color, backgroundColor: done ? color : "#fff" }}
+      className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-[scale,box-shadow] duration-150 hover:scale-125 ${pressed ? "scale-125 shadow-md" : ""} ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
+      style={{ left, ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
     />
   );
 }
@@ -603,7 +737,7 @@ function NewProjectForm({ courses, todayKey, canCancel, onCreate, onCancel }) {
         {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
       </select>
       <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-label="Start date" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
-      <span className="text-xs text-slate-300">to</span>
+      <span className="text-xs text-slate-400">to</span>
       <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
       <button type="submit" disabled={!name.trim()} className="rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600 disabled:opacity-40">Create</button>
       {canCancel && <button type="button" onClick={onCancel} className="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>}
@@ -642,11 +776,13 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
         }
       }}
       className="modal-surface absolute z-50 w-72 space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-xl"
-      style={{ left: Math.max(popover.x, 8), top: Math.max(popover.y, 8) }}
+      style={{ left: popover.x, top: popover.y, transformOrigin: `${popover.originX}px ${popover.originY}px` }}
     >
       <div className="flex items-center justify-between">
         <p className="truncate text-xs font-semibold text-slate-700">Add to {project.name}</p>
-        <button type="button" onClick={onClose} className="rounded-full px-1.5 text-slate-400 hover:text-slate-700" aria-label="Close">×</button>
+        <button type="button" onClick={onClose} className="-my-1 -mr-1.5 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+          <CloseIcon />
+        </button>
       </div>
       <SegmentedControl label="Item type" options={KIND_OPTIONS} value={kind} onChange={(next) => { setKind(next); inputRef.current?.focus(); }} />
       <input
@@ -661,7 +797,7 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
         <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label={kind === "phase" ? "Start date" : "Date"} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
         {kind === "phase" && (
           <>
-            <span className="text-xs text-slate-300">to</span>
+            <span className="text-xs text-slate-400">to</span>
             <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
           </>
         )}
@@ -672,7 +808,7 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
           {milestones.map((milestone) => <option key={milestone.id} value={milestone.id}>Counts toward ◆ {milestone.title}</option>)}
         </select>
       )}
-      <p className="text-[10px] leading-snug text-slate-400">
+      <p className="text-[11px] leading-snug text-slate-500">
         {kind === "phase" && "Phases only show here on the timeline."}
         {kind === "milestone" && "Shows on your calendar. It's reached on its own once its tasks are done."}
         {kind === "task" && "Shows in your task list and calendar like any other task."}
