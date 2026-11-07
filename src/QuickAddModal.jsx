@@ -128,7 +128,10 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
       repeatDays: parsed.repeatDays,
       dueDates: parsed.dueDates,
     });
-    setText("");
+    // In the planner, the next task starts toward the same milestone, so a milestone's tasks can be
+    // entered one after another
+    const milestone = planner && parsed.courseId ? courses.find((c) => c.id === parsed.courseId) : null;
+    setText(milestone ? `@${milestone.name} ` : "");
     setError(null);
   }
 
