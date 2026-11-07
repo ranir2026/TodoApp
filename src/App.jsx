@@ -24,6 +24,7 @@ import Collapsible, { Chevron } from "./Collapsible";
 import PlannerModal from "./PlannerModal";
 import { withMilestoneStatus } from "./milestones";
 import { EMPTY_PLANNER, normalizePlanner } from "./planner";
+import { COLOR_PALETTE } from "./courseColors";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -31,7 +32,7 @@ const MOBILE_TABS = [
   { id: "profile", label: "Profile", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="8.5" r="3.8" /><path className="tab-fill" d="M4.5 20c.9-3.6 3.9-5.8 7.5-5.8s6.6 2.2 7.5 5.8z" /></svg> },
 ];
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
-const COURSE_COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
+const COURSE_COLOR_PALETTE = COLOR_PALETTE;
 const DEFAULT_QUICK_LINKS = [];
 
 function ArchiveIcon() {

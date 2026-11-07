@@ -1,5 +1,8 @@
 const FALLBACK_COLOR = "#94a3b8";
 
+// Preset colors offered for categories and projects
+export const COLOR_PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6"];
+
 function normalizeColor(color) {
   if (!color) return FALLBACK_COLOR;
   if (/^#[\da-f]{3}$/i.test(color)) {

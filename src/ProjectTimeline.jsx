@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SegmentedControl from "./SegmentedControl";
-import { Chevron } from "./Collapsible";
+import Collapsible, { Chevron } from "./Collapsible";
 import { useLocalStorage } from "./useLocalStorage";
-import { getCourseColor } from "./courseColors";
+import { COLOR_PALETTE, getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
@@ -55,6 +55,10 @@ function milestoneTone(milestone, todayKey) {
 export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   const [creating, setCreating] = useState(false);
+  // Bumped each time the form opens so its fields start fresh and play their entrance again
+  const [formKey, setFormKey] = useState(0);
+  const [colorMenu, setColorMenu] = useState(null);
+  const [createdId, setCreatedId] = useState(null);
   const [popover, setPopover] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -122,6 +126,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   });
 
   useLayoutEffect(() => {
+    if (!createdId) return;
+    const row = scrollRef.current?.querySelector(`[data-project-id="${createdId}"]`);
+    row?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [createdId]);
+
+  useLayoutEffect(() => {
     scrollToToday();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom]);
@@ -158,12 +168,32 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     updateProject(projectId, (project) => ({ phases: project.phases.filter((phase) => phase.id !== phaseId) }));
   }
 
-  function createProject({ name, courseId, startDate, endDate }) {
+  function openCreate() {
+    if (creating) return;
+    setFormKey((key) => key + 1);
+    setCreating(true);
+  }
+
+  function createProject({ name, courseId, color, startDate, endDate }) {
+    const id = crypto.randomUUID();
     updatePlanner((current) => ({
       ...current,
-      projects: [...current.projects, { id: crypto.randomUUID(), name, courseId, startDate, endDate: endDate < startDate ? startDate : endDate, collapsed: false, phases: [] }],
+      projects: [...current.projects, { id, name, courseId, color: color ?? null, startDate, endDate: endDate < startDate ? startDate : endDate, collapsed: false, phases: [] }],
     }));
     setCreating(false);
+    setCreatedId(id);
+  }
+
+  // A project's own color, falling back to its category's
+  const projectColor = (project) => project.color || getCourseColor(courseMap[project.courseId]);
+
+  // The color menu opens from the swatch that was clicked
+  function openColorMenu(event, { value, categoryColor, onChange }) {
+    const root = rootRef.current.getBoundingClientRect();
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(Math.min(anchor.left - root.left - 8, root.width - 208), 8);
+    const y = Math.min(anchor.bottom - root.top + 6, root.height - 150);
+    setColorMenu({ x, y, originX: anchor.left - root.left + anchor.width / 2 - x, originY: anchor.top - root.top - y, value, categoryColor, onChange });
   }
 
   function addItem(project, { kind, title, date, endDate, milestoneId }) {
@@ -343,16 +373,13 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 
   const controls = (
     <>
-      <button type="button" onClick={() => setCreating(true)} className="flex shrink-0 items-center gap-1 rounded-lg bg-course-500 py-1 pr-2.5 pl-2 text-xs font-medium text-white hover:bg-course-600">
+      <button type="button" onClick={openCreate} className="flex shrink-0 items-center gap-1 rounded-lg bg-course-500 py-1 pr-2.5 pl-2 text-xs font-medium text-white hover:bg-course-600">
         <PlusIcon className="h-3.5 w-3.5" />
         Project
       </button>
       <button type="button" onClick={scrollToToday} className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300">
         Today
       </button>
-      <p className="ml-1 hidden min-w-0 truncate text-[11px] text-slate-500 lg:block" title="Double-click a project's row to add a phase, milestone, or task. Drag bars and points to reschedule.">
-        Double-click a project's row to add a phase, milestone, or task. Drag bars and points to reschedule.
-      </p>
       <div className="flex-1" />
       <SegmentedControl label="Timeline zoom" className="inline-grid shrink-0" segmentClassName="px-3" options={[{ id: "weeks", label: "Weeks" }, { id: "months", label: "Months" }]} value={zoom} onChange={setZoom} />
     </>
@@ -362,9 +389,18 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     <div ref={rootRef} className={`relative flex h-full min-h-0 flex-col select-none ${drag ? "cursor-grabbing" : ""}`}>
       {toolbar && createPortal(controls, toolbar)}
 
-      {(creating || projects.length === 0) && (
-        <NewProjectForm courses={courses} todayKey={todayKey} canCancel={projects.length > 0} onCreate={createProject} onCancel={() => setCreating(false)} />
-      )}
+      <Collapsible open={creating || projects.length === 0}>
+        <NewProjectForm
+          key={formKey}
+          courses={courses}
+          todayKey={todayKey}
+          canCancel={projects.length > 0}
+          focusName={formKey > 0}
+          onCreate={createProject}
+          onCancel={() => setCreating(false)}
+          onPickColor={openColorMenu}
+        />
+      </Collapsible>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <div className="relative flex min-h-full flex-col" style={{ width: LABEL_WIDTH + timelineWidth }}>
@@ -396,7 +432,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
           </div>
 
           {projects.map((project) => {
-            const color = getCourseColor(courseMap[project.courseId]);
+            const color = projectColor(project);
             const items = projectTodos.filter((todo) => todo.projectId === project.id);
             const milestones = items.filter((todo) => todo.type === "milestone").sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
             const milestoneIds = new Set(milestones.map((milestone) => milestone.id));
@@ -446,7 +482,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
             };
 
             return (
-              <div key={project.id} className="border-b border-slate-100">
+              <div key={project.id} data-project-id={project.id} className={`border-b border-slate-100 ${project.id === createdId ? "planner-row-enter" : ""}`}>
                 <Row
                   height={PROJECT_ROW}
                   label={
@@ -454,7 +490,19 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       <button type="button" onClick={() => updateProject(project.id, { collapsed: !project.collapsed })} className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={project.collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`} aria-expanded={!project.collapsed}>
                         <Chevron open={!project.collapsed} />
                       </button>
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                      <button
+                        type="button"
+                        onClick={(event) => openColorMenu(event, {
+                          value: project.color ?? null,
+                          categoryColor: getCourseColor(courseMap[project.courseId]),
+                          onChange: (next) => updateProject(project.id, { color: next }),
+                        })}
+                        className="-mx-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-slate-100"
+                        aria-label={`Change ${project.name} color`}
+                        title="Change color"
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10 ring-inset" style={{ backgroundColor: color }} />
+                      </button>
                       {renaming?.kind === "project" && renaming.id === project.id ? (
                         <RenameInput value={renaming.value} onChange={(value) => setRenaming({ ...renaming, value })} onCommit={commitRename} onCancel={() => setRenaming(null)} />
                       ) : (
@@ -555,11 +603,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     {looseTasks.length > 0 && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
 
                     {isEmpty && (
-                      <Row height={ROW} indent label={<span className="text-[11px] text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)}>
-                        <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-[11px] whitespace-nowrap text-slate-400" style={{ left: xOf(project.startDate) + 4 }}>
-                          Double-click to add a phase, milestone, or task
-                        </span>
-                      </Row>
+                      <Row height={ROW} indent label={<span className="text-[11px] text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)} />
                     )}
                   </>
                 )}
@@ -573,6 +617,20 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
           </div>
         </div>
       </div>
+
+      {colorMenu && (
+        <>
+          <div className="absolute inset-0 z-40" onPointerDown={() => setColorMenu(null)} />
+          <ColorMenu
+            menu={colorMenu}
+            onChange={(next) => {
+              colorMenu.onChange(next);
+              setColorMenu((current) => current && { ...current, value: next });
+            }}
+            onClose={() => setColorMenu(null)}
+          />
+        </>
+      )}
 
       {popover && activeProject && (
         <>
@@ -706,43 +764,113 @@ function RenameInput({ value, onChange, onCommit, onCancel }) {
   );
 }
 
-function NewProjectForm({ courses, todayKey, canCancel, onCreate, onCancel }) {
+function NewProjectForm({ courses, todayKey, canCancel, focusName, onCreate, onCancel, onPickColor }) {
   const [name, setName] = useState("");
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
+  const [color, setColor] = useState(null);
   const [startDate, setStartDate] = useState(todayKey);
   const [endDate, setEndDate] = useState(addDays(todayKey, 28));
+  const categoryColor = getCourseColor(courses.find((course) => course.id === courseId));
 
   function submit(event) {
     event.preventDefault();
     if (!name.trim() || !startDate || !endDate) return;
-    onCreate({ name: name.trim(), courseId: courseId || null, startDate, endDate });
+    onCreate({ name: name.trim(), courseId: courseId || null, color, startDate, endDate });
   }
+
+  // Each field drops in a beat after the one before it
+  const field = (index) => ({ style: { "--i": index } });
 
   return (
     <form onSubmit={submit} className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
-      <input
-        // Focus only when asked for with "+ Project": on the empty state it would swallow the tab shortcut
-        autoFocus={canCancel}
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && canCancel) {
-            event.stopPropagation();
-            onCancel();
-          }
-        }}
-        placeholder={canCancel ? "Project name" : "Name your first project…"}
-        className="min-w-40 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-course-400"
-      />
-      <select value={courseId} onChange={(event) => setCourseId(event.target.value)} aria-label="Category" className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none">
+      <div {...field(0)} className="project-form-field flex min-w-40 flex-1 items-center gap-1.5 rounded-lg border border-slate-200 bg-white pl-1 focus-within:border-course-400">
+        <button
+          type="button"
+          onClick={(event) => onPickColor(event, { value: color, categoryColor, onChange: setColor })}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-slate-100"
+          aria-label="Project color"
+          title="Project color"
+        >
+          <span className="h-3 w-3 rounded-full ring-1 ring-black/10 ring-inset" style={{ backgroundColor: color || categoryColor }} />
+        </button>
+        <input
+          // Focus only when asked for with "+ Project": on the empty state it would swallow the tab shortcut
+          autoFocus={focusName}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && canCancel) {
+              event.stopPropagation();
+              onCancel();
+            }
+          }}
+          placeholder={canCancel ? "Project name" : "Name your first project…"}
+          aria-label="Project name"
+          className="min-w-0 flex-1 bg-transparent py-1.5 pr-2.5 text-sm outline-none"
+        />
+      </div>
+      <select {...field(1)} value={courseId} onChange={(event) => setCourseId(event.target.value)} aria-label="Category" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none">
         {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
       </select>
-      <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-label="Start date" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
-      <span className="text-xs text-slate-400">to</span>
-      <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
-      <button type="submit" disabled={!name.trim()} className="rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600 disabled:opacity-40">Create</button>
-      {canCancel && <button type="button" onClick={onCancel} className="rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>}
+      <input {...field(2)} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-label="Start date" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
+      <span {...field(3)} className="project-form-field text-xs text-slate-400">to</span>
+      <input {...field(4)} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
+      <button {...field(5)} type="submit" disabled={!name.trim()} className="project-form-field rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600 disabled:opacity-40">Create</button>
+      {canCancel && <button {...field(6)} type="button" onClick={onCancel} className="project-form-field rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>}
     </form>
+  );
+}
+
+// Swatches for a project's color: its category's color (the default), the presets, or any custom color
+function ColorMenu({ menu, onChange, onClose }) {
+  const custom = menu.value && !COLOR_PALETTE.includes(menu.value.toLowerCase());
+  const swatch = (selected) => `flex h-7 w-7 items-center justify-center rounded-full ring-offset-2 transition-shadow ${selected ? "ring-2 ring-slate-400" : "hover:ring-2 hover:ring-slate-200"}`;
+  const pick = (value) => {
+    onChange(value);
+    onClose();
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Project color"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+      className="modal-surface absolute z-50 w-52 rounded-card border border-slate-200 bg-white p-3 shadow-xl"
+      style={{ left: menu.x, top: menu.y, transformOrigin: `${menu.originX}px ${menu.originY}px` }}
+    >
+      <button
+        type="button"
+        autoFocus={!menu.value}
+        onClick={() => pick(null)}
+        className="mb-2.5 flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/10 ring-inset" style={{ backgroundColor: menu.categoryColor }} />
+        <span className="flex-1">Category color</span>
+        {!menu.value && <span className="text-course-600">✓</span>}
+      </button>
+      <div className="grid grid-cols-5 gap-2 px-0.5">
+        {COLOR_PALETTE.map((value) => (
+          <button key={value} type="button" autoFocus={menu.value?.toLowerCase() === value} onClick={() => pick(value)} className={swatch(menu.value?.toLowerCase() === value)} aria-label={`Color ${value}`} aria-pressed={menu.value?.toLowerCase() === value}>
+            <span className="h-6 w-6 rounded-full" style={{ backgroundColor: value }} />
+          </button>
+        ))}
+        <label className={`${swatch(custom)} relative cursor-pointer`} title="Custom color">
+          <span className="h-6 w-6 rounded-full" style={{ background: custom ? menu.value : "conic-gradient(#f43f5e, #f59e0b, #84cc16, #10b981, #0ea5e9, #6366f1, #d946ef, #f43f5e)" }} />
+          <input
+            type="color"
+            value={menu.value || menu.categoryColor}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label="Custom color"
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 
@@ -809,11 +937,6 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
           {milestones.map((milestone) => <option key={milestone.id} value={milestone.id}>Counts toward ◆ {milestone.title}</option>)}
         </select>
       )}
-      <p className="text-[11px] leading-snug text-slate-500">
-        {kind === "phase" && "Phases only show here on the timeline."}
-        {kind === "milestone" && "Shows on your calendar. It's reached on its own once its tasks are done."}
-        {kind === "task" && "Shows in your task list and calendar like any other task."}
-      </p>
       <button type="submit" disabled={!title.trim()} className="w-full rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600 disabled:opacity-40">
         Add {kind}
       </button>

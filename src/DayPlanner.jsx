@@ -449,7 +449,6 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
       <aside ref={trayRef} className={`flex w-72 shrink-0 flex-col border-r border-slate-100 transition-colors ${drag?.kind === "move" && drag.overTray ? "bg-slate-50" : ""}`}>
         <div className="shrink-0 px-4 pt-4 pb-2">
           <p className="text-xs font-semibold text-slate-700">Unscheduled</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">Drag onto the schedule to plan when you'll do it.</p>
           <input
             type="search"
             value={query}
@@ -527,7 +526,6 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
             aria-label="Add a planner item"
             className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:border-solid"
           />
-          <p className="mt-1 text-[11px] text-slate-400">Planner items stay here and never show up in your task list.</p>
         </form>
       </aside>
 
