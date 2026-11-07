@@ -94,6 +94,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const tooltipRef = useRef(null);
   const tipTimerRef = useRef(null);
   const tipHiddenAtRef = useRef(0);
+  const tipOpenRef = useRef(false);
   const runningSettleRef = useRef(null);
 
   const dayWidth = DAY_WIDTH[zoom] ?? DAY_WIDTH.weeks;
@@ -171,7 +172,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     const settle = settleRef.current;
     if (!settle) return;
     settleRef.current = null;
-    const elements = [...rootRef.current.querySelectorAll(`[data-drag-key="${settle.key}"]`)].map((element) => ({
+    const elements = [...rootRef.current.querySelectorAll(settle.keys.map((key) => `[data-drag-key="${key}"]`).join(","))].map((element) => ({
       element,
       left: parseFloat(element.style.left),
       width: parseFloat(element.style.width),
@@ -346,7 +347,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    hideTip();
+    // A stack's card stays up through a click (it's how you read the stack); it goes once a drag starts
+    if (state.kind !== "group") hideTip();
     runningSettleRef.current?.();
     runningSettleRef.current = null;
     dragRef.current = { ...state, originX: event.clientX, active: false, delta: 0, dx: 0, samples: [] };
@@ -357,6 +359,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       if (!current) return;
       const dx = moveEvent.clientX - current.originX;
       if (!current.active && Math.abs(dx) < DRAG_THRESHOLD) return;
+      if (!current.active) hideTip();
       const now = performance.now();
       current.samples = [...current.samples.filter((sample) => now - sample.time < VELOCITY_WINDOW), { x: moveEvent.clientX, time: now }];
       current.active = true;
@@ -382,7 +385,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       }
       const [first, last] = [current.samples[0], current.samples.at(-1)];
       const velocity = first && last && last.time > first.time ? ((last.x - first.x) / (last.time - first.time)) * 1000 : 0;
-      settleRef.current = { key: `${current.kind}:${current.id}`, point: current.kind === "todo", velocity, ...releaseOffsets(current) };
+      // A stack of tasks settles together with each of its tasks' dots in the dropped-down lists
+      const keys = current.kind === "group" ? [`group:${current.id}`, ...current.ids.map((id) => `todo:${id}`)] : [`${current.kind}:${current.id}`];
+      settleRef.current = { keys, point: current.kind === "todo" || current.kind === "group", velocity, ...releaseOffsets(current) };
       if (current.delta !== 0) commitDrag(current);
     };
     const handleCancel = () => {
@@ -396,8 +401,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     window.addEventListener("pointercancel", handleCancel);
   }
 
-  function commitDrag({ kind, id, projectId, mode, range, delta }) {
+  function commitDrag({ kind, id, ids, projectId, mode, range, delta }) {
     const next = shiftRange(range, mode, delta);
+    if (kind === "group") {
+      for (const taskId of ids) onUpdateTodo(taskId, { dueDate: next.start });
+      extendProject(projectId, [next.start]);
+    }
     if (kind === "project") updateProject(id, { startDate: next.start, endDate: next.end });
     if (kind === "phase") {
       updatePhase(projectId, id, next);
@@ -430,9 +439,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     return { left: left + drag.dx, width, landing };
   }
 
+  // A task moves with the pointer when it's dragged on its own or as part of a stack
+  const isMoving = (id) => isDragging("todo", id) || Boolean(drag?.active && drag.kind === "group" && drag.ids.includes(id));
+
   function pointGeometry(todo) {
     const left = xOf(todo.dueDate) + dayWidth / 2;
-    if (!isDragging("todo", todo.id)) return { left, landing: null };
+    if (!isMoving(todo.id)) return { left, landing: null };
     return { left: left + drag.dx, landing: xOf(addDays(todo.dueDate, drag.delta)) + dayWidth / 2 };
   }
 
@@ -459,10 +471,18 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   // ── Hover cards ─────────────────────────────────────────────────────────
   // Shown after a short pause; once one is up, moving to a neighbor swaps instantly ("warm"), like
   // system tooltips. Points anchor the arrow at their center; bars at the pointer along the bar.
+  // A point's card can be hovered: leaving the point waits a beat before hiding, and reaching the
+  // card in that time keeps it open (so a stack's task list can be clicked).
   function hideTip() {
     clearTimeout(tipTimerRef.current);
     if (tooltipRef.current) tooltipRef.current.hide();
+    tipOpenRef.current = false;
     tipHiddenAtRef.current = performance.now();
+  }
+
+  function hideTipSoon() {
+    clearTimeout(tipTimerRef.current);
+    tipTimerRef.current = setTimeout(hideTip, 160);
   }
 
   function tipHandlers(key, getContent, anchor = "point") {
@@ -477,12 +497,44 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         if (event.pointerType !== "mouse" || dragRef.current) return;
         clearTimeout(tipTimerRef.current);
         const position = place(event);
-        const show = () => tooltipRef.current?.show({ key, content: getContent(), ...position });
-        if (performance.now() - tipHiddenAtRef.current < 300) show();
+        const show = () => {
+          tipOpenRef.current = true;
+          tooltipRef.current?.show({ key, content: getContent(), interactive: anchor === "point", ...position });
+        };
+        if (tipOpenRef.current || performance.now() - tipHiddenAtRef.current < 300) show();
         else tipTimerRef.current = setTimeout(show, 180);
       },
       onPointerMove: anchor === "bar" ? (event) => { if (!dragRef.current) tooltipRef.current?.move(place(event).x); } : undefined,
-      onPointerLeave: hideTip,
+      onPointerLeave: anchor === "point" ? hideTipSoon : hideTip,
+    };
+  }
+
+  // Several tasks due the same day in one row share a stack of dots; its card lists them all
+  function stackTip(stack, date, milestone, color) {
+    const open = stack.filter((task) => !task.resolved.completed);
+    const days = daysBetween(todayKey, date);
+    const status = !open.length
+      ? { label: "All done", tone: "success" }
+      : days < 0
+      ? { label: `${open.length} overdue`, tone: "danger" }
+      : { label: `Due ${fromNow(date)}`, tone: days <= 2 ? "urgent" : "neutral" };
+    return {
+      kind: "Tasks",
+      color,
+      title: `${stack.length} tasks · ${longDate(date)}`,
+      lines: [milestone ? `Count toward ◆ ${milestone.title}` : "Not tied to a milestone"],
+      status,
+      items: stack.map((task) => ({
+        id: task.raw.id,
+        title: task.raw.title,
+        done: task.resolved.completed,
+        overdue: !task.resolved.completed && days < 0,
+        meta: task.raw.startTime ? formatClock(timeToMinutes(task.raw.startTime)) : null,
+        onSelect: () => {
+          hideTip();
+          onEdit(task.raw);
+        },
+      })),
     };
   }
 
@@ -647,6 +699,43 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
               );
             };
 
+            // Tasks due the same day stack up; a task being dragged on its own leaves its stack while it moves
+            const renderStacks = (dated, milestone) => {
+              const byDate = new Map();
+              for (const task of dated) {
+                if (isDragging("todo", task.raw.id)) {
+                  byDate.set(`solo:${task.raw.id}`, [task]);
+                  continue;
+                }
+                byDate.set(task.raw.dueDate, [...(byDate.get(task.raw.dueDate) ?? []), task]);
+              }
+              return [...byDate.values()].map((stack) => {
+                if (stack.length === 1) return renderPoint(stack[0].raw, "task");
+                const sorted = [...stack].sort((a, b) => (a.raw.startTime ?? "").localeCompare(b.raw.startTime ?? "") || a.raw.title.localeCompare(b.raw.title));
+                const ids = sorted.map((task) => task.raw.id);
+                const id = [...ids].sort()[0];
+                const date = sorted[0].raw.dueDate;
+                const dragKey = `group:${id}`;
+                const { left, landing } = pointGeometry(sorted[0].raw);
+                return (
+                  <span key={dragKey} className="contents">
+                    {landing !== null && <PointLanding left={landing} color={color} />}
+                    <TaskStack
+                      tasks={sorted}
+                      date={date}
+                      todayKey={todayKey}
+                      color={color}
+                      left={left}
+                      dragKey={dragKey}
+                      pressed={pressed === dragKey}
+                      tip={tipHandlers(dragKey, () => stackTip(sorted, date, milestone, color))}
+                      onPointerDown={(event) => beginDrag(event, { kind: "group", id, ids, projectId: project.id, mode: "move", range: { start: date, end: date } })}
+                    />
+                  </span>
+                );
+              });
+            };
+
             const pointRow = (key, label, rowTasks, milestone) => {
               const dated = rowTasks.filter((task) => task.raw.dueDate);
               const undated = rowTasks.length - dated.length;
@@ -663,7 +752,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                   {lineXs.length > 1 && (
                     <div className="absolute top-1/2 h-px -translate-y-1/2" style={{ left: Math.min(...lineXs), width: Math.max(...lineXs) - Math.min(...lineXs), backgroundColor: `${color}66` }} />
                   )}
-                  {dated.map((task) => renderPoint(task.raw, "task"))}
+                  {renderStacks(dated, milestone)}
                   {milestone?.dueDate && renderPoint(milestone, "milestone")}
                   {draftInRow && <DraftDot left={xOf(draftInRow.dueDate) + dayWidth / 2} title={draftInRow.title} color={color} />}
                 </Row>
@@ -887,7 +976,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       </div>
       </div>
 
-      <TimelineTooltip ref={tooltipRef} />
+      <TimelineTooltip ref={tooltipRef} onPointerEnter={() => clearTimeout(tipTimerRef.current)} onPointerLeave={hideTipSoon} onWheel={hideTip} />
 
       {colorMenu && (
         <>
@@ -1022,6 +1111,43 @@ function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPo
       className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-[scale,box-shadow] duration-150 hover:scale-125 ${pressed ? "scale-125 shadow-md" : ""} ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
       style={{ left, ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
     />
+  );
+}
+
+// Several tasks due the same day: up to three overlapping dots (overdue and open ones in front of
+// done ones), dragged as one. Hovering shows every task in the stack.
+const STACK_MAX = 3;
+const STACK_STEP = 5;
+
+function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, onPointerDown }) {
+  const rank = (task) => (task.resolved.completed ? 2 : date < todayKey ? 0 : 1);
+  const shown = [...tasks].sort((a, b) => rank(a) - rank(b)).slice(0, STACK_MAX);
+  const width = 10 + (shown.length - 1) * STACK_STEP;
+  const open = tasks.filter((task) => !task.resolved.completed).length;
+  return (
+    <button
+      type="button"
+      data-drag-key={dragKey}
+      onPointerDown={onPointerDown}
+      onDoubleClick={(event) => event.stopPropagation()}
+      {...tip}
+      aria-label={`${tasks.length} tasks on ${shortDate(date)}, ${open ? `${open} open` : "all done"}: ${tasks.map((task) => task.raw.title).join(", ")}`}
+      className={`absolute top-1/2 z-10 h-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none transition-[scale] duration-150 hover:scale-115 ${pressed ? "scale-115" : ""}`}
+      style={{ left, width }}
+    >
+      {shown.map((task, index) => {
+        const done = task.resolved.completed;
+        const overdue = !done && date < todayKey;
+        return (
+          <span
+            key={task.raw.id}
+            className={`absolute top-0 h-2.5 w-2.5 rounded-full border-2 ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
+            // Front dots sit on top; a white ring keeps overlapping dots apart
+            style={{ left: index * STACK_STEP, zIndex: STACK_MAX - index, boxShadow: "0 0 0 1.5px white", ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
+          />
+        );
+      })}
+    </button>
   );
 }
 
