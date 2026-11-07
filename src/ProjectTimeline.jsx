@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SegmentedControl from "./SegmentedControl";
 import Collapsible, { Chevron } from "./Collapsible";
@@ -77,12 +77,35 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const [createdId, setCreatedId] = useState(null);
   // Milestones whose task list is dropped down in the projects panel
   const [openMilestones, setOpenMilestones] = useState(() => new Set());
-  const toggleMilestoneList = (id) => setOpenMilestones((current) => {
+  // Lists that are collapsing: still drawn while their rows play the entrance in reverse
+  const [closingMilestones, setClosingMilestones] = useState(() => new Set());
+  const closeTimersRef = useRef(new Map());
+  const editSet = (setter, id, add) => setter((current) => {
+    if (current.has(id) === add) return current;
     const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (add) next.add(id);
+    else next.delete(id);
     return next;
   });
+  function toggleMilestoneList(id, rowCount) {
+    clearTimeout(closeTimersRef.current.get(id));
+    closeTimersRef.current.delete(id);
+    if (!openMilestones.has(id)) {
+      // Reopening mid-collapse just plays the entrance again
+      editSet(setClosingMilestones, id, false);
+      editSet(setOpenMilestones, id, true);
+      return;
+    }
+    editSet(setOpenMilestones, id, false);
+    editSet(setClosingMilestones, id, true);
+    // The last row to leave is the top one (plus the line from the diamond), after the stagger
+    const duration = prefersReducedMotion() ? 150 : 300 + rowCount * 40;
+    closeTimersRef.current.set(id, setTimeout(() => {
+      closeTimersRef.current.delete(id);
+      editSet(setClosingMilestones, id, false);
+    }, duration + 20));
+  }
+  useEffect(() => () => closeTimersRef.current.forEach(clearTimeout), []);
   const [popover, setPopover] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -114,7 +137,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 12px") + 8);
       for (const milestone of items.filter((todo) => todo.type === "milestone")) {
         widest = Math.max(widest, 12 + 16 + 4 + 8 + 6 + textWidth(milestone.title, "400 12px") + 6 + textWidth("00/00", "400 11px") + 8);
-        if (openMilestones.has(milestone.id)) {
+        if (openMilestones.has(milestone.id) || closingMilestones.has(milestone.id)) {
           for (const task of items.filter((todo) => todo.milestoneId === milestone.id)) {
             widest = Math.max(widest, 28 + 14 + 8 + textWidth(task.title, "400 12px") + 8 + textWidth("Nov 30", "400 11px") + 8);
           }
@@ -122,7 +145,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       }
     }
     return Math.round(Math.min(Math.max(widest + 12, LABEL_MIN + 52), LABEL_AUTO_MAX));
-  }, [projects, projectTodos, openMilestones]);
+  }, [projects, projectTodos, openMilestones, closingMilestones]);
   const labelWidth = Math.min(Math.max(labelOverride ?? autoLabelWidth, LABEL_MIN), LABEL_MAX);
 
   function startLabelResize(event) {
@@ -739,8 +762,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
               });
             };
 
-            // `spineDown`: the milestone's task list is open below, so a line drops from its diamond into it
-            const pointRow = (key, label, rowTasks, milestone, spineDown = false) => {
+            // `spineDown`: the milestone's task list is open below, so a line drops from its diamond into
+            // it (and, while the list collapses, leaves after its rows)
+            const pointRow = (key, label, rowTasks, milestone, spineDown = null) => {
               const dated = rowTasks.filter((task) => task.raw.dueDate);
               const undated = rowTasks.length - dated.length;
               const lineXs = [...dated.map((task) => pointGeometry(task.raw).left), ...(milestone?.dueDate ? [pointGeometry(milestone).left] : [])];
@@ -757,7 +781,11 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     <div className="absolute top-1/2 h-px -translate-y-1/2" style={{ left: Math.min(...lineXs), width: Math.max(...lineXs) - Math.min(...lineXs), backgroundColor: `${color}66` }} />
                   )}
                   {spineDown && (
-                    <span aria-hidden="true" className="project-form-field pointer-events-none absolute top-1/2 bottom-0 w-px" style={{ left: Math.round(pointGeometry(milestone).left - 0.5), backgroundColor: `${color}66` }} />
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute top-1/2 bottom-0 w-px ${spineDown.closing ? "project-form-field-exit" : "project-form-field"}`}
+                      style={{ left: Math.round(pointGeometry(milestone).left - 0.5), backgroundColor: `${color}66`, "--ri": spineDown.exitIndex }}
+                    />
                   )}
                   {renderStacks(dated, milestone)}
                   {milestone?.dueDate && renderPoint(milestone, "milestone")}
@@ -896,7 +924,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     {milestones.map((milestone) => {
                       const milestoneTasks = tasks.filter((task) => task.raw.milestoneId === milestone.id);
                       const listOpen = openMilestones.has(milestone.id);
-                      const spineDown = listOpen && Boolean(milestone.dueDate) && milestoneTasks.some((task) => task.raw.dueDate);
+                      const listClosing = !listOpen && closingMilestones.has(milestone.id);
+                      const rowCount = Math.max(milestoneTasks.length, 1);
+                      const spineDown = (listOpen || listClosing) && Boolean(milestone.dueDate) && milestoneTasks.some((task) => task.raw.dueDate);
                       return (
                         <div key={milestone.id} className="contents">
                           {pointRow(
@@ -904,7 +934,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             <div className="group/label relative flex min-w-0 items-center">
                               <button
                                 type="button"
-                                onClick={() => toggleMilestoneList(milestone.id)}
+                                onClick={() => toggleMilestoneList(milestone.id, rowCount)}
                                 aria-expanded={listOpen}
                                 title={`${milestone.title}: ${listOpen ? "hide" : "show"} its tasks`}
                                 className="-ml-1 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1 text-left text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900"
@@ -927,10 +957,11 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             </div>,
                             milestoneTasks,
                             milestone,
-                            spineDown,
+                            spineDown && { closing: listClosing, exitIndex: rowCount },
                           )}
-                          {listOpen && (
+                          {(listOpen || listClosing) && (
                             <MilestoneTaskList
+                              closing={listClosing}
                               tasks={milestoneTasks}
                               color={color}
                               todayKey={todayKey}
@@ -1170,12 +1201,14 @@ function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, 
 //    tasks read as one group hanging off their milestone; the last branch turns the corner.
 //  - Alternate rows carry a faint wash of the project's color across the name and the timeline,
 //    and the hovered row a stronger one, so the eye can follow a name over to its dot.
-function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd }) {
+//  - `closing`: collapsing plays the entrance in reverse, bottom row first, before the list goes.
+function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd, closing = false }) {
   const sorted = [...tasks].sort((a, b) => (a.raw.dueDate ?? "9999").localeCompare(b.raw.dueDate ?? "9999") || a.raw.title.localeCompare(b.raw.title));
+  const motion = closing ? "project-form-field-exit" : "project-form-field";
   if (!sorted.length) {
     return (
       <Row height={TASK_ROW} label={
-        <span className="project-form-field flex items-center gap-2 pl-7 text-[11px] text-slate-400">
+        <span className={`${motion} flex items-center gap-2 pl-7 text-[11px] text-slate-400`}>
           No tasks yet
           {onAdd && <button type="button" onClick={onAdd} className="rounded px-1 font-medium text-course-600 hover:bg-course-50">Add one</button>}
         </span>
@@ -1196,9 +1229,10 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milest
       <Row
         key={task.raw.id}
         height={TASK_ROW}
-        className="project-form-field group/task"
+        className={`${motion} group/task`}
         style={{
           "--i": index,
+          "--ri": sorted.length - 1 - index,
           // The name column must stay opaque (it's sticky), so it gets a mixed color; the timeline
           // side gets the same color as a translucent wash so weekend shading still shows through
           "--row-label": index % 2 ? mix(4) : "white",

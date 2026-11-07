@@ -194,6 +194,10 @@ button:not(:disabled):active { scale: 0.97; }
 .project-form-field { animation: project-field-in 360ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms + 60ms); }
 .planner-row-enter { animation: project-field-in 360ms var(--ease-out) both; }
 @keyframes project-field-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+/* ...and leave the way they came: back up and out, bottom row first, on the mirrored curve.
+   `--ri` counts rows from the bottom */
+.project-form-field-exit { animation: project-field-out 300ms cubic-bezier(0.68, 0, 0.77, 0) both; animation-delay: calc(var(--ri, 0) * 40ms); pointer-events: none; }
+@keyframes project-field-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-6px); } }
 
 /* Timeline hover card grows out of its arrow; the planner quick add rises from the bottom edge it docks to;
    the draft task's dot on the timeline breathes so it reads as "not added yet" */
@@ -225,6 +229,7 @@ button:not(:disabled):active { scale: 0.97; }
   .timeline-tip, .quick-dock-enter { animation: modal-backdrop-in 120ms ease both; }
   .planner-draft-dot { animation: none; }
   .project-form-field, .planner-row-enter { animation: modal-backdrop-in 150ms ease both; animation-delay: 0ms; }
+  .project-form-field-exit { animation: tab-fade-out 150ms ease both; animation-delay: 0ms; }
   .segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 1; }
 }
 
