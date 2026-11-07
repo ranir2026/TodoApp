@@ -10,7 +10,19 @@ function getCurrentToken(text, cursorPos) {
   return { token: match[1], start: match.index };
 }
 
-function getSuggestions(text, cursorPos, courses) {
+// Timeline tasks are one-off: a weekday names a single due date (the next one), not a repeat,
+// unless "weekly" asks for one; with no date at all, `defaultDueDate` fills one in
+function plannerDraft(parsed, defaultDueDate) {
+  const weekly = parsed.repeat === "weekly";
+  let draft = { ...parsed, repeatDays: weekly ? parsed.repeatDays : [], dueDates: parsed.dueDate ? [parsed.dueDate] : [] };
+  if (!draft.dueDate) {
+    const fallback = defaultDueDate?.(draft);
+    if (fallback) draft = { ...draft, dueDate: fallback.date, dueDates: [fallback.date], dueDateSource: fallback.label };
+  }
+  return draft;
+}
+
+function getSuggestions(text, cursorPos, courses, planner = false) {
   const current = getCurrentToken(text, cursorPos);
   if (!current) return [];
   const { token, start } = current;
@@ -27,7 +39,8 @@ function getSuggestions(text, cursorPos, courses) {
 
   const q = token.toLowerCase();
   if (q.length < 1) return [];
-  return SUGGESTION_KEYWORDS.filter((k) => k.insert.startsWith(q) && k.insert !== q).map((k) => ({
+  // Everything in the planner is a task, so the task / event markers aren't offered there
+  return SUGGESTION_KEYWORDS.filter((k) => k.insert.startsWith(q) && k.insert !== q && !(planner && (k.insert === "tk" || k.insert === "ev"))).map((k) => ({
     label: k.insert,
     hint: k.hint,
     insert: k.insert,
@@ -55,7 +68,7 @@ function formatRepeatDays(days) {
 // In the planner, "@" picks a milestone instead of a category (pass the milestones as `courses`),
 // everything added is a task, and it docks at the bottom of the planner without a scrim so the
 // timeline stays visible and scrollable; `onPreviewChange` reports the parsed draft as you type
-export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", title, subtitle, courses, onAdd, onClose, onPreviewChange }) {
+export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", title, subtitle, courses, onAdd, onClose, onPreviewChange, defaultDueDate }) {
   const planner = mode === "planner";
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -72,8 +85,12 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
   }, [open, initialText]);
 
   const cursorPos = text.length;
-  const suggestions = useMemo(() => getSuggestions(text, cursorPos, courses).slice(0, 6), [text, cursorPos, courses]);
-  const preview = useMemo(() => (text.trim() ? parseQuickAdd(text, courses) : null), [text, courses]);
+  const suggestions = useMemo(() => getSuggestions(text, cursorPos, courses, planner).slice(0, 6), [text, cursorPos, courses, planner]);
+  const preview = useMemo(() => {
+    if (!text.trim()) return null;
+    const parsed = parseQuickAdd(text, courses);
+    return planner ? plannerDraft(parsed, defaultDueDate) : parsed;
+  }, [text, courses, planner, defaultDueDate]);
   const previewCourse = preview?.courseId ? courses.find((c) => c.id === preview.courseId) : null;
 
   useEffect(() => setActiveIndex(0), [text]);
@@ -91,7 +108,8 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
   }
 
   function submit() {
-    const parsed = parseQuickAdd(text, courses);
+    const raw = parseQuickAdd(text, courses);
+    const parsed = planner ? plannerDraft(raw, defaultDueDate) : raw;
     if (!parsed.title.trim()) return;
     if (!planner && !parsed.typeExplicit) {
       setError('Add "tk" for task or "ev" for event at the end');
@@ -239,10 +257,14 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
               )}
 
               {preview.dueDate ? (
-                <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs font-medium ${preview.dueDateSource ? "border-dashed border-slate-300 bg-white/60 text-slate-500" : "border-slate-200 bg-white text-slate-600"}`}
+                  title={preview.dueDateSource ? `No date typed, so it's due on the ${preview.dueDateSource}` : undefined}
+                >
                   {preview.repeatDays?.length > 1
                     ? formatRepeatDays(preview.repeatDays)
                     : formatDate(preview.dueDate)}
+                  {preview.dueDateSource && <span className="font-normal"> · {preview.dueDateSource}</span>}
                 </span>
               ) : (
                 <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no date</span>

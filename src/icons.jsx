@@ -22,3 +22,11 @@ export function CloseIcon({ className = "h-4 w-4" }) {
 export function PlusIcon({ className = "h-4 w-4" }) {
   return <Icon className={className}><path d="M8 3.5v9M3.5 8h9" /></Icon>;
 }
+
+export function PencilIcon({ className = "h-4 w-4" }) {
+  return <Icon className={className}><path d="M10.5 3.5l2 2L6 12l-2.75.75L4 10l6.5-6.5zM9.25 4.75l2 2" /></Icon>;
+}
+
+export function CheckIcon({ className = "h-4 w-4" }) {
+  return <Icon className={className}><path d="M3.75 8.25l2.75 2.75 5.75-6" /></Icon>;
+}

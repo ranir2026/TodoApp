@@ -38,13 +38,20 @@ export default function PlannerModal({ open, suspended, onClose, keymap, todos, 
     return todos
       .filter((todo) => todo.type === "milestone" && todo.projectId === quickAddProject.id)
       .sort((a, b) => Number(a.completed) - Number(b.completed) || (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"))
-      .map((milestone) => ({ id: milestone.id, name: milestone.title, color, hint: milestone.completed ? "\u25c6 reached" : "\u25c6 milestone" }));
+      .map((milestone) => ({ id: milestone.id, name: milestone.title, color, dueDate: milestone.dueDate, hint: milestone.completed ? "\u25c6 reached" : "\u25c6 milestone" }));
   }, [todos, quickAddProject, courseMap]);
 
   const closeQuickAdd = useCallback(() => {
     setQuickAdd(null);
     setDraft(null);
   }, []);
+  // Without a date, a task is due when its milestone is, or when the project ends
+  const defaultDueDate = useCallback((parsed) => {
+    const milestone = parsed.courseId ? milestoneMentions.find((mention) => mention.id === parsed.courseId) : null;
+    if (milestone?.dueDate) return { date: milestone.dueDate, label: "milestone date" };
+    return quickAddProject?.endDate ? { date: quickAddProject.endDate, label: "project end" } : null;
+  }, [milestoneMentions, quickAddProject]);
+
   const handlePreview = useCallback((preview) => {
     setDraft(preview?.title ? { title: preview.title, milestoneId: preview.courseId, dueDate: preview.dueDate } : null);
   }, []);
@@ -129,6 +136,7 @@ export default function PlannerModal({ open, suspended, onClose, keymap, todos, 
                 onUpdateTodo={onUpdateTodo}
                 onEdit={onEdit}
                 onDeleteProject={onDeleteProject}
+                onToggleTodo={onToggleTodo}
                 onQuickAdd={(projectId, text = "") => setQuickAdd({ projectId, text })}
                 quickAddProjectId={quickAdd?.projectId ?? null}
                 draft={quickAdd && draft ? { ...draft, projectId: quickAdd.projectId } : null}
@@ -156,6 +164,7 @@ export default function PlannerModal({ open, suspended, onClose, keymap, todos, 
               onAdd={addFromQuickAdd}
               onClose={closeQuickAdd}
               onPreviewChange={handlePreview}
+              defaultDueDate={defaultDueDate}
             />
           )}
         </div>

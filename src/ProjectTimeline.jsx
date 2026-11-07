@@ -7,7 +7,7 @@ import { COLOR_PALETTE, getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
-import { CloseIcon, PlusIcon } from "./icons";
+import { CheckIcon, CloseIcon, PencilIcon, PlusIcon } from "./icons";
 import TimelineTooltip from "./TimelineTooltip";
 
 const LABEL_MIN = 180;
@@ -16,6 +16,7 @@ const LABEL_AUTO_MAX = 420;
 const DAY_WIDTH = { weeks: 30, months: 10 };
 const PROJECT_ROW = 44;
 const ROW = 32;
+const TASK_ROW = 28;
 const DRAG_THRESHOLD = 4;
 const VELOCITY_WINDOW = 100;
 
@@ -65,7 +66,7 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   // null means "fit the longest name"; dragging the column's edge sets a width of your own
   const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
@@ -74,6 +75,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const [formKey, setFormKey] = useState(0);
   const [colorMenu, setColorMenu] = useState(null);
   const [createdId, setCreatedId] = useState(null);
+  // Milestones whose task list is dropped down in the projects panel
+  const [openMilestones, setOpenMilestones] = useState(() => new Set());
+  const toggleMilestoneList = (id) => setOpenMilestones((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
   const [popover, setPopover] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -103,11 +112,16 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       if (project.collapsed) continue;
       for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 12px") + 8);
       for (const milestone of items.filter((todo) => todo.type === "milestone")) {
-        widest = Math.max(widest, 12 + 8 + 6 + textWidth(milestone.title, "400 12px") + 6 + textWidth("00/00", "400 11px") + 8);
+        widest = Math.max(widest, 12 + 16 + 4 + 8 + 6 + textWidth(milestone.title, "400 12px") + 6 + textWidth("00/00", "400 11px") + 8);
+        if (openMilestones.has(milestone.id)) {
+          for (const task of items.filter((todo) => todo.milestoneId === milestone.id)) {
+            widest = Math.max(widest, 28 + 14 + 8 + textWidth(task.title, "400 12px") + 8 + textWidth("Nov 30", "400 11px") + 8);
+          }
+        }
       }
     }
     return Math.round(Math.min(Math.max(widest + 12, LABEL_MIN + 52), LABEL_AUTO_MAX));
-  }, [projects, projectTodos]);
+  }, [projects, projectTodos, openMilestones]);
   const labelWidth = Math.min(Math.max(labelOverride ?? autoLabelWidth, LABEL_MIN), LABEL_MAX);
 
   function startLabelResize(event) {
@@ -136,6 +150,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     for (const phase of project.phases ?? []) keys.push(phase.start, phase.end);
   }
   for (const todo of projectTodos) if (todo.dueDate) keys.push(todo.dueDate);
+  if (draft?.dueDate) keys.push(draft.dueDate);
   const rangeStart = startOfWeekKey(addDays(earliest(keys), -14));
   const rangeEnd = addDays(latest(keys), zoom === "weeks" ? 45 : 120);
   const totalDays = daysBetween(rangeStart, rangeEnd) + 1;
@@ -782,27 +797,53 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       );
                     })}
 
-                    {milestones.map((milestone) =>
-                      pointRow(
-                        milestone.id,
-                        <div className="group/label relative flex min-w-0 items-center">
-                          <button type="button" onClick={() => onEdit(milestone)} title={milestone.title} className="flex min-w-0 items-center gap-1.5 text-left text-xs text-slate-700 hover:text-course-600">
-                            <span className={`h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
-                            <span className="line-clamp-2 min-w-0 leading-tight break-words">{milestone.title}</span>
-                            <span className="shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
-                          </button>
-                          {onQuickAdd && (
-                            <HoverActions>
-                              <button type="button" onClick={() => onQuickAdd(project.id, `@${milestone.title} `)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add a task toward ${milestone.title}`} title="Add a task toward this milestone">
-                                <PlusIcon className="h-3.5 w-3.5" />
+                    {milestones.map((milestone) => {
+                      const milestoneTasks = tasks.filter((task) => task.raw.milestoneId === milestone.id);
+                      const listOpen = openMilestones.has(milestone.id);
+                      return (
+                        <div key={milestone.id} className="contents">
+                          {pointRow(
+                            milestone.id,
+                            <div className="group/label relative flex min-w-0 items-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleMilestoneList(milestone.id)}
+                                aria-expanded={listOpen}
+                                title={`${milestone.title}: ${listOpen ? "hide" : "show"} its tasks`}
+                                className="-ml-1 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1 text-left text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                              >
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400"><Chevron open={listOpen} /></span>
+                                <span className={`mr-0.5 h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
+                                <span className="line-clamp-2 min-w-0 leading-tight break-words">{milestone.title}</span>
+                                <span className="ml-0.5 shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
                               </button>
-                            </HoverActions>
+                              <HoverActions>
+                                {onQuickAdd && (
+                                  <button type="button" onClick={() => onQuickAdd(project.id, `@${milestone.title} `)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add a task toward ${milestone.title}`} title="Add a task toward this milestone">
+                                    <PlusIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => onEdit(milestone)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Edit ${milestone.title}`} title="Edit milestone">
+                                  <PencilIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </HoverActions>
+                            </div>,
+                            milestoneTasks,
+                            milestone,
                           )}
-                        </div>,
-                        tasks.filter((task) => task.raw.milestoneId === milestone.id),
-                        milestone,
-                      ),
-                    )}
+                          {listOpen && (
+                            <MilestoneTaskList
+                              tasks={milestoneTasks}
+                              color={color}
+                              todayKey={todayKey}
+                              renderPoint={renderPoint}
+                              onToggle={(task) => onToggleTodo?.(task.raw.id, task.resolved.occurrenceDate ?? undefined)}
+                              onAdd={onQuickAdd ? () => onQuickAdd(project.id, `@${milestone.title} `) : null}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
 
                     {(looseTasks.length > 0 || (draftHere?.dueDate && !draftHere.milestoneId)) && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
 
@@ -982,6 +1023,53 @@ function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPo
       style={{ left, ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
     />
   );
+}
+
+// A milestone's tasks dropped down under it: a checklist where clicking a row marks the task done
+// (or not), with each task's dot repeated on its own row so the list lines up with the timeline
+function MilestoneTaskList({ tasks, color, todayKey, renderPoint, onToggle, onAdd }) {
+  const sorted = [...tasks].sort((a, b) => (a.raw.dueDate ?? "9999").localeCompare(b.raw.dueDate ?? "9999") || a.raw.title.localeCompare(b.raw.title));
+  if (!sorted.length) {
+    return (
+      <Row height={TASK_ROW} label={
+        <span className="project-form-field flex items-center gap-2 pl-7 text-[11px] text-slate-400">
+          No tasks yet
+          {onAdd && <button type="button" onClick={onAdd} className="rounded px-1 font-medium text-course-600 hover:bg-course-50">Add one</button>}
+        </span>
+      } />
+    );
+  }
+  return sorted.map((task, index) => {
+    const done = task.resolved.completed;
+    const overdue = !done && task.raw.dueDate && task.raw.dueDate < todayKey;
+    return (
+      <Row
+        key={task.raw.id}
+        height={TASK_ROW}
+        label={
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={done}
+            onClick={() => onToggle(task)}
+            className="project-form-field group/check -ml-1 flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 pl-7 text-left text-xs hover:bg-slate-50"
+            style={{ "--i": index }}
+          >
+            <span
+              className={`task-complete-toggle flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border-[1.5px] ${done ? "text-white" : "bg-white group-hover/check:border-slate-400"}`}
+              style={done ? { backgroundColor: color, borderColor: color } : { borderColor: "var(--color-slate-300)" }}
+            >
+              {done && <CheckIcon className="h-2.5 w-2.5" />}
+            </span>
+            <span className={`line-clamp-2 min-w-0 flex-1 leading-tight break-words ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{task.raw.title}</span>
+            <span className={`shrink-0 text-[11px] ${overdue ? "text-danger-600" : "text-slate-400"}`}>{task.raw.dueDate ? shortDate(task.raw.dueDate) : "No date"}</span>
+          </button>
+        }
+      >
+        {task.raw.dueDate && renderPoint(task.raw, "task")}
+      </Row>
+    );
+  });
 }
 
 // The task being typed in quick add, shown where it will land: a breathing dashed dot and its title

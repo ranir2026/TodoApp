@@ -241,7 +241,8 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   }
 
   // First free hour after now (today) or 9am, for scheduling without dragging
-  function nextFreeSlot(length = DEFAULT_LENGTH) {
+  // The first free stretch of `length` minutes after now (today) or 9am, or null if none is left
+  function nextFreeSlot(length) {
     const busy = [...blocks, ...timedItems];
     let start = dateKey === todayKey ? Math.ceil(nowMinutes / SNAP) * SNAP : 9 * 60;
     while (start + length <= DAY_MINUTES) {
@@ -253,9 +254,18 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     return null;
   }
 
+  // Book the next free hour; when no full hour is left in the day, book the first shorter gap
+  // instead (down to 15 minutes), running until the next block or midnight
   function scheduleNext(source) {
-    const start = nextFreeSlot();
-    if (start !== null) setFlashId(addBlock(source, start, start + DEFAULT_LENGTH));
+    const hour = nextFreeSlot(DEFAULT_LENGTH);
+    if (hour !== null) {
+      setFlashId(addBlock(source, hour, hour + DEFAULT_LENGTH));
+      return;
+    }
+    const start = nextFreeSlot(SNAP);
+    if (start === null) return;
+    const nextBusy = [...blocks, ...timedItems].filter((item) => item.startMinutes >= start + SNAP).reduce((min, item) => Math.min(min, item.startMinutes), DAY_MINUTES);
+    setFlashId(addBlock(source, start, Math.min(start + DEFAULT_LENGTH, Math.floor(nextBusy / SNAP) * SNAP)));
   }
 
   // ── Dragging ────────────────────────────────────────────────────────────
