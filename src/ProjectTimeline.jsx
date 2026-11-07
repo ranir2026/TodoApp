@@ -30,6 +30,14 @@ function textWidth(text, font) {
   return measureContext.measureText(text).width * 1.02;
 }
 
+// A milestone list's cascade: each row a beat after the next, with the beat shrinking as the list
+// grows so opening or closing never drags (see .milestone-row-enter / -exit). `steps` counts the
+// rows plus the line from the diamond.
+const ROW_EXIT_MS = 180;
+function listStagger(steps, closing) {
+  return closing ? Math.min(20, 100 / steps) : Math.min(30, 150 / steps);
+}
+
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 function startOfWeekKey(key) {
@@ -98,8 +106,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     }
     editSet(setOpenMilestones, id, false);
     editSet(setClosingMilestones, id, true);
-    // The last row to leave is the top one (plus the line from the diamond), after the stagger
-    const duration = prefersReducedMotion() ? 150 : 300 + rowCount * 40;
+    // The last to leave is the line from the diamond, after every row's beat
+    const duration = prefersReducedMotion() ? 120 : ROW_EXIT_MS + rowCount * listStagger(rowCount + 1, true);
     closeTimersRef.current.set(id, setTimeout(() => {
       closeTimersRef.current.delete(id);
       editSet(setClosingMilestones, id, false);
@@ -783,8 +791,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                   {spineDown && (
                     <span
                       aria-hidden="true"
-                      className={`pointer-events-none absolute top-1/2 bottom-0 w-px ${spineDown.closing ? "project-form-field-exit" : "project-form-field"}`}
-                      style={{ left: Math.round(pointGeometry(milestone).left - 0.5), backgroundColor: `${color}66`, "--ri": spineDown.exitIndex }}
+                      className={`pointer-events-none absolute top-1/2 bottom-0 w-px ${spineDown.closing ? "milestone-row-exit" : "milestone-row-enter"}`}
+                      style={{ left: Math.round(pointGeometry(milestone).left - 0.5), backgroundColor: `${color}66`, "--ri": spineDown.exitIndex, "--stagger": spineDown.stagger }}
                     />
                   )}
                   {renderStacks(dated, milestone)}
@@ -926,6 +934,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       const listOpen = openMilestones.has(milestone.id);
                       const listClosing = !listOpen && closingMilestones.has(milestone.id);
                       const rowCount = Math.max(milestoneTasks.length, 1);
+                      const stagger = `${listStagger(rowCount + 1, listClosing)}ms`;
                       const spineDown = (listOpen || listClosing) && Boolean(milestone.dueDate) && milestoneTasks.some((task) => task.raw.dueDate);
                       return (
                         <div key={milestone.id} className="contents">
@@ -957,11 +966,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             </div>,
                             milestoneTasks,
                             milestone,
-                            spineDown && { closing: listClosing, exitIndex: rowCount },
+                            spineDown && { closing: listClosing, exitIndex: rowCount, stagger },
                           )}
                           {(listOpen || listClosing) && (
                             <MilestoneTaskList
                               closing={listClosing}
+                              stagger={stagger}
                               tasks={milestoneTasks}
                               color={color}
                               todayKey={todayKey}
@@ -1202,9 +1212,9 @@ function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, 
 //  - Alternate rows carry a faint wash of the project's color across the name and the timeline,
 //    and the hovered row a stronger one, so the eye can follow a name over to its dot.
 //  - `closing`: collapsing plays the entrance in reverse, bottom row first, before the list goes.
-function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd, closing = false }) {
+function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd, closing = false, stagger }) {
   const sorted = [...tasks].sort((a, b) => (a.raw.dueDate ?? "9999").localeCompare(b.raw.dueDate ?? "9999") || a.raw.title.localeCompare(b.raw.title));
-  const motion = closing ? "project-form-field-exit" : "project-form-field";
+  const motion = closing ? "milestone-row-exit" : "milestone-row-enter";
   if (!sorted.length) {
     return (
       <Row height={TASK_ROW} label={
@@ -1233,6 +1243,7 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milest
         style={{
           "--i": index,
           "--ri": sorted.length - 1 - index,
+          "--stagger": stagger,
           // The name column must stay opaque (it's sticky), so it gets a mixed color; the timeline
           // side gets the same color as a translucent wash so weekend shading still shows through
           "--row-label": index % 2 ? mix(4) : "white",
