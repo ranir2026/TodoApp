@@ -509,8 +509,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     };
   }
 
-  // Several tasks due the same day in one row share a stack of dots; its card lists them all
+  // Several tasks due the same day in one row share a stack of dots. A stack that shows every task
+  // as a dot (up to three) gets one card per task; a bigger one gets a single card listing them all.
   function stackTip(stack, date, milestone, color) {
+    const select = (task) => () => {
+      hideTip();
+      onEdit(task.raw);
+    };
+    if (stack.length <= STACK_MAX) return stack.map((task) => ({ ...taskTip(task.raw, color), onSelect: select(task) }));
     const open = stack.filter((task) => !task.resolved.completed);
     const days = daysBetween(todayKey, date);
     const status = !open.length
@@ -530,10 +536,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         done: task.resolved.completed,
         overdue: !task.resolved.completed && days < 0,
         meta: task.raw.startTime ? formatClock(timeToMinutes(task.raw.startTime)) : null,
-        onSelect: () => {
-          hideTip();
-          onEdit(task.raw);
-        },
+        onSelect: select(task),
       })),
     };
   }
