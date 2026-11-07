@@ -739,7 +739,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
               });
             };
 
-            const pointRow = (key, label, rowTasks, milestone) => {
+            // `spineDown`: the milestone's task list is open below, so a line drops from its diamond into it
+            const pointRow = (key, label, rowTasks, milestone, spineDown = false) => {
               const dated = rowTasks.filter((task) => task.raw.dueDate);
               const undated = rowTasks.length - dated.length;
               const lineXs = [...dated.map((task) => pointGeometry(task.raw).left), ...(milestone?.dueDate ? [pointGeometry(milestone).left] : [])];
@@ -754,6 +755,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                 >
                   {lineXs.length > 1 && (
                     <div className="absolute top-1/2 h-px -translate-y-1/2" style={{ left: Math.min(...lineXs), width: Math.max(...lineXs) - Math.min(...lineXs), backgroundColor: `${color}66` }} />
+                  )}
+                  {spineDown && (
+                    <span aria-hidden="true" className="project-form-field pointer-events-none absolute top-1/2 bottom-0 w-px" style={{ left: Math.round(pointGeometry(milestone).left - 0.5), backgroundColor: `${color}66` }} />
                   )}
                   {renderStacks(dated, milestone)}
                   {milestone?.dueDate && renderPoint(milestone, "milestone")}
@@ -892,6 +896,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     {milestones.map((milestone) => {
                       const milestoneTasks = tasks.filter((task) => task.raw.milestoneId === milestone.id);
                       const listOpen = openMilestones.has(milestone.id);
+                      const spineDown = listOpen && Boolean(milestone.dueDate) && milestoneTasks.some((task) => task.raw.dueDate);
                       return (
                         <div key={milestone.id} className="contents">
                           {pointRow(
@@ -922,6 +927,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             </div>,
                             milestoneTasks,
                             milestone,
+                            spineDown,
                           )}
                           {listOpen && (
                             <MilestoneTaskList
@@ -929,6 +935,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                               color={color}
                               todayKey={todayKey}
                               renderPoint={renderPoint}
+                              pointX={(todo) => pointGeometry(todo).left}
+                              milestoneX={milestone.dueDate ? pointGeometry(milestone).left : null}
                               onToggle={(task) => onToggleTodo?.(task.raw.id, task.resolved.occurrenceDate ?? undefined)}
                               onAdd={onQuickAdd ? () => onQuickAdd(project.id, `@${milestone.title} `) : null}
                             />
@@ -1021,14 +1029,15 @@ function HoverActions({ children }) {
   );
 }
 
-function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, children }) {
+// `labelClassName` replaces the label's white background (it must stay opaque: it's sticky over the grid)
+function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, className = "", style, labelClassName = "bg-white", contentClassName = "", children }) {
   return (
-    <div className="flex" style={{ minHeight: height }}>
-      <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 bg-white py-1 pr-2 ${indent ? "pl-8" : "pl-3"}`} style={{ width: "var(--label-width)" }}>
+    <div className={`flex ${className}`} style={{ minHeight: height, ...style }}>
+      <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 py-1 pr-2 ${labelClassName} ${indent ? "pl-8" : "pl-3"}`} style={{ width: "var(--label-width)" }}>
         {label}
         {sublabel && <span className="truncate text-[11px] leading-tight text-slate-500">{sublabel}</span>}
       </div>
-      <div className="relative min-w-0 flex-1" onDoubleClick={onTimelineDoubleClick}>
+      <div className={`relative min-w-0 flex-1 ${contentClassName}`} onDoubleClick={onTimelineDoubleClick}>
         {children}
       </div>
     </div>
@@ -1155,8 +1164,13 @@ function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, 
 }
 
 // A milestone's tasks dropped down under it: a checklist where clicking a row marks the task done
-// (or not), with each task's dot repeated on its own row so the list lines up with the timeline
-function MilestoneTaskList({ tasks, color, todayKey, renderPoint, onToggle, onAdd }) {
+// (or not), with each task's dot repeated on its own row so the list lines up with the timeline.
+//  - Each row (name and dot together) drops in a beat after the one above.
+//  - The milestone's date drops a thin line down the list, and each dot branches into it, so the
+//    tasks read as one group hanging off their milestone; the last branch turns the corner.
+//  - Alternate rows carry a faint wash of the project's color across the name and the timeline,
+//    and the hovered row a stronger one, so the eye can follow a name over to its dot.
+function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd }) {
   const sorted = [...tasks].sort((a, b) => (a.raw.dueDate ?? "9999").localeCompare(b.raw.dueDate ?? "9999") || a.raw.title.localeCompare(b.raw.title));
   if (!sorted.length) {
     return (
@@ -1168,21 +1182,39 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, onToggle, onAd
       } />
     );
   }
+  // Sorted by date, so the dated rows come first; the spine stops at the last of them
+  const lastDated = milestoneX === null ? -1 : sorted.findLastIndex((task) => task.raw.dueDate);
+  const line = `${color}66`;
+  const mix = (percent) => `color-mix(in srgb, ${color} ${percent}%, white)`;
   return sorted.map((task, index) => {
     const done = task.resolved.completed;
     const overdue = !done && task.raw.dueDate && task.raw.dueDate < todayKey;
+    const dotX = task.raw.dueDate ? pointX(task.raw) : null;
+    const spineX = milestoneX === null ? null : Math.round(milestoneX - 0.5);
+    const isLast = index === lastDated;
     return (
       <Row
         key={task.raw.id}
         height={TASK_ROW}
+        className="project-form-field group/task"
+        style={{
+          "--i": index,
+          // The name column must stay opaque (it's sticky), so it gets a mixed color; the timeline
+          // side gets the same color as a translucent wash so weekend shading still shows through
+          "--row-label": index % 2 ? mix(4) : "white",
+          "--row-label-hover": mix(9),
+          "--row-wash": index % 2 ? `${color}0a` : "transparent",
+          "--row-wash-hover": `${color}17`,
+        }}
+        labelClassName="bg-[var(--row-label)] transition-colors duration-150 group-hover/task:bg-[var(--row-label-hover)]"
+        contentClassName="bg-[var(--row-wash)] transition-colors duration-150 group-hover/task:bg-[var(--row-wash-hover)]"
         label={
           <button
             type="button"
             role="checkbox"
             aria-checked={done}
             onClick={() => onToggle(task)}
-            className="project-form-field group/check -ml-1 flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 pl-7 text-left text-xs hover:bg-slate-50"
-            style={{ "--i": index }}
+            className="group/check -ml-1 flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 pl-7 text-left text-xs"
           >
             <span
               className={`task-complete-toggle flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border-[1.5px] ${done ? "text-white" : "bg-white group-hover/check:border-slate-400"}`}
@@ -1195,6 +1227,26 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, onToggle, onAd
           </button>
         }
       >
+        {spineX !== null && index < lastDated && (
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 w-px" style={{ left: spineX, backgroundColor: line }} />
+        )}
+        {spineX !== null && dotX !== null && (isLast ? (
+          // The last branch turns the corner into the spine instead of meeting it at a T
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 h-[calc(50%+0.5px)]"
+            style={{
+              // The corner's vertical edge lands on the spine's pixel column from either side
+              left: dotX <= spineX ? dotX : spineX,
+              width: dotX <= spineX ? spineX + 1 - dotX : dotX - spineX,
+              borderBottom: `1px solid ${line}`,
+              [dotX <= spineX ? "borderRight" : "borderLeft"]: `1px solid ${line}`,
+              [dotX <= spineX ? "borderBottomRightRadius" : "borderBottomLeftRadius"]: 6,
+            }}
+          />
+        ) : (
+          <span aria-hidden="true" className="pointer-events-none absolute top-1/2 h-px" style={{ left: Math.min(dotX, spineX), width: Math.abs(spineX - dotX), backgroundColor: line }} />
+        ))}
         {task.raw.dueDate && renderPoint(task.raw, "task")}
       </Row>
     );
