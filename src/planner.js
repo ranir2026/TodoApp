@@ -1,5 +1,7 @@
 // Planner data lives outside the todo list: day plans are only shown in the planner modal, and
 // projects hold the timeline-only pieces (span, phases). Milestones and project tasks are todos.
+import { getCourseColor } from "./courseColors";
+
 export const EMPTY_PLANNER = { days: {}, projects: [] };
 export const EMPTY_DAY = { blocks: [], inbox: [] };
 
@@ -8,6 +10,11 @@ export function normalizePlanner(planner) {
     days: planner?.days && typeof planner.days === "object" ? planner.days : {},
     projects: Array.isArray(planner?.projects) ? planner.projects : [],
   };
+}
+
+// A project's own color, falling back to its category's
+export function projectColor(project, courseMap) {
+  return project?.color || getCourseColor(courseMap[project?.courseId]);
 }
 
 export function toDateKey(date) {

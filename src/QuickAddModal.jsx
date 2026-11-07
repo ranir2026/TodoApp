@@ -20,7 +20,7 @@ function getSuggestions(text, cursorPos, courses) {
     const q = mention[1].toLowerCase().replace(/\s+/g, " ");
     const matches = courses.filter((c) => c.name.toLowerCase().startsWith(q) && c.name.toLowerCase() !== q.trimEnd());
     if (matches.length || token.startsWith("@")) {
-      return matches.map((c) => ({ label: `@${c.name}`, hint: "category", color: c.color, insert: `@${c.name}`, start: mention.index }));
+      return matches.map((c) => ({ label: `@${c.name}`, hint: c.hint ?? "category", color: c.color, insert: `@${c.name}`, start: mention.index }));
     }
   }
 
@@ -51,7 +51,10 @@ function formatRepeatDays(days) {
     .join(", ");
 }
 
-export default function QuickAddModal({ open, embedded = false, courses, onAdd, onClose }) {
+// In the planner, "@" picks a milestone instead of a category (pass the milestones as `courses`),
+// and everything added is a task
+export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", courses, onAdd, onClose }) {
+  const planner = mode === "planner";
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState(null);
@@ -59,12 +62,12 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
 
   useEffect(() => {
     if (open) {
-      setText("");
+      setText(initialText);
       setError(null);
       setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }, [open]);
+  }, [open, initialText]);
 
   const cursorPos = text.length;
   const suggestions = useMemo(() => getSuggestions(text, cursorPos, courses).slice(0, 6), [text, cursorPos, courses]);
@@ -85,12 +88,12 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
   function submit() {
     const parsed = parseQuickAdd(text, courses);
     if (!parsed.title.trim()) return;
-    if (!parsed.typeExplicit) {
+    if (!planner && !parsed.typeExplicit) {
       setError('Add "tk" for task or "ev" for event at the end');
       return;
     }
     onAdd({
-      type: parsed.type,
+      type: planner ? "task" : parsed.type,
       title: parsed.title,
       courseId: parsed.courseId,
       dueDate: parsed.dueDate,
@@ -143,7 +146,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
         className={embedded ? "w-full" : "w-full max-w-lg rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"}
         onClick={embedded ? undefined : (e) => e.stopPropagation()}
       >
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">Quick add</h2>
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">{planner ? "Add a task to a milestone" : "Quick add"}</h2>
 
         <div className="relative">
           <input
@@ -158,7 +161,7 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
             autoCapitalize="none"
             autoCorrect="off"
             enterKeyHint="done"
-            placeholder="Essay @Math tomorrow 3pm !weekly tk"
+            placeholder={planner ? "Write intro @Draft due tomorrow" : "Essay @Math tomorrow 3pm !weekly tk"}
             className="w-full rounded-lg border border-todo-300 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
           />
 
@@ -194,10 +197,10 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-full border px-2 py-1 text-xs font-medium ${
-                  preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
+                  planner || preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
                 }`}
               >
-                {preview.typeExplicit ? (preview.type === "event" ? "Event" : "Task") : "tk / ev ?"}
+                {planner ? "Task" : preview.typeExplicit ? (preview.type === "event" ? "Event" : "Task") : "tk / ev ?"}
               </span>
 
               {previewCourse ? (
@@ -205,10 +208,10 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
                   className="rounded-full border px-2 py-1 text-xs font-medium"
                   style={{ backgroundColor: `${previewCourse.color}1f`, borderColor: `${previewCourse.color}55`, color: previewCourse.color }}
                 >
-                  @{previewCourse.name}
+                  {planner ? `◆ ${previewCourse.name}` : `@${previewCourse.name}`}
                 </span>
               ) : (
-                <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">no category</span>
+                <span className="rounded-full border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400">{planner ? "no milestone" : "no category"}</span>
               )}
 
               {preview.dueDate ? (
@@ -251,13 +254,15 @@ export default function QuickAddModal({ open, embedded = false, courses, onAdd, 
 
         <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
           <p className="mb-1 font-semibold text-slate-600">Formatting guide</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Category</span> — assign a category, e.g. <span className="font-mono">@Math</span></p>
+          {planner
+            ? <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Milestone</span> — counts it toward a milestone, e.g. <span className="font-mono">@Draft due</span></p>
+            : <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Category</span> — assign a category, e.g. <span className="font-mono">@Math</span></p>}
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">today / tomorrow / mon / 9/20 / nov 11</span> — sets the due date</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">3pm / 9:30am / 3pm-4pm</span> — sets start (and end) time</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">daily / weekly / monthly</span> — sets how often it repeats</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">!</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">urgent</span> — marks it urgent</p>
           <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">[note]</span> — adds additional info</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">tk</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">ev</span> (anywhere, usually at the end) — required: task or event</p>
+          {!planner && <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">tk</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">ev</span> (anywhere, usually at the end) — required: task or event</p>}
           <p className="pt-1 text-slate-400">Everything else becomes the title. Press <span className="font-mono">Tab</span> to accept a suggestion, <span className="font-mono">Enter</span> to add.</p>
         </div>
       </div>

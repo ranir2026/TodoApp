@@ -1,20 +1,32 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SegmentedControl from "./SegmentedControl";
 import Collapsible, { Chevron } from "./Collapsible";
 import { useLocalStorage } from "./useLocalStorage";
 import { COLOR_PALETTE, getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
-import { addDays, daysBetween, toDateKey } from "./planner";
+import { addDays, daysBetween, projectColor, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { CloseIcon, PlusIcon } from "./icons";
 
-const LABEL_WIDTH = 232;
+const LABEL_MIN = 180;
+const LABEL_MAX = 560;
+const LABEL_AUTO_MAX = 420;
 const DAY_WIDTH = { weeks: 30, months: 10 };
 const PROJECT_ROW = 44;
 const ROW = 32;
 const DRAG_THRESHOLD = 4;
 const VELOCITY_WINDOW = 100;
+
+let measureContext = null;
+// Width of a label in the app's font, so the name column can fit the longest name
+function textWidth(text, font) {
+  measureContext ??= document.createElement("canvas").getContext("2d");
+  const family = getComputedStyle(document.body).fontFamily;
+  measureContext.font = `${font} ${family}`;
+  // The app opens small text up slightly (0.012em), so allow for it
+  return measureContext.measureText(text).width * 1.02;
+}
 
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -52,8 +64,10 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onQuickAdd }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
+  // null means "fit the longest name"; dragging the column's edge sets a width of your own
+  const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
   const [creating, setCreating] = useState(false);
   // Bumped each time the form opens so its fields start fresh and play their entrance again
   const [formKey, setFormKey] = useState(0);
@@ -74,6 +88,41 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const { projects } = planner;
   const projectIds = new Set(projects.map((project) => project.id));
   const projectTodos = todos.filter((todo) => todo.projectId && projectIds.has(todo.projectId));
+
+  // Fit the name column to its longest label: project rows (chevron, color, name, count), phases, and milestones
+  const autoLabelWidth = useMemo(() => {
+    let widest = 0;
+    for (const project of projects) {
+      const items = projectTodos.filter((todo) => todo.projectId === project.id);
+      const taskCount = items.filter((todo) => todo.type !== "milestone").length;
+      widest = Math.max(widest, 12 + 18 + 6 + 16 + 6 + textWidth(project.name, "600 14px") + (taskCount ? 6 + textWidth(`${taskCount}/${taskCount}`, "400 11px") : 0) + 8);
+      if (project.collapsed) continue;
+      for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 12px") + 8);
+      for (const milestone of items.filter((todo) => todo.type === "milestone")) {
+        widest = Math.max(widest, 12 + 8 + 6 + textWidth(milestone.title, "400 12px") + 6 + textWidth("00/00", "400 11px") + 8);
+      }
+    }
+    return Math.round(Math.min(Math.max(widest + 12, LABEL_MIN + 52), LABEL_AUTO_MAX));
+  }, [projects, projectTodos]);
+  const labelWidth = Math.min(Math.max(labelOverride ?? autoLabelWidth, LABEL_MIN), LABEL_MAX);
+
+  function startLabelResize(event) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = labelWidth;
+    document.body.style.cursor = "col-resize";
+    const handleMove = (moveEvent) => setLabelOverride(Math.round(Math.min(Math.max(startWidth + moveEvent.clientX - startX, LABEL_MIN), LABEL_MAX)));
+    const handleUp = () => {
+      document.body.style.cursor = "";
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
 
   // The visible range covers every project with some room on both sides, starting on a Sunday
   // so the weekend shading lines up
@@ -139,7 +188,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   function scrollToToday() {
     const scroller = scrollRef.current;
     if (!scroller) return;
-    scroller.scrollLeft = Math.max(0, xOf(todayKey) - (scroller.clientWidth - LABEL_WIDTH) * 0.2);
+    scroller.scrollLeft = Math.max(0, xOf(todayKey) - (scroller.clientWidth - labelWidth) * 0.2);
   }
 
   // ── Planner updates ─────────────────────────────────────────────────────
@@ -184,8 +233,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     setCreatedId(id);
   }
 
-  // A project's own color, falling back to its category's
-  const projectColor = (project) => project.color || getCourseColor(courseMap[project.courseId]);
+
 
   // The color menu opens from the swatch that was clicked
   function openColorMenu(event, { value, categoryColor, onChange }) {
@@ -402,13 +450,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         />
       </Collapsible>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
-        <div className="relative flex min-h-full flex-col" style={{ width: LABEL_WIDTH + timelineWidth }}>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: LABEL_WIDTH, width: timelineWidth, backgroundImage: weekendShading }} />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-danger-500/60" style={{ left: LABEL_WIDTH + xOf(todayKey) + dayWidth / 2 }} />
+      <div className="relative min-h-0 flex-1">
+      <div ref={scrollRef} className="absolute inset-0 overflow-auto">
+        <div className="relative flex min-h-full flex-col" style={{ width: labelWidth + timelineWidth, "--label-width": `${labelWidth}px` }}>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: labelWidth, width: timelineWidth, backgroundImage: weekendShading }} />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-danger-500/60" style={{ left: labelWidth + xOf(todayKey) + dayWidth / 2 }} />
 
           <div className="sticky top-0 z-30 flex border-b border-slate-200 bg-white">
-            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase" style={{ width: LABEL_WIDTH }}>
+            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase" style={{ width: "var(--label-width)" }}>
               Projects
             </div>
             <div className="relative shrink-0" style={{ width: timelineWidth, height: 40 }}>
@@ -432,7 +481,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
           </div>
 
           {projects.map((project) => {
-            const color = projectColor(project);
+            const color = projectColor(project, courseMap);
             const items = projectTodos.filter((todo) => todo.projectId === project.id);
             const milestones = items.filter((todo) => todo.type === "milestone").sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
             const milestoneIds = new Set(milestones.map((milestone) => milestone.id));
@@ -486,7 +535,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                 <Row
                   height={PROJECT_ROW}
                   label={
-                    <div className="group/label flex min-w-0 items-center gap-1.5">
+                    <div className="group/label relative flex min-w-0 items-center gap-1.5">
                       <button type="button" onClick={() => updateProject(project.id, { collapsed: !project.collapsed })} className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={project.collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`} aria-expanded={!project.collapsed}>
                         <Chevron open={!project.collapsed} />
                       </button>
@@ -506,18 +555,19 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       {renaming?.kind === "project" && renaming.id === project.id ? (
                         <RenameInput value={renaming.value} onChange={(value) => setRenaming({ ...renaming, value })} onCommit={commitRename} onCancel={() => setRenaming(null)} />
                       ) : (
-                        <button type="button" onClick={() => setRenaming({ kind: "project", id: project.id, value: project.name })} className="min-w-0 truncate text-left text-sm font-semibold text-slate-800 hover:text-course-600" title="Rename">
+                        <button type="button" onClick={() => setRenaming({ kind: "project", id: project.id, value: project.name })} className="line-clamp-2 min-w-0 text-left text-sm leading-tight font-semibold break-words text-slate-800 hover:text-course-600" title={`${project.name} (click to rename)`}>
                           {project.name}
                         </button>
                       )}
                       {tasks.length > 0 && <span className="shrink-0 text-[11px] text-slate-500">{doneCount}/{tasks.length}</span>}
-                      <span className="flex-1" />
-                      <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-course-600 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Add to ${project.name}`} title="Add phase, milestone, or task">
-                        <PlusIcon className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" onClick={() => onDeleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
-                        <CloseIcon className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverActions>
+                        <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add to ${project.name}`} title="Add phase, milestone, or task">
+                          <PlusIcon className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" onClick={() => onDeleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
+                          <CloseIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </HoverActions>
                     </div>
                   }
                   sublabel={`${shortDate(span.start)} – ${shortDate(span.end)}`}
@@ -552,18 +602,19 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                           height={ROW}
                           indent
                           label={
-                            <div className="group/label flex min-w-0 items-center gap-1.5">
+                            <div className="group/label relative flex min-w-0 items-center gap-1.5">
                               {renaming?.kind === "phase" && renaming.id === phase.id ? (
                                 <RenameInput value={renaming.value} onChange={(value) => setRenaming({ ...renaming, value })} onCommit={commitRename} onCancel={() => setRenaming(null)} />
                               ) : (
-                                <button type="button" onClick={() => setRenaming({ kind: "phase", projectId: project.id, id: phase.id, value: phase.name })} className="min-w-0 truncate text-left text-xs text-slate-600 hover:text-course-600" title="Rename phase">
+                                <button type="button" onClick={() => setRenaming({ kind: "phase", projectId: project.id, id: phase.id, value: phase.name })} className="line-clamp-2 min-w-0 text-left text-xs leading-tight break-words text-slate-600 hover:text-course-600" title={`${phase.name} (click to rename)`}>
                                   {phase.name}
                                 </button>
                               )}
-                              <span className="flex-1" />
-                              <button type="button" onClick={() => deletePhase(project.id, phase.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-danger-500 focus-visible:opacity-100 group-hover/label:opacity-100" aria-label={`Delete phase ${phase.name}`}>
-                                <CloseIcon className="h-3.5 w-3.5" />
-                              </button>
+                              <HoverActions>
+                                <button type="button" onClick={() => deletePhase(project.id, phase.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete phase ${phase.name}`}>
+                                  <CloseIcon className="h-3.5 w-3.5" />
+                                </button>
+                              </HoverActions>
                             </div>
                           }
                           onTimelineDoubleClick={(event) => openPopover(event, project, { kind: "phase" })}
@@ -590,11 +641,20 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     {milestones.map((milestone) =>
                       pointRow(
                         milestone.id,
-                        <button type="button" onClick={() => onEdit(milestone)} className="flex min-w-0 items-center gap-1.5 text-left text-xs text-slate-700 hover:text-course-600">
-                          <span className={`h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
-                          <span className="min-w-0 truncate">{milestone.title}</span>
-                          <span className="shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
-                        </button>,
+                        <div className="group/label relative flex min-w-0 items-center">
+                          <button type="button" onClick={() => onEdit(milestone)} title={milestone.title} className="flex min-w-0 items-center gap-1.5 text-left text-xs text-slate-700 hover:text-course-600">
+                            <span className={`h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
+                            <span className="line-clamp-2 min-w-0 leading-tight break-words">{milestone.title}</span>
+                            <span className="shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
+                          </button>
+                          {onQuickAdd && (
+                            <HoverActions>
+                              <button type="button" onClick={() => onQuickAdd(`@${milestone.title} `)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add a task toward ${milestone.title}`} title="Add a task toward this milestone">
+                                <PlusIcon className="h-3.5 w-3.5" />
+                              </button>
+                            </HoverActions>
+                          )}
+                        </div>,
                         tasks.filter((task) => task.raw.milestoneId === milestone.id),
                         milestone,
                       ),
@@ -613,9 +673,33 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 
           {/* Carries the label column down to the bottom so the day grid doesn't show through under it */}
           <div className="flex flex-1">
-            <div className="sticky left-0 z-20 shrink-0 border-r border-slate-100 bg-white" style={{ width: LABEL_WIDTH }} />
+            <div className="sticky left-0 z-20 shrink-0 border-r border-slate-100 bg-white" style={{ width: "var(--label-width)" }} />
           </div>
         </div>
+      </div>
+
+      {/* The name column's edge: drag to resize, double-click to fit the names again */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize project names"
+        aria-valuenow={labelWidth}
+        aria-valuemin={LABEL_MIN}
+        aria-valuemax={LABEL_MAX}
+        tabIndex={0}
+        title="Drag to resize. Double-click to fit the names."
+        onPointerDown={startLabelResize}
+        onDoubleClick={() => setLabelOverride(null)}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          setLabelOverride(Math.min(Math.max(labelWidth + (event.key === "ArrowRight" ? 16 : -16), LABEL_MIN), LABEL_MAX));
+        }}
+        className="group/resize absolute inset-y-0 z-30 flex w-2.5 -translate-x-1/2 cursor-col-resize justify-center outline-none"
+        style={{ left: labelWidth }}
+      >
+        <span className="h-full w-0.5 rounded-full transition-colors group-hover/resize:bg-course-400 group-focus-visible/resize:bg-course-400 group-active/resize:bg-course-500" />
+      </div>
       </div>
 
       {colorMenu && (
@@ -649,10 +733,19 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   );
 }
 
+// Row actions float over the end of the label on hover, so they never cost the name any width
+function HoverActions({ children }) {
+  return (
+    <span className="absolute inset-y-0 right-0 flex items-center pointer-events-none bg-linear-to-r from-transparent via-white via-30% to-white pl-5 opacity-0 transition-opacity group-hover/label:pointer-events-auto group-hover/label:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+      {children}
+    </span>
+  );
+}
+
 function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, children }) {
   return (
-    <div className="flex" style={{ height }}>
-      <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 bg-white pr-2 ${indent ? "pl-8" : "pl-3"}`} style={{ width: LABEL_WIDTH }}>
+    <div className="flex" style={{ minHeight: height }}>
+      <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 bg-white py-1 pr-2 ${indent ? "pl-8" : "pl-3"}`} style={{ width: "var(--label-width)" }}>
         {label}
         {sublabel && <span className="truncate text-[11px] leading-tight text-slate-500">{sublabel}</span>}
       </div>
