@@ -32,6 +32,121 @@ function dueLabel(todo, isEvent) {
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
+function CheckIcon({ className }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" className={className}>
+      <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4l2.3 2.29 6.3-6.29a1 1 0 011.4 0z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function openLink(event, href) {
+  event.stopPropagation();
+  event.preventDefault();
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
+const SMALL_CHIP = "shrink-0 rounded-full px-1.5 py-px text-[11px] font-medium";
+
+// A milestone's tasks in one card: the milestone heads it (click to edit), and each task is a slim
+// row with its checkbox and only the chips that differ from task to task. Category and project are
+// shared, so they're said once, by the card's accent and header.
+export function MilestoneCard({ milestone, tasks, course, project, onToggle, onDelete, onEdit, selectedId }) {
+  const due = dueLabel(milestone, false);
+  const progress = milestone.progress;
+  return (
+    <li className="overflow-hidden rounded-xl border border-l-4 border-slate-200 bg-white transition-shadow hover:shadow-sm" style={courseAccentStyle(course)}>
+      <button
+        type="button"
+        data-task-id={milestone.id}
+        onClick={() => onEdit(milestone)}
+        title={`Edit milestone ${milestone.title}`}
+        className="flex w-full min-w-0 items-center gap-2 px-3.5 pt-2.5 pb-2 text-left hover:bg-slate-50/70"
+      >
+        <span className={`h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] border-2 ${milestone.completed ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
+        <span className="min-w-0 truncate text-xs font-semibold text-slate-700">{milestone.title}</span>
+        {project && <span className="min-w-0 truncate text-[11px] text-slate-400">▸ {project.name}</span>}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
+          {milestone.completed
+            ? <span className={`${SMALL_CHIP} bg-success-500/10 text-success-600`}>Reached</span>
+            : due && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
+          {progress?.total > 0 && (
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-500 tabular-nums" title={`${progress.done} of ${progress.total} tasks done`}>
+              <span className="h-1 w-8 overflow-hidden rounded-full bg-slate-100">
+                <span className="block h-full rounded-full bg-success-500" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              </span>
+              {progress.done}/{progress.total}
+            </span>
+          )}
+        </span>
+      </button>
+      <ul className="divide-y divide-slate-100 border-t border-slate-100">
+        {tasks.map((task) => (
+          <CompactTaskRow key={task.id} todo={task} onToggle={onToggle} onDelete={onDelete} onEdit={onEdit} selected={task.id === selectedId} />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
+  const done = todo.completed;
+  const due = dueLabel(todo, false);
+  const timeRange = timeRangeLabel(todo);
+  const links = extractLinks(todo.description);
+  return (
+    <li data-task-id={todo.id} className={`group flex items-center gap-2.5 py-1.5 pr-2 pl-3.5 ${selected ? "bg-todo-500/5 ring-2 ring-todo-400/30 ring-inset" : "hover:bg-slate-50/70"}`}>
+      <button
+        type="button"
+        onClick={() => onToggle(todo.id, todo.occurrenceDate)}
+        className={`task-complete-toggle flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+          done ? "border-success-500 bg-success-500 text-white" : todo.priority === "urgent" ? "border-urgent-500 hover:border-urgent-600" : "border-slate-300 hover:border-todo-500"
+        }`}
+        aria-label={`Toggle ${todo.title} complete`}
+      >
+        {done && <CheckIcon className="h-2.5 w-2.5" />}
+      </button>
+      <button type="button" onClick={() => onEdit(todo)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <span className={`min-w-0 flex-1 text-[13px] leading-snug break-words transition-colors ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>
+          {todo.title}
+          {todo.description && !links.length && (
+            <svg viewBox="0 0 20 20" fill="currentColor" className="ml-1 inline-block h-3 w-3 -translate-y-px text-slate-300" aria-hidden="true">
+              <path fillRule="evenodd" d="M2 4.75A2.75 2.75 0 014.75 2h10.5A2.75 2.75 0 0118 4.75v10.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25V4.75zM5 6.25a.75.75 0 01.75-.75h8.5a.75.75 0 010 1.5h-8.5A.75.75 0 015 6.25zm0 3.5a.75.75 0 01.75-.75h8.5a.75.75 0 010 1.5h-8.5A.75.75 0 015 9.75zm0 3.5a.75.75 0 01.75-.75h4.5a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+            </svg>
+          )}
+        </span>
+        {links.map((link) => (
+          <span
+            key={link.href}
+            role="link"
+            tabIndex={0}
+            title={link.href}
+            onClick={(event) => openLink(event, link.href)}
+            onKeyDown={(event) => { if (event.key === "Enter") openLink(event, link.href); }}
+            className={`${SMALL_CHIP} max-w-28 cursor-pointer truncate bg-link-100 text-link-700 hover:bg-link-200`}
+          >
+            ↗ {link.label}
+          </span>
+        ))}
+        {todo.priority === "urgent" && !done && <span className={`${SMALL_CHIP} bg-urgent-100 text-urgent-700`}>Urgent</span>}
+        {timeRange && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`}>{timeRange}</span>}
+        {todo.repeat && todo.repeat !== "none" && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`} title={`Repeats ${todo.repeat}`}>↻</span>}
+        {due && !done && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
+      </button>
+      <button
+        type="button"
+        onClick={() => onDelete(todo.id, todo.occurrenceDate)}
+        className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger-500 focus-visible:opacity-100"
+        aria-label={`Delete ${todo.title}`}
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+        </svg>
+      </button>
+    </li>
+  );
+}
+
 export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false }) {
   const isEvent = todo.type === "event";
   const isMilestone = todo.type === "milestone";

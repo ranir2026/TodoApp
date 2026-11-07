@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { useLocalStorage } from "./useLocalStorage";
 import StatsBar from "./StatsBar";
 import AddTodoForm from "./AddTodoForm";
-import TodoItem from "./TodoItem";
+import TodoItem, { MilestoneCard } from "./TodoItem";
 import CalendarView from "./CalendarView";
 import CommandPalette from "./CommandPalette";
 import KeybindSettings from "./KeybindSettings";
@@ -23,7 +23,7 @@ import MobileAddSheet from "./MobileAddSheet";
 import Collapsible, { Chevron } from "./Collapsible";
 import PlannerModal from "./PlannerModal";
 import { withMilestoneStatus } from "./milestones";
-import { EMPTY_PLANNER, normalizePlanner } from "./planner";
+import { EMPTY_PLANNER, addDays, normalizePlanner, toDateKey } from "./planner";
 import { COLOR_PALETTE } from "./courseColors";
 
 const MOBILE_TABS = [
@@ -370,10 +370,39 @@ export default function App() {
     });
   }, [resolvedTodos, filter, search, courseFilter, typeFilter, priorityFilter]);
 
+  // Category view only: project work stays out of the list until it's coming up (due within the
+  // next week, or already overdue) unless it has no date. A milestone's tasks share one card, headed
+  // by the milestone, so a project reads as a single block rather than a run of separate cards.
+  const todayKey = toDateKey(new Date());
   const groupedTasks = useMemo(() => {
     if (sortBy !== "course") return null;
-    return courses.map((c) => ({ course: c, tasks: visibleTasks.filter((t) => t.courseId === c.id) })).filter((g) => g.tasks.length > 0);
-  }, [sortBy, courses, visibleTasks]);
+    const horizon = addDays(todayKey, 7);
+    const milestones = Object.fromEntries(todosView.filter((todo) => todo.type === "milestone").map((todo) => [todo.id, todo]));
+    const shown = visibleTasks.filter((task) => !task.projectId || !task.dueDate || task.dueDate <= horizon);
+    return courses.map((course) => {
+      const tasks = shown.filter((task) => task.courseId === course.id);
+      const isMilestoneTask = (task) => task.type !== "milestone" && milestones[task.milestoneId];
+      const headed = new Set(tasks.filter(isMilestoneTask).map((task) => task.milestoneId));
+      const blocks = [];
+      const byMilestone = new Map();
+      for (const task of tasks) {
+        // A listed milestone with listed tasks becomes its card's header instead of a card of its own
+        if (task.type === "milestone" && headed.has(task.id)) continue;
+        if (!isMilestoneTask(task)) {
+          blocks.push({ key: task.id, task });
+          continue;
+        }
+        let block = byMilestone.get(task.milestoneId);
+        if (!block) {
+          block = { key: `milestone:${task.milestoneId}`, milestone: milestones[task.milestoneId], tasks: [] };
+          byMilestone.set(task.milestoneId, block);
+          blocks.push(block);
+        }
+        block.tasks.push(task);
+      }
+      return { course, tasks, blocks };
+    }).filter((g) => g.tasks.length > 0);
+  }, [sortBy, courses, visibleTasks, todosView, todayKey]);
 
   const groupedDates = useMemo(() => {
     if (sortBy !== "date") return null;
@@ -388,7 +417,8 @@ export default function App() {
     return [...groups.entries()].map(([key, tasks]) => ({ key, label: dateGroupLabel(key, today), tasks }));
   }, [sortBy, visibleTasks]);
 
-  const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.tasks) : visibleTasks;
+  // Keyboard selection walks the rows in the order they're drawn
+  const orderedTasks = groupedTasks ? groupedTasks.flatMap((g) => g.blocks.flatMap((block) => block.task ? [block.task] : block.tasks)) : visibleTasks;
 
   const mobileAgenda = useMemo(() => {
     return todos.filter((todo) => todo.dueDate === mobileSelectedDate).sort((a, b) => (a.startTime || "99:99").localeCompare(b.startTime || "99:99"));
@@ -685,16 +715,28 @@ export default function App() {
                       <h3 className="text-xs font-semibold tracking-wide text-slate-400 uppercase">{g.course.name}</h3>
                     </div>
                     <ul className="space-y-2">
-                      {g.tasks.map((todo) => (
+                      {g.blocks.map((block) => block.task ? (
                         <TodoItem
-                          key={todo.id}
-                          todo={todo}
-                          course={courseMap[todo.courseId]}
-                          project={projectMap[todo.projectId]}
+                          key={block.key}
+                          todo={block.task}
+                          course={courseMap[block.task.courseId]}
+                          project={projectMap[block.task.projectId]}
                           onToggle={toggleTodo}
                           onDelete={deleteTodo}
                           onEdit={editItem}
-                          selected={todo.id === selectedId}
+                          selected={block.task.id === selectedId}
+                        />
+                      ) : (
+                        <MilestoneCard
+                          key={block.key}
+                          milestone={block.milestone}
+                          tasks={block.tasks}
+                          course={courseMap[g.course.id]}
+                          project={projectMap[block.milestone.projectId]}
+                          onToggle={toggleTodo}
+                          onDelete={deleteTodo}
+                          onEdit={editItem}
+                          selectedId={selectedId}
                         />
                       ))}
                     </ul>
