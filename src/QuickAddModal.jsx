@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { extractLinks } from "./noteLinks";
+import { CloseIcon } from "./icons";
 import { parseQuickAdd, SUGGESTION_KEYWORDS } from "./quickAdd";
 
 function getCurrentToken(text, cursorPos) {
@@ -52,8 +53,9 @@ function formatRepeatDays(days) {
 }
 
 // In the planner, "@" picks a milestone instead of a category (pass the milestones as `courses`),
-// and everything added is a task
-export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", courses, onAdd, onClose }) {
+// everything added is a task, and it docks at the bottom of the planner without a scrim so the
+// timeline stays visible and scrollable; `onPreviewChange` reports the parsed draft as you type
+export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", title, subtitle, courses, onAdd, onClose, onPreviewChange }) {
   const planner = mode === "planner";
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -75,6 +77,9 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
   const previewCourse = preview?.courseId ? courses.find((c) => c.id === preview.courseId) : null;
 
   useEffect(() => setActiveIndex(0), [text]);
+  useEffect(() => {
+    if (open) onPreviewChange?.(preview);
+  }, [open, preview, onPreviewChange]);
 
   if (!open) return null;
 
@@ -135,18 +140,37 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
       }
       submit();
     }
-    if (e.key === "Escape" && suggestions.length === 0) {
-      onClose();
+    if (e.key === "Escape") {
+      // Docked in the planner, Escape belongs to this panel and must not also close the planner
+      if (planner) e.stopPropagation();
+      if (suggestions.length === 0) onClose();
     }
   }
 
   return (
-    <div className={embedded ? "mobile-quick-content" : "modal-scrim fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"} onClick={embedded ? undefined : onClose}>
+    <div
+      className={embedded ? "mobile-quick-content" : planner ? "pointer-events-none absolute inset-x-0 bottom-0 z-50 flex justify-center p-4" : "modal-scrim fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 pt-24"}
+      onClick={embedded || planner ? undefined : onClose}
+    >
       <div
-        className={embedded ? "w-full" : "w-full max-w-lg rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"}
-        onClick={embedded ? undefined : (e) => e.stopPropagation()}
+        role={planner ? "dialog" : undefined}
+        aria-label={planner ? title : undefined}
+        className={embedded ? "w-full" : planner ? "quick-dock-enter glass-light pointer-events-auto w-full max-w-xl rounded-sheet p-4" : "w-full max-w-lg rounded-sheet border border-slate-200 bg-white p-4 shadow-xl"}
+        onClick={embedded || planner ? undefined : (e) => e.stopPropagation()}
       >
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">{planner ? "Add a task to a milestone" : "Quick add"}</h2>
+        {planner ? (
+          <div className="mb-2 flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+              {subtitle && <div className="mt-0.5 text-xs text-slate-600">{subtitle}</div>}
+            </div>
+            <button type="button" onClick={onClose} className="-mt-1 -mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-900/5 hover:text-slate-800" aria-label="Close quick add">
+              <CloseIcon />
+            </button>
+          </div>
+        ) : (
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Quick add</h2>
+        )}
 
         <div className="relative">
           <input
@@ -166,7 +190,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
           />
 
           {suggestions.length > 0 && (
-            <ul className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+            <ul className={`absolute inset-x-0 z-10 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg ${planner ? "bottom-full mb-1" : "top-full mt-1"}`}>
               {suggestions.map((s, i) => (
                 <li key={s.label}>
                   <button
@@ -252,19 +276,30 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
 
         {error && <p className="mt-1.5 text-xs font-medium text-danger-600">{error}</p>}
 
-        <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-          <p className="mb-1 font-semibold text-slate-600">Formatting guide</p>
-          {planner
-            ? <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Milestone</span> — counts it toward a milestone, e.g. <span className="font-mono">@Draft due</span></p>
-            : <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Category</span> — assign a category, e.g. <span className="font-mono">@Math</span></p>}
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">today / tomorrow / mon / 9/20 / nov 11</span> — sets the due date</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">3pm / 9:30am / 3pm-4pm</span> — sets start (and end) time</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">daily / weekly / monthly</span> — sets how often it repeats</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">!</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">urgent</span> — marks it urgent</p>
-          <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">[note]</span> — adds additional info</p>
-          {!planner && <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">tk</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">ev</span> (anywhere, usually at the end) — required: task or event</p>}
-          <p className="pt-1 text-slate-400">Everything else becomes the title. Press <span className="font-mono">Tab</span> to accept a suggestion, <span className="font-mono">Enter</span> to add.</p>
-        </div>
+        {planner ? (
+          // Docked over the timeline, the guide stays to one line so the panel covers as little as possible
+          <p className="mt-2.5 text-[11px] leading-relaxed text-slate-600">
+            {[["@milestone", "milestone"], ["tomorrow / mon / nov 11", "date"], ["3pm", "time"], ["weekly", "repeat"], ["!", "urgent"], ["[note]", "note"]].map(([syntax, meaning]) => (
+              <span key={syntax} className="mr-2.5 inline-block whitespace-nowrap">
+                <span className="rounded bg-white/80 px-1 py-0.5 font-mono text-slate-800">{syntax}</span> {meaning}
+              </span>
+            ))}
+          </p>
+        ) : (
+          <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
+            <p className="mb-1 font-semibold text-slate-600">Formatting guide</p>
+            {planner
+              ? <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Milestone</span> — counts it toward a milestone, e.g. <span className="font-mono">@Draft due</span></p>
+              : <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">@Category</span> — assign a category, e.g. <span className="font-mono">@Math</span></p>}
+            <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">today / tomorrow / mon / 9/20 / nov 11</span> — sets the due date</p>
+            <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">3pm / 9:30am / 3pm-4pm</span> — sets start (and end) time</p>
+            <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">daily / weekly / monthly</span> — sets how often it repeats</p>
+            <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">!</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">urgent</span> — marks it urgent</p>
+            <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">[note]</span> — adds additional info</p>
+            {!planner && <p><span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">tk</span> or <span className="rounded bg-white px-1 py-0.5 font-mono text-slate-700">ev</span> (anywhere, usually at the end) — required: task or event</p>}
+            <p className="pt-1 text-slate-400">Everything else becomes the title. Press <span className="font-mono">Tab</span> to accept a suggestion, <span className="font-mono">Enter</span> to add.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -195,6 +195,15 @@ button:not(:disabled):active { scale: 0.97; }
 .planner-row-enter { animation: project-field-in 360ms var(--ease-out) both; }
 @keyframes project-field-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
+/* Timeline hover card grows out of its arrow; the planner quick add rises from the bottom edge it docks to;
+   the draft task's dot on the timeline breathes so it reads as "not added yet" */
+.timeline-tip { animation: timeline-tip-in 140ms var(--ease-out) both; }
+@keyframes timeline-tip-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+.quick-dock-enter { animation: quick-dock-in 280ms var(--ease-out) both; }
+@keyframes quick-dock-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.planner-draft-dot { animation: planner-draft-pulse 1.6s ease-in-out infinite; }
+@keyframes planner-draft-pulse { 0%, 100% { box-shadow: 0 0 0 0 currentColor; } 50% { box-shadow: 0 0 0 4px transparent; } }
+
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-surface-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes undo-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -213,6 +222,8 @@ button:not(:disabled):active { scale: 0.97; }
   .calendar-page-enter { animation: modal-backdrop-in 150ms ease both; }
   .task-check-pop { animation: none; }
   .planner-flash { animation: planner-flash-reduced 900ms ease both; }
+  .timeline-tip, .quick-dock-enter { animation: modal-backdrop-in 120ms ease both; }
+  .planner-draft-dot { animation: none; }
   .project-form-field, .planner-row-enter { animation: modal-backdrop-in 150ms ease both; animation-delay: 0ms; }
   .segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 1; }
 }

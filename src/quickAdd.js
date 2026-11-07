@@ -116,7 +116,8 @@ function extractDate(text) {
 }
 
 function extractTime(text) {
-  let m = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+  // Not inside a dashed date like 2026-12-06, whose "12-06" would otherwise read as 12:00 to 6:00
+  let m = text.match(/(?<![\d-])\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b(?!-\d)/i);
   if (m) {
     let [, sh, smin, smer, eh, emin, emer] = m;
     smer = (smer || emer || "").toLowerCase() || undefined;

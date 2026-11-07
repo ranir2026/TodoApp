@@ -5,9 +5,10 @@ import Collapsible, { Chevron } from "./Collapsible";
 import { useLocalStorage } from "./useLocalStorage";
 import { COLOR_PALETTE, getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
-import { addDays, daysBetween, projectColor, toDateKey } from "./planner";
+import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { CloseIcon, PlusIcon } from "./icons";
+import TimelineTooltip from "./TimelineTooltip";
 
 const LABEL_MIN = 180;
 const LABEL_MAX = 560;
@@ -64,7 +65,7 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onQuickAdd }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   // null means "fit the longest name"; dragging the column's edge sets a width of your own
   const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
@@ -81,6 +82,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
   const settleRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const tipTimerRef = useRef(null);
+  const tipHiddenAtRef = useRef(0);
   const runningSettleRef = useRef(null);
 
   const dayWidth = DAY_WIDTH[zoom] ?? DAY_WIDTH.weeks;
@@ -179,6 +183,37 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     const row = scrollRef.current?.querySelector(`[data-project-id="${createdId}"]`);
     row?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }, [createdId]);
+
+  // Keep the quick add's project, and the spot its task will land, in view above the docked panel
+  function revealInScroller(element, { horizontal = false } = {}) {
+    const scroller = scrollRef.current;
+    if (!scroller || !element) return;
+    const view = scroller.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    const behavior = prefersReducedMotion() ? "auto" : "smooth";
+    const visibleBottom = view.bottom - bottomInset;
+    let top = scroller.scrollTop;
+    if (rect.top < view.top + 40) top -= view.top + 40 - rect.top;
+    else if (rect.bottom > visibleBottom - 8) top += rect.bottom - (visibleBottom - 8);
+    let left = scroller.scrollLeft;
+    if (horizontal) {
+      if (rect.left < view.left + labelWidth + 16) left -= view.left + labelWidth + 16 - rect.left;
+      else if (rect.right > view.right - 16) left += rect.right - (view.right - 16);
+    }
+    if (top !== scroller.scrollTop || left !== scroller.scrollLeft) scroller.scrollTo({ top, left, behavior });
+  }
+
+  useLayoutEffect(() => {
+    if (!quickAddProjectId) return;
+    revealInScroller(scrollRef.current?.querySelector(`[data-project-id="${quickAddProjectId}"] > div`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickAddProjectId]);
+
+  useLayoutEffect(() => {
+    if (!draft?.dueDate) return;
+    revealInScroller(scrollRef.current?.querySelector("[data-draft-dot]"), { horizontal: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.projectId, draft?.milestoneId, draft?.dueDate]);
 
   useLayoutEffect(() => {
     scrollToToday();
@@ -296,6 +331,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    hideTip();
     runningSettleRef.current?.();
     runningSettleRef.current = null;
     dragRef.current = { ...state, originX: event.clientX, active: false, delta: 0, dx: 0, samples: [] };
@@ -405,6 +441,88 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     setPopover({ projectId: project.id, kind, date: key, x, y, originX: clickX - x, originY: clickY - y });
   }
 
+  // ── Hover cards ─────────────────────────────────────────────────────────
+  // Shown after a short pause; once one is up, moving to a neighbor swaps instantly ("warm"), like
+  // system tooltips. Points anchor the arrow at their center; bars at the pointer along the bar.
+  function hideTip() {
+    clearTimeout(tipTimerRef.current);
+    if (tooltipRef.current) tooltipRef.current.hide();
+    tipHiddenAtRef.current = performance.now();
+  }
+
+  function tipHandlers(key, getContent, anchor = "point") {
+    const place = (event) => {
+      const root = rootRef.current.getBoundingClientRect();
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = anchor === "point" ? rect.left + rect.width / 2 : Math.min(Math.max(event.clientX, rect.left + 8), rect.right - 8);
+      return { x: x - root.left, top: rect.top - root.top, bottom: rect.bottom - root.top, width: root.width };
+    };
+    return {
+      onPointerEnter: (event) => {
+        if (event.pointerType !== "mouse" || dragRef.current) return;
+        clearTimeout(tipTimerRef.current);
+        const position = place(event);
+        const show = () => tooltipRef.current?.show({ key, content: getContent(), ...position });
+        if (performance.now() - tipHiddenAtRef.current < 300) show();
+        else tipTimerRef.current = setTimeout(show, 180);
+      },
+      onPointerMove: anchor === "bar" ? (event) => { if (!dragRef.current) tooltipRef.current?.move(place(event).x); } : undefined,
+      onPointerLeave: hideTip,
+    };
+  }
+
+  const longDate = (key) => parseDateKey(key).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const dayCount = (start, end) => `${daysBetween(start, end) + 1} ${daysBetween(start, end) === 0 ? "day" : "days"}`;
+  function fromNow(key) {
+    const days = daysBetween(todayKey, key);
+    if (days === 0) return "today";
+    if (days === 1) return "tomorrow";
+    if (days === -1) return "yesterday";
+    return days > 0 ? `in ${days} days` : `${-days} days ago`;
+  }
+  // Where a span sits relative to today
+  function spanStatus(start, end) {
+    if (todayKey < start) return { label: `Starts ${fromNow(start)}`, tone: "neutral" };
+    if (todayKey > end) return { label: "Finished", tone: "neutral" };
+    return { label: "In progress", tone: "success" };
+  }
+
+  function taskTip(task, color) {
+    const resolved = resolveTask(task);
+    const milestone = task.milestoneId ? projectTodos.find((todo) => todo.id === task.milestoneId) : null;
+    const time = task.startTime ? ` at ${formatClock(timeToMinutes(task.startTime))}` : "";
+    const days = daysBetween(todayKey, task.dueDate);
+    const status = resolved.completed
+      ? { label: "Done", tone: "success" }
+      : days < 0
+      ? { label: "Overdue", tone: "danger" }
+      : { label: `Due ${fromNow(task.dueDate)}`, tone: days <= 2 ? "urgent" : "neutral" };
+    return {
+      kind: "Task",
+      color,
+      title: task.title,
+      lines: [`Due ${longDate(task.dueDate)}${time}`, milestone ? `Counts toward \u25c6 ${milestone.title}` : "Not tied to a milestone"],
+      status,
+    };
+  }
+
+  function milestoneTip(milestone, color) {
+    const tone = milestoneTone(milestone, todayKey);
+    const status = tone === "reached"
+      ? { label: "Reached", tone: "success" }
+      : tone === "overdue"
+      ? { label: "Overdue", tone: "danger" }
+      : { label: `Due ${fromNow(milestone.dueDate)}`, tone: tone === "soon" ? "urgent" : "neutral" };
+    return {
+      kind: "Milestone",
+      color,
+      title: milestone.title,
+      lines: [`Due ${longDate(milestone.dueDate)}`, ...(milestone.progress?.total ? [] : ["No tasks linked yet"])],
+      status,
+      progress: milestone.progress,
+    };
+  }
+
   // ── Header ──────────────────────────────────────────────────────────────
   const months = [];
   for (let i = 0; i < totalDays; i++) {
@@ -451,7 +569,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       </Collapsible>
 
       <div className="relative min-h-0 flex-1">
-      <div ref={scrollRef} className="absolute inset-0 overflow-auto">
+      <div ref={scrollRef} onScroll={hideTip} className="absolute inset-0 overflow-auto">
         <div className="relative flex min-h-full flex-col" style={{ width: labelWidth + timelineWidth, "--label-width": `${labelWidth}px` }}>
           <div aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: labelWidth, width: timelineWidth, backgroundImage: weekendShading }} />
           <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-danger-500/60" style={{ left: labelWidth + xOf(todayKey) + dayWidth / 2 }} />
@@ -493,12 +611,17 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
             const spanHandlers = barHandlers("project", project.id, project.id, { start: project.startDate, end: project.endDate });
             const phases = project.phases ?? [];
             const isEmpty = !phases.length && !items.length;
+            // While a quick add is open for this project it stays expanded and shows where the task will land
+            const draftHere = draft?.projectId === project.id ? draft : null;
+            const quickAddHere = quickAddProjectId === project.id;
+            const expanded = !project.collapsed || quickAddHere;
 
             const renderPoint = (todo, kind) => {
               const { left, landing } = pointGeometry(todo);
               const handlers = barHandlers("todo", todo.id, project.id, { start: todo.dueDate, end: todo.dueDate }, () => onEdit(todo));
               const dragKey = `todo:${todo.id}`;
-              const state = { dragKey, pressed: pressed === dragKey, onPointerDown: handlers.move };
+              const tip = tipHandlers(dragKey, () => (kind === "milestone" ? milestoneTip(todo, color) : taskTip(todo, color)));
+              const state = { dragKey, pressed: pressed === dragKey, onPointerDown: handlers.move, tip };
               return (
                 <span key={todo.id} className="contents">
                   {landing !== null && <PointLanding left={landing} diamond={kind === "milestone"} color={color} />}
@@ -513,6 +636,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
               const dated = rowTasks.filter((task) => task.raw.dueDate);
               const undated = rowTasks.length - dated.length;
               const lineXs = [...dated.map((task) => pointGeometry(task.raw).left), ...(milestone?.dueDate ? [pointGeometry(milestone).left] : [])];
+              const draftInRow = draftHere?.dueDate && (milestone ? draftHere.milestoneId === milestone.id : !draftHere.milestoneId) ? draftHere : null;
               return (
                 <Row
                   key={key}
@@ -526,18 +650,19 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                   )}
                   {dated.map((task) => renderPoint(task.raw, "task"))}
                   {milestone?.dueDate && renderPoint(milestone, "milestone")}
+                  {draftInRow && <DraftDot left={xOf(draftInRow.dueDate) + dayWidth / 2} title={draftInRow.title} color={color} />}
                 </Row>
               );
             };
 
             return (
-              <div key={project.id} data-project-id={project.id} className={`border-b border-slate-100 ${project.id === createdId ? "planner-row-enter" : ""}`}>
+              <div key={project.id} data-project-id={project.id} className={`border-b border-slate-100 transition-colors ${project.id === createdId ? "planner-row-enter" : ""}`} style={quickAddHere ? { backgroundColor: `${color}0d` } : undefined}>
                 <Row
                   height={PROJECT_ROW}
                   label={
                     <div className="group/label relative flex min-w-0 items-center gap-1.5">
                       <button type="button" onClick={() => updateProject(project.id, { collapsed: !project.collapsed })} className="-ml-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={project.collapsed ? `Expand ${project.name}` : `Collapse ${project.name}`} aria-expanded={!project.collapsed}>
-                        <Chevron open={!project.collapsed} />
+                        <Chevron open={expanded} />
                       </button>
                       <button
                         type="button"
@@ -561,7 +686,13 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       )}
                       {tasks.length > 0 && <span className="shrink-0 text-[11px] text-slate-500">{doneCount}/{tasks.length}</span>}
                       <HoverActions>
-                        <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add to ${project.name}`} title="Add phase, milestone, or task">
+                        {onQuickAdd && (
+                          <button type="button" onClick={() => onQuickAdd(project.id)} className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-course-600" aria-label={`Quick add a task to ${project.name}`} title="Quick add a task to this project">
+                            <PlusIcon className="h-3 w-3" />
+                            Task
+                          </button>
+                        )}
+                        <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add to ${project.name}`} title="Add a phase, milestone, or task on a date">
                           <PlusIcon className="h-3.5 w-3.5" />
                         </button>
                         <button type="button" onClick={() => onDeleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
@@ -580,7 +711,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     width={spanGeometry.width}
                     height={10}
                     style={{ backgroundColor: `${color}33`, color, boxShadow: `inset 0 0 0 1px ${color}55` }}
-                    title={`${project.name}: ${shortDate(span.start)} – ${shortDate(span.end)}`}
+                    tip={tipHandlers(`project:${project.id}`, () => ({
+                      kind: "Project",
+                      color,
+                      title: project.name,
+                      lines: [`${longDate(span.start)} \u2013 ${longDate(span.end)}`, dayCount(span.start, span.end)],
+                      status: spanStatus(span.start, span.end),
+                      progress: { done: doneCount, total: tasks.length },
+                    }), "bar")}
                     handlers={spanHandlers}
                     active={isDragging("project", project.id)}
                     pressed={pressed === `project:${project.id}`}
@@ -590,7 +728,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                   {milestones.filter((milestone) => milestone.dueDate).map((milestone) => renderPoint(milestone, "milestone"))}
                 </Row>
 
-                {!project.collapsed && (
+                {expanded && (
                   <>
                     {phases.map((phase) => {
                       const range = liveRange("phase", phase.id, { start: phase.start, end: phase.end });
@@ -627,7 +765,13 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             height={20}
                             rounded="rounded-md"
                             style={{ backgroundColor: `${color}2e`, color, boxShadow: `inset 0 0 0 1px ${color}44` }}
-                            title={`${phase.name}: ${shortDate(range.start)} – ${shortDate(range.end)}`}
+                            tip={tipHandlers(`phase:${phase.id}`, () => ({
+                              kind: "Phase",
+                              color,
+                              title: phase.name,
+                              lines: [`${longDate(range.start)} \u2013 ${longDate(range.end)}`, `${dayCount(range.start, range.end)} in ${project.name}`],
+                              status: spanStatus(range.start, range.end),
+                            }), "bar")}
                             handlers={barHandlers("phase", phase.id, project.id, { start: phase.start, end: phase.end })}
                             active={isDragging("phase", phase.id)}
                             pressed={pressed === `phase:${phase.id}`}
@@ -649,7 +793,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                           </button>
                           {onQuickAdd && (
                             <HoverActions>
-                              <button type="button" onClick={() => onQuickAdd(`@${milestone.title} `)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add a task toward ${milestone.title}`} title="Add a task toward this milestone">
+                              <button type="button" onClick={() => onQuickAdd(project.id, `@${milestone.title} `)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add a task toward ${milestone.title}`} title="Add a task toward this milestone">
                                 <PlusIcon className="h-3.5 w-3.5" />
                               </button>
                             </HoverActions>
@@ -660,9 +804,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       ),
                     )}
 
-                    {looseTasks.length > 0 && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
+                    {(looseTasks.length > 0 || (draftHere?.dueDate && !draftHere.milestoneId)) && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
 
-                    {isEmpty && (
+                    {isEmpty && !draftHere?.dueDate && (
                       <Row height={ROW} indent label={<span className="text-[11px] text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)} />
                     )}
                   </>
@@ -673,7 +817,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 
           {/* Carries the label column down to the bottom so the day grid doesn't show through under it */}
           <div className="flex flex-1">
-            <div className="sticky left-0 z-20 shrink-0 border-r border-slate-100 bg-white" style={{ width: "var(--label-width)" }} />
+            <div className="sticky left-0 z-20 shrink-0 border-r border-slate-100 bg-white" style={{ width: "var(--label-width)", minHeight: bottomInset }} />
           </div>
         </div>
       </div>
@@ -701,6 +845,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         <span className="h-full w-0.5 rounded-full transition-colors group-hover/resize:bg-course-400 group-focus-visible/resize:bg-course-400 group-active/resize:bg-course-500" />
       </div>
       </div>
+
+      <TimelineTooltip ref={tooltipRef} />
 
       {colorMenu && (
         <>
@@ -756,7 +902,7 @@ function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, c
   );
 }
 
-function Bar({ dragKey, left, width, height, rounded = "rounded-full", style, title, handlers, active, pressed, children }) {
+function Bar({ dragKey, left, width, height, rounded = "rounded-full", style, tip, handlers, active, pressed, children }) {
   // Narrow bars keep thin edge handles so there is still a middle to grab and move
   const handleWidth = width >= 48 ? 10 : 4;
   return (
@@ -764,7 +910,7 @@ function Bar({ dragKey, left, width, height, rounded = "rounded-full", style, ti
       data-drag-key={dragKey}
       onPointerDown={handlers.move}
       onDoubleClick={(event) => event.stopPropagation()}
-      title={title}
+      {...tip}
       className={`group/bar absolute top-1/2 z-[1] -translate-y-1/2 cursor-grab touch-none overflow-hidden transition-shadow duration-150 ${rounded} ${active ? "shadow-lg" : pressed ? "shadow-md" : "hover:shadow-sm"}`}
       style={{ left, width, height, ...style }}
     >
@@ -806,7 +952,7 @@ const DIAMOND_TONES = {
   open: "bg-white",
 };
 
-function Diamond({ milestone, tone, color, left, dragKey, pressed, onPointerDown }) {
+function Diamond({ milestone, tone, color, left, dragKey, pressed, tip, onPointerDown }) {
   const status = tone === "reached" ? "reached" : tone === "overdue" ? "overdue" : tone === "soon" ? "due soon" : "upcoming";
   const progress = milestone.progress?.total ? ` · ${milestone.progress.done}/${milestone.progress.total} tasks` : " · no tasks linked";
   return (
@@ -815,26 +961,36 @@ function Diamond({ milestone, tone, color, left, dragKey, pressed, onPointerDown
       data-drag-key={dragKey}
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
-      title={`◆ ${milestone.title} · ${shortDate(milestone.dueDate)} · ${status}${progress}`}
-      aria-label={`Milestone ${milestone.title}, ${status}`}
+      {...tip}
+      aria-label={`Milestone ${milestone.title}, ${status}${progress}`}
       className={`absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-grab touch-none rounded-[3px] border-2 transition-[scale,box-shadow] duration-150 ${pressed ? "scale-110 shadow-md" : "shadow-sm"} ${DIAMOND_TONES[tone]}`}
       style={{ left, ...(tone === "open" ? { borderColor: color } : null) }}
     />
   );
 }
 
-function TaskDot({ task, done, overdue, color, left, dragKey, pressed, onPointerDown }) {
+function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPointerDown }) {
   return (
     <button
       type="button"
       data-drag-key={dragKey}
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
-      title={`${task.title} · ${shortDate(task.dueDate)}${done ? " · done" : overdue ? " · overdue" : ""}`}
-      aria-label={`Task ${task.title}`}
+      {...tip}
+      aria-label={`Task ${task.title}, ${shortDate(task.dueDate)}${done ? ", done" : overdue ? ", overdue" : ""}`}
       className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-[scale,box-shadow] duration-150 hover:scale-125 ${pressed ? "scale-125 shadow-md" : ""} ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
       style={{ left, ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
     />
+  );
+}
+
+// The task being typed in quick add, shown where it will land: a breathing dashed dot and its title
+function DraftDot({ left, title, color }) {
+  return (
+    <span data-draft-dot="" aria-hidden="true" className="pointer-events-none absolute top-1/2 z-20 flex -translate-y-1/2 items-center gap-1.5" style={{ left: left - 6, color }}>
+      <span className="planner-draft-dot h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-current bg-white" />
+      <span className="max-w-48 truncate rounded bg-white/90 px-1 text-[11px] font-medium shadow-sm">{title}</span>
+    </span>
   );
 }
 

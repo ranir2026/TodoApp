@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SegmentedControl from "./SegmentedControl";
 import DayPlanner from "./DayPlanner";
 import ProjectTimeline from "./ProjectTimeline";
 import QuickAddModal from "./QuickAddModal";
 import { useLocalStorage } from "./useLocalStorage";
-import { CloseIcon, PlusIcon } from "./icons";
+import { CloseIcon } from "./icons";
 import { comboLabel, normalizeCombo } from "./keybinds";
 import { projectColor } from "./planner";
 
@@ -19,65 +19,72 @@ const isTyping = (target) => target.tagName === "INPUT" || target.tagName === "T
 // `suspended` is set while another dialog (the item editor) sits on top, so Escape closes that one first.
 export default function PlannerModal({ open, suspended, onClose, keymap, todos, courses, courseMap, planner, updatePlanner, onToggleTodo, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
   const [tab, setTab] = useLocalStorage("plannerTab", "today");
-  // The planner's own quick add, where "@" picks a milestone; holds the text it opens with
+  // The planner's quick add for one project, where "@" picks one of its milestones: { projectId, text }
   const [quickAdd, setQuickAdd] = useState(null);
+  // What's being typed there, previewed on the timeline as it would land
+  const [draft, setDraft] = useState(null);
   const pressStartedOnBackdrop = useRef(false);
   const surfaceRef = useRef(null);
   const switchCombo = keymap?.plannerSwitchTab;
-  const quickAddCombo = keymap?.quickAdd;
   // Each tab renders its own controls into the header (through a portal) instead of a second toolbar row
   const [toolbar, setToolbar] = useState(null);
 
-  // Milestones to "@"-mention, soonest first, colored and labeled by their project
+  const quickAddProject = quickAdd ? planner.projects.find((project) => project.id === quickAdd.projectId) : null;
+
+  // The project's milestones to "@"-mention, open ones soonest first
   const milestoneMentions = useMemo(() => {
-    const projects = new Map(planner.projects.map((project) => [project.id, project]));
+    if (!quickAddProject) return [];
+    const color = projectColor(quickAddProject, courseMap);
     return todos
-      .filter((todo) => todo.type === "milestone" && projects.has(todo.projectId))
+      .filter((todo) => todo.type === "milestone" && todo.projectId === quickAddProject.id)
       .sort((a, b) => Number(a.completed) - Number(b.completed) || (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"))
-      .map((milestone) => {
-        const project = projects.get(milestone.projectId);
-        return { id: milestone.id, name: milestone.title, color: projectColor(project, courseMap), hint: `◆ ${project.name}` };
-      });
-  }, [todos, planner.projects, courseMap]);
+      .map((milestone) => ({ id: milestone.id, name: milestone.title, color, hint: milestone.completed ? "\u25c6 reached" : "\u25c6 milestone" }));
+  }, [todos, quickAddProject, courseMap]);
+
+  const closeQuickAdd = useCallback(() => {
+    setQuickAdd(null);
+    setDraft(null);
+  }, []);
+  const handlePreview = useCallback((preview) => {
+    setDraft(preview?.title ? { title: preview.title, milestoneId: preview.courseId, dueDate: preview.dueDate } : null);
+  }, []);
 
   useEffect(() => {
-    if (!open || suspended || quickAdd) return undefined;
+    if (!open || suspended) return undefined;
     const handleKey = (event) => {
       if (event.key === "Escape") {
-        // An Escape that closed a dialog over the planner (quick add) can reach here once that
-        // dialog is gone; only one pressed in the planner itself, or with nothing focused, closes it
-        if (event.target === document.body || surfaceRef.current?.contains(event.target)) onClose();
+        // With the quick add docked open, Escape outside its field closes the quick add first
+        if (quickAdd) closeQuickAdd();
+        else if (event.target === document.body || surfaceRef.current?.contains(event.target)) onClose();
         return;
       }
-      // Shortcuts only fire when you aren't typing, and holding a key down doesn't repeat them
-      if (isTyping(event.target) || event.repeat) return;
-      const combo = normalizeCombo(event);
-      if (switchCombo && combo === switchCombo) {
+      // The tab shortcut only fires when you aren't typing, doesn't repeat while held, and waits
+      // while a quick add is open so its project stays on screen
+      if (quickAdd || isTyping(event.target) || event.repeat) return;
+      if (switchCombo && normalizeCombo(event) === switchCombo) {
         event.preventDefault();
         setTab((current) => (current === "timeline" ? "today" : "timeline"));
-      } else if (quickAddCombo && combo === quickAddCombo) {
-        event.preventDefault();
-        setQuickAdd({ text: "" });
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, suspended, quickAdd, onClose, switchCombo, quickAddCombo, setTab]);
+  }, [open, suspended, quickAdd, onClose, closeQuickAdd, switchCombo, setTab]);
 
-  // A task added toward a milestone joins that milestone's project and takes its category,
-  // and the project's span grows if the task falls outside it
+  // The task joins the project (and the "@" milestone, if any) and takes the project's category;
+  // the project's span grows if the task falls outside it
   function addFromQuickAdd(item) {
+    const project = quickAddProject;
+    if (!project) return;
     const milestone = item.courseId ? todos.find((todo) => todo.id === item.courseId) : null;
-    const project = milestone ? planner.projects.find((candidate) => candidate.id === milestone.projectId) : null;
-    const course = project ? courseMap[project.courseId] : null;
+    const course = courseMap[project.courseId];
     onAddTodo({
       ...item,
       type: "task",
       courseId: course && !course.archived ? course.id : null,
-      projectId: project?.id ?? null,
+      projectId: project.id,
       milestoneId: milestone?.id ?? null,
     });
-    if (project && item.dueDate && (item.dueDate < project.startDate || item.dueDate > project.endDate)) {
+    if (item.dueDate && (item.dueDate < project.startDate || item.dueDate > project.endDate)) {
       updatePlanner((current) => ({
         ...current,
         projects: current.projects.map((candidate) => (candidate.id === project.id
@@ -97,24 +104,14 @@ export default function PlannerModal({ open, suspended, onClose, keymap, todos, 
         // A drag that starts inside and ends out here must not count as a click on the backdrop
         onClick={(event) => { if (event.target === event.currentTarget && pressStartedOnBackdrop.current) onClose(); }}
       >
-        <div ref={surfaceRef} role="dialog" aria-modal="true" aria-label="Planner" className="modal-surface flex h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-dialog border border-slate-200 bg-white shadow-xl">
+        <div ref={surfaceRef} role="dialog" aria-modal="true" aria-label="Planner" className="modal-surface relative flex h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-dialog border border-slate-200 bg-white shadow-xl">
           <div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4">
             <h2 className="text-sm font-semibold text-slate-900">Planner</h2>
             <div className="shrink-0" title={switchCombo ? `Switch views (${comboLabel(switchCombo)})` : undefined}>
-              <SegmentedControl label="Planner view" className="inline-grid" segmentClassName="px-4" options={TABS} value={tab} onChange={setTab} />
+              <SegmentedControl label="Planner view" className="inline-grid" segmentClassName="px-4" options={TABS} value={tab} onChange={(next) => { closeQuickAdd(); setTab(next); }} />
             </div>
             <span aria-hidden="true" className="h-5 w-px shrink-0 bg-slate-200" />
             <div ref={setToolbar} className="flex min-w-0 flex-1 items-center gap-2" />
-            <button
-              type="button"
-              onClick={() => setQuickAdd({ text: "" })}
-              title="Add a task, using @ to pick its milestone"
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 py-1 pr-1.5 pl-2 text-xs font-medium text-slate-600 hover:border-slate-300"
-            >
-              <PlusIcon className="h-3.5 w-3.5" />
-              Task
-              {quickAddCombo && <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-sans text-[11px] text-slate-500">{comboLabel(quickAddCombo)}</kbd>}
-            </button>
             <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close planner">
               <CloseIcon />
             </button>
@@ -132,23 +129,37 @@ export default function PlannerModal({ open, suspended, onClose, keymap, todos, 
                 onUpdateTodo={onUpdateTodo}
                 onEdit={onEdit}
                 onDeleteProject={onDeleteProject}
-                onQuickAdd={(text) => setQuickAdd({ text })}
+                onQuickAdd={(projectId, text = "") => setQuickAdd({ projectId, text })}
+                quickAddProjectId={quickAdd?.projectId ?? null}
+                draft={quickAdd && draft ? { ...draft, projectId: quickAdd.projectId } : null}
+                bottomInset={quickAdd ? 220 : 0}
               />
             ) : (
               <DayPlanner todos={todos} courseMap={courseMap} toolbar={toolbar} planner={planner} updatePlanner={updatePlanner} onToggleTodo={onToggleTodo} onEdit={onEdit} />
             )}
           </div>
+          {/* Docked inside the planner with no scrim, so the timeline stays in view and scrollable */}
+          {tab === "timeline" && quickAddProject && (
+            <QuickAddModal
+              key={quickAddProject.id}
+              open
+              mode="planner"
+              title="Quick Add Task to Project"
+              subtitle={
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: projectColor(quickAddProject, courseMap) }} />
+                  <span className="truncate font-medium">{quickAddProject.name}</span>
+                </span>
+              }
+              initialText={quickAdd.text}
+              courses={milestoneMentions}
+              onAdd={addFromQuickAdd}
+              onClose={closeQuickAdd}
+              onPreviewChange={handlePreview}
+            />
+          )}
         </div>
       </div>
-      {/* Outside the planner's surface: its transform would otherwise trap this fixed overlay inside it */}
-      <QuickAddModal
-        open={Boolean(quickAdd)}
-        mode="planner"
-        initialText={quickAdd?.text ?? ""}
-        courses={milestoneMentions}
-        onAdd={addFromQuickAdd}
-        onClose={() => setQuickAdd(null)}
-      />
     </>
   );
 }
