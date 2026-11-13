@@ -3,6 +3,14 @@
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
 
+  /* UI type scale, in rem so it follows the browser's font size. Five steps:
+     caption 11 · xs 12 (footnote) · subhead 13 · sm 14 (body) · base 16 (headline).
+     Display sizes (xl and up) are for the date heading only. */
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1rem;
+  --text-subhead: 0.8125rem;
+  --text-subhead--line-height: 1.25rem;
+
   /* Concentric corners: a container's radius is its controls' radius (lg) plus its padding,
      so a control tucked into a corner shares the container's curve */
   --radius-card: calc(var(--radius-lg) + var(--spacing) * 3);
@@ -127,17 +135,51 @@ body {
 .undo-toast {
   animation: undo-toast-in 220ms var(--ease-out) both;
 }
+/* It leaves the way it came: back down, quicker, accelerating away */
+.undo-toast.is-leaving {
+  animation: undo-toast-out 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
 
 /* Size-specific tracking: small text opens up, large text tightens.
    In the base layer so explicit tracking-* utilities still win. */
 @layer base {
-  .text-\[10px\], .text-\[11px\], .text-xs { letter-spacing: 0.012em; }
+  .text-\[10px\], .text-\[11px\], .text-caption, .text-xs { letter-spacing: 0.012em; }
   .text-xl, .text-2xl { letter-spacing: -0.015em; }
   .text-3xl, .text-4xl { letter-spacing: -0.025em; line-height: 1.05; }
 }
 
 /* Instant press feedback on every button */
 button:not(:disabled):active { scale: 0.97; }
+
+/* Big surfaces don't shrink when pressed (the text would slide around inside a card that stays put);
+   they darken instead. `press-tint` darkens the button itself; `row-press` darkens the card it sits in. */
+button.press-tint:not(:disabled):active,
+button.row-press:not(:disabled):active { scale: 1; }
+button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05); }
+.task-card:has(> button.row-press:active),
+.task-row:has(> button.row-press:active) { background-color: var(--color-slate-50); }
+.milestone-head:active { background-color: var(--color-slate-100); }
+
+/* Every text field focuses in the app's one tint (indigo); amber stays the color of Add buttons */
+.field-tint { transition: border-color 150ms ease, box-shadow 150ms ease; }
+.field-tint:focus { border-color: var(--color-course-300); box-shadow: 0 0 0 3px rgb(99 102 241 / 0.12); outline: none; }
+
+/* Row actions (delete, archive, ×) stay out of the way until you reach for the row: hover, keyboard
+   focus inside it, or keyboard selection. On touch screens there's no hover, so they always show. */
+.row-action { opacity: 0; transition: opacity 150ms ease, color 150ms ease; }
+.group:hover .row-action, .group:focus-within .row-action, .row-action:focus-visible, .is-selected .row-action { opacity: 1; }
+.row-action:disabled { opacity: 0 !important; pointer-events: none; }
+@media (hover: none) { .row-action { opacity: 1; } }
+
+/* Filter menu grows out of its button */
+.menu-pop { animation: timeline-tip-in 160ms var(--ease-out) both; transform-origin: top right; }
+.menu-leave { animation: menu-out 120ms cubic-bezier(0.4, 0, 1, 1) both; transform-origin: top right; pointer-events: none; }
+@keyframes menu-out { to { opacity: 0; transform: scale(.96); } }
+
+/* List ⇄ calendar: the incoming view fades up while the outgoing one fades away on top of it */
+.view-enter { animation: modal-backdrop-in 200ms ease-out both; }
+.view-leave { animation: tab-fade-out 160ms ease-in both; pointer-events: none; }
 
 /* Frosted backdrop behind modals */
 .modal-backdrop, .modal-scrim {
@@ -212,14 +254,69 @@ button:not(:disabled):active { scale: 0.97; }
 .planner-draft-dot { animation: planner-draft-pulse 1.6s ease-in-out infinite; }
 @keyframes planner-draft-pulse { 0%, 100% { box-shadow: 0 0 0 0 currentColor; } 50% { box-shadow: 0 0 0 4px transparent; } }
 
+/* Today panel, docked to the window's right edge. The dock's width makes room in the dashboard while
+   the panel slides in on the same sheet curve, so content and panel move as one piece. Closing is a
+   little quicker than opening, and the Cmds button floats over the panel like any other content. The tab hangs off the panel's left edge, so it rides out with it and
+   is the last thing left at the window edge when the panel is put away. */
+.today-dock { --today-w: 18rem; --today-curve: cubic-bezier(0.32, 0.72, 0, 1); width: 0; transition: width 320ms var(--today-curve); }
+/* Open, the dock also keeps a gutter for the tab, so it never sits on top of the dashboard */
+.today-dock[data-open="true"] { width: calc(var(--today-w) + 1.5rem); transition-duration: 420ms; }
+.today-panel { transform: translateX(100%); transition: transform 320ms var(--today-curve), box-shadow 320ms ease; }
+.today-dock[data-open="true"] .today-panel { transform: none; transition-duration: 420ms; }
+.today-tab { box-shadow: -6px 0 16px -10px rgb(15 23 42 / 0.35); transition: translate 220ms var(--ease-out), color 150ms ease; }
+/* Closed, the tab leans out a little under the pointer: a hint of the pull that opens it. It moves
+   by transform (no layout work); a strip of the same material runs off the window edge behind it, so
+   leaning out never opens a gap at the edge. Opening drops the lean at once, so the tab and panel
+   leave together. */
+.today-dock:not([data-open="true"]) .today-tab::after {
+  content: ""; position: absolute; top: -1px; bottom: -1px; left: 100%; width: 8px;
+  background: inherit; border: 1px solid; border-color: inherit; border-left: 0;
+}
+.today-dock:not([data-open="true"]) .today-tab:hover { translate: -4px 0; }
+.today-dock[data-open="true"] .today-tab { transition: color 150ms ease; }
+.today-tab-chevron { transition: rotate 320ms var(--today-curve); }
+.today-dock[data-open="true"] .today-tab-chevron { rotate: 180deg; transition-duration: 420ms; }
+/* Today panel entry: a quiet filled field that turns white and outlined while you type in it. The
+   Return button grows in only once what you've typed can be added, and the preview row drops into
+   the list where the new block will land. */
+.today-entry { transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.today-entry:focus-within { background: #fff; border-color: var(--color-course-300); box-shadow: 0 0 0 3px rgb(99 102 241 / 0.12); }
+.today-entry-submit { transition: opacity 150ms ease, scale 200ms var(--ease-out), background-color 150ms ease; }
+.today-entry-submit.is-hidden { opacity: 0; scale: 0.6; pointer-events: none; }
+.today-draft { animation: project-field-in 200ms var(--ease-out) both; }
+/* Too narrow to push the dashboard over: the panel floats on top of it instead, as a translucent
+   layer (a parallel panel, so no scrim: the dashboard stays live beside it). The tab is made of the
+   same material so the two still read as one piece. */
+@media (max-width: 1279.98px) {
+  .today-dock[data-open="true"] { width: 0; }
+  .today-dock[data-open="true"] .today-panel { box-shadow: -24px 0 48px -28px rgb(15 23 42 / 0.4); }
+  .today-panel, .today-tab {
+    background: rgb(255 255 255 / 0.78);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    border-color: rgb(15 23 42 / 0.08);
+  }
+  .today-dock:not([data-open="true"]) .today-tab::after { -webkit-backdrop-filter: inherit; backdrop-filter: inherit; }
+}
+@media (max-width: 1279.98px) and (prefers-reduced-transparency: reduce) {
+  .today-panel, .today-tab { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #e2e8f0; }
+}
+
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-surface-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes undo-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes undo-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(12px); } }
 
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop, .modal-surface, .undo-toast { animation-duration: 120ms; }
   .modal-surface { animation-name: modal-backdrop-in; }
   .undo-toast { animation-name: modal-backdrop-in; }
+  .undo-toast.is-leaving { animation-name: tab-fade-out; }
+  .today-dock:not([data-open="true"]) .today-tab:hover { translate: none; }
+  .menu-pop { animation: modal-backdrop-in 120ms ease both; }
+  .menu-leave { animation: tab-fade-out 100ms ease both; }
+  .view-enter { animation-duration: 150ms; }
+  .view-leave { animation-duration: 120ms; }
   .task-complete-toggle { transition-duration: 100ms; }
   .task-complete-toggle:active { transform: none; }
   button:not(:disabled):active { scale: 1; }
@@ -236,6 +333,13 @@ button:not(:disabled):active { scale: 0.97; }
   .milestone-row-enter { animation: modal-backdrop-in 150ms ease both; animation-delay: 0ms; }
   .milestone-row-exit { animation: tab-fade-out 120ms ease both; animation-delay: 0ms; }
   .segmented:has(.segmented-option[aria-checked="true"]:active) .segmented-pill { scale: 1; }
+  /* The panel appears in place and its contents fade in, instead of sliding */
+  .today-dock, .today-dock[data-open="true"], .today-panel, .today-dock[data-open="true"] .today-panel, .today-tab-chevron { transition: none; }
+  .today-draft { animation: modal-backdrop-in 120ms ease both; }
+  .today-entry-submit { transition: opacity 150ms ease; }
+  .today-entry-submit.is-hidden { scale: 1; }
+  .today-panel-body { opacity: 0; transition: opacity 150ms ease; }
+  .today-dock[data-open="true"] .today-panel-body { opacity: 1; }
 }
 
 @keyframes planner-flash-reduced { 0%, 40% { outline: 2px solid rgb(99 102 241 / 0.6); } 100% { outline: 2px solid rgb(99 102 241 / 0); } }
@@ -454,6 +558,16 @@ button:not(:disabled):active { scale: 0.97; }
   .mobile-calendar-shell .mobile-month-row { height: auto; flex: 1 1 0%; }
   .mobile-calendar-shell .mobile-month-day { height: auto; }
   .mobile-calendar-shell .month-quick-add { display: block; }
+  /* The mobile calendar is an edge-to-edge sheet pulled up under its floating header; on desktop it's
+     a card like the rest of the dashboard, sitting below the view switch */
+  .mobile-calendar-shell { width: auto; margin: 0; border: 1px solid var(--color-slate-200); border-radius: var(--radius-sheet); padding: 1rem; box-shadow: var(--shadow-sm); container: calendar / inline-size; }
+  /* The title says the full date when there's room, and a short one when the card is narrow, always on one line */
+  .calendar-title-long, .calendar-title-short { white-space: nowrap; }
+  .calendar-title-short { display: none; }
+  @container calendar (max-width: 36rem) {
+    .calendar-title-long { display: none; }
+    .calendar-title-short { display: inline; }
+  }
 }
 
 @media (max-width: 767px) {

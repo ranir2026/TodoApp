@@ -13,7 +13,7 @@ import ActivityHeatmap from "./ActivityHeatmap";
 import SegmentedControl from "./SegmentedControl";
 import { useGlobalKeybinds } from "./useGlobalKeybinds";
 import { DEFAULT_KEYMAP, comboLabel } from "./keybinds";
-import { isRepeating, parseDateKey, resolveTask, toggleOccurrence } from "./occurrences";
+import { currentOccurrence, isDueSoon, isOccurrenceCompleted, isOverdue, isRepeating, parseDateKey, resolveTask, toggleOccurrence } from "./occurrences";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
@@ -22,15 +22,26 @@ import QuickLinkModal from "./QuickLinkModal";
 import MobileAddSheet from "./MobileAddSheet";
 import Collapsible, { Chevron } from "./Collapsible";
 import PlannerModal from "./PlannerModal";
+import TodayPanel from "./TodayPanel";
 import { withMilestoneStatus } from "./milestones";
 import { EMPTY_PLANNER, addDays, normalizePlanner, toDateKey } from "./planner";
 import { COLOR_PALETTE } from "./courseColors";
+import FilterMenu from "./FilterMenu";
+import { DEFAULT_FILTERS, activeFilterCount } from "./filters";
+import FlipScope from "./FlipScope";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
   { id: "calendar", label: "Calendar", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><rect className="tab-fill" x="3.5" y="5" width="17" height="15" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg> },
   { id: "profile", label: "Profile", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="8.5" r="3.8" /><path className="tab-fill" d="M4.5 20c.9-3.6 3.9-5.8 7.5-5.8s6.6 2.2 7.5 5.8z" /></svg> },
 ];
+const VIEW_OPTIONS = [
+  { id: "list", title: "List", label: <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M5.5 4h8M5.5 8h8M5.5 12h8" /><circle cx="2.75" cy="4" r=".6" fill="currentColor" /><circle cx="2.75" cy="8" r=".6" fill="currentColor" /><circle cx="2.75" cy="12" r=".6" fill="currentColor" /></svg> },
+  { id: "calendar", title: "Calendar", label: <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2" /><path d="M2.5 6.5h11M5.5 2v2.5M10.5 2v2.5" /></svg> },
+];
+const STATUS_OPTIONS = [{ id: "active", label: "Active" }, { id: "completed", label: "Done" }, { id: "all", label: "All" }];
+const SORT_OPTIONS = [{ id: "date", label: "Date", title: "Sort by date" }, { id: "course", label: "Category", title: "Sort by category" }];
+const TYPE_NOUNS = { task: "tasks", event: "events", milestone: "milestones", all: "items" };
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = COLOR_PALETTE;
 const DEFAULT_QUICK_LINKS = [];
@@ -41,6 +52,21 @@ function ArchiveIcon() {
       <rect x="2" y="3" width="12" height="3" rx="1" />
       <path d="M3 6v6.5A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6M6.5 9h3" />
     </svg>
+  );
+}
+
+// An empty list says why it's empty and offers the way out
+function EmptyList({ title, detail, action, onAction }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-200 px-6 py-10 text-center">
+      <p className="text-sm font-medium text-slate-700">{title}</p>
+      {detail && <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-slate-500">{detail}</p>}
+      {action && (
+        <button type="button" onClick={onAction} className="mt-3 rounded-full border border-course-100 bg-course-50 px-3 py-1 text-xs font-medium text-course-700 transition-colors hover:border-course-300">
+          {action}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -69,8 +95,17 @@ export default function App() {
   const [courseFilter, setCourseFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("task");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  // null, or "soon" / "overdue": the stats card's counts open the list filtered to them
+  const [dueFilter, setDueFilter] = useState(null);
   const [sortBy, setSortBy] = useState("course"); // date | course
   const [view, setView] = useState("list"); // list | calendar
+  // List ⇄ calendar crossfade: the view being left stays mounted (scroll and all) while it fades out
+  const [shownView, setShownView] = useState(view);
+  const [leavingView, setLeavingView] = useState(null);
+  if (view !== shownView) {
+    setLeavingView(shownView);
+    setShownView(view);
+  }
   const [calendarMode, setCalendarMode] = useState("day");
   const [newCourseName, setNewCourseName] = useState("");
   const [editingCourseId, setEditingCourseId] = useState(null);
@@ -82,6 +117,9 @@ export default function App() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  // Asks the planner to open on a particular tab: { tab }, a new object each time
+  const [plannerTabRequest, setPlannerTabRequest] = useState(null);
+  const [todayOpen, setTodayOpen] = useLocalStorage("todayPanelOpen", false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [emailConfirmed, setEmailConfirmed] = useState(() => {
@@ -101,8 +139,12 @@ export default function App() {
   const [mobileAddOpen, setMobileAddOpen] = useState(false);
   const [mobileSelectedDate, setMobileSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [mobileCalendarMode, setMobileCalendarMode] = useState("month");
-  const [undoAction, setUndoAction] = useState(null);
+  // { id, message, undo }; it stays mounted while `toastLeaving` plays its exit
+  const [toast, setToast] = useState(null);
+  const [toastLeaving, setToastLeaving] = useState(false);
   const undoTimerRef = useRef(null);
+  const toastLeaveTimerRef = useRef(null);
+  const listScrollRef = useRef(null);
   const addInputRef = useRef(null);
   const searchInputRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
@@ -110,7 +152,7 @@ export default function App() {
   const calendarRef = useRef(null);
   const now = new Date();
   const dayName = now.toLocaleDateString(undefined, { weekday: "long" });
-  const monthDate = now.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const monthDate = now.toLocaleDateString(undefined, { month: "long", day: "numeric" });
   const resolvedKeymap = useMemo(() => ({ ...DEFAULT_KEYMAP, ...keymap }), [keymap]);
   // Archived categories keep their tasks but are hidden from everywhere new items are created
   const activeCourses = useMemo(() => courses.filter((c) => !c.archived), [courses]);
@@ -192,7 +234,36 @@ export default function App() {
       ? toggleOccurrence(previous, occurrenceDate)
       : { ...previous, completed: !previous.completed, completedAt: !previous.completed ? new Date().toISOString() : null };
     setTodos((prev) => prev.map((t) => (t.id === id ? next : t)));
-    showUndo(() => setTodos((prev) => prev.map((t) => (t.id === id ? previous : t))));
+    const nowDone = isRepeating(previous) ? isOccurrenceCompleted(next, occurrenceDate ?? currentOccurrence(previous)) : next.completed;
+    showUndo(() => setTodos((prev) => prev.map((t) => (t.id === id ? previous : t))), nowDone ? `Completed “${previous.title}”` : `Marked “${previous.title}” not done`);
+  }
+
+  // The stats card's counts: open the list on just those tasks, with nothing else narrowing it, so the
+  // list matches the number that was clicked. Clicking the same count again puts the list back.
+  function showDue(kind) {
+    if (dueFilter === kind) { setDueFilter(null); return; }
+    setDueFilter(kind);
+    setView("list");
+    setFilter("active");
+    setCourseFilter("all");
+    setTypeFilter("task");
+    setPriorityFilter("all");
+  }
+
+  function changeFilters(patch) {
+    if ("courseFilter" in patch) setCourseFilter(patch.courseFilter);
+    if ("typeFilter" in patch) setTypeFilter(patch.typeFilter);
+    if ("priorityFilter" in patch) setPriorityFilter(patch.priorityFilter);
+    if ("dueFilter" in patch) setDueFilter(patch.dueFilter);
+  }
+
+  function resetFilters() {
+    changeFilters(DEFAULT_FILTERS);
+  }
+
+  function openPlannerToday() {
+    setPlannerTabRequest({ tab: "today" });
+    setPlannerOpen(true);
   }
 
   // Whether checking off this list row removes it from the current filter (vs. a repeating
@@ -214,7 +285,7 @@ export default function App() {
     const deleted = todos[index];
     if (!deleted) return;
     setTodos((prev) => prev.filter((t) => t.id !== id));
-    showUndo(() => setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]));
+    showUndo(() => setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]), `Deleted “${deleted.title}”`);
     setEditingItem(null);
   }
 
@@ -229,13 +300,23 @@ export default function App() {
     showUndo(() => {
       updatePlanner((current) => ({ ...current, projects: [...current.projects.slice(0, index), project, ...current.projects.slice(index)] }));
       setTodos((prev) => [...prev, ...removedTodos]);
-    });
+    }, `Deleted project “${project.name}”`);
   }
 
-  function showUndo(undo) {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    setUndoAction(() => undo);
-    undoTimerRef.current = setTimeout(() => setUndoAction(null), 5000);
+  // The toast names what just happened, so Undo says exactly what it will put back
+  function showUndo(undo, message) {
+    clearTimeout(undoTimerRef.current);
+    clearTimeout(toastLeaveTimerRef.current);
+    setToastLeaving(false);
+    setToast({ id: crypto.randomUUID(), message, undo });
+    undoTimerRef.current = setTimeout(dismissToast, 5000);
+  }
+
+  function dismissToast() {
+    clearTimeout(undoTimerRef.current);
+    setToastLeaving(true);
+    clearTimeout(toastLeaveTimerRef.current);
+    toastLeaveTimerRef.current = setTimeout(() => { setToast(null); setToastLeaving(false); }, 160);
   }
 
   // Tabs stay mounted (so state and scroll survive); the window is shared, so each tab's scroll is saved and restored here
@@ -274,10 +355,9 @@ export default function App() {
   }
 
   function undoLastAction() {
-    if (!undoAction) return;
-    undoAction();
-    setUndoAction(null);
-    clearTimeout(undoTimerRef.current);
+    if (!toast || toastLeaving) return;
+    toast.undo();
+    dismissToast();
   }
 
   function addCourse(e) {
@@ -323,7 +403,7 @@ export default function App() {
     if (!course || (archived && isLastActiveCourse(course))) return;
     if (editingCourseId === id) setEditingCourseId(null);
     setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, archived } : c)));
-    showUndo(() => setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, archived: course.archived } : c))));
+    showUndo(() => setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, archived: course.archived } : c))), `${archived ? "Archived" : "Restored"} “${course.name}”`);
   }
 
   function deleteCourse(id) {
@@ -338,7 +418,7 @@ export default function App() {
     showUndo(() => {
       setCourses(previousCourses);
       setTodos((prevTodos) => prevTodos.map((todo) => (movedTaskIds.has(todo.id) ? { ...todo, courseId: id } : todo)));
-    });
+    }, `Deleted category “${course.name}”`);
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
@@ -361,14 +441,15 @@ export default function App() {
       // Milestones are deadlines for tasks, so they sit alongside them
       const matchesType = typeFilter === "all" || type === typeFilter || (typeFilter === "task" && type === "milestone");
       const matchesPriority = priorityFilter === "all" || t.priority === priorityFilter;
-      return matchesSearch && matchesCourse && matchesType && matchesPriority;
+      const matchesDue = !dueFilter || (dueFilter === "soon" ? isDueSoon(t) : isOverdue(t));
+      return matchesSearch && matchesCourse && matchesType && matchesPriority && matchesDue;
     });
     return [...list].sort((a, b) => {
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [resolvedTodos, filter, search, courseFilter, typeFilter, priorityFilter]);
+  }, [resolvedTodos, filter, search, courseFilter, typeFilter, priorityFilter, dueFilter]);
 
   // Category view only: project work stays out of the list until it's coming up (due within the
   // next week, or already overdue) unless it has no date. A milestone's tasks share one card, headed
@@ -469,6 +550,7 @@ export default function App() {
       toggleSort: () => setSortBy((current) => current === "course" ? "date" : "course"),
       quickLink: () => setQuickLinkOpen(true),
       openPlanner: () => setPlannerOpen(true),
+      toggleToday: () => setTodayOpen((v) => !v),
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -496,10 +578,47 @@ export default function App() {
       { id: "toggleSort", label: "Toggle date/category sort", run: () => setSortBy((current) => current === "course" ? "date" : "course") },
       { id: "quickLink", label: "Add quick link", run: () => setQuickLinkOpen(true) },
       { id: "openPlanner", label: "Open planner", run: () => setPlannerOpen(true) },
+      { id: "toggleToday", label: "Show or hide today's plan", run: () => setTodayOpen((v) => !v) },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
     ],
     [view],
   );
+
+  const viewSwitch = <SegmentedControl label="View" className="inline-grid shrink-0" segmentClassName="px-2" options={VIEW_OPTIONS} value={view} onChange={setView} />;
+
+  function emptyListState() {
+    // Category view holds back project work that's more than a week out
+    if (visibleTasks.length > 0) {
+      return { title: "Nothing due this week", detail: "Project tasks due later stay out of the category view until they're a week away.", action: "Sort by date", onAction: () => setSortBy("date") };
+    }
+    const query = search.trim();
+    if (query || activeFilterCount({ courseFilter, typeFilter, priorityFilter, dueFilter }) > 0) {
+      const words = [
+        filter === "completed" && "completed",
+        dueFilter === "overdue" && "overdue",
+        priorityFilter === "urgent" && "urgent",
+        priorityFilter === "normal" && "normal-priority",
+        TYPE_NOUNS[typeFilter],
+        dueFilter === "soon" && "due soon",
+        courseFilter !== "all" && `in ${courseMap[courseFilter]?.name ?? "this category"}`,
+        query && `matching “${query}”`,
+      ].filter(Boolean);
+      return { title: `No ${words.join(" ")}`, action: "Clear filters", onAction: () => { resetFilters(); setSearch(""); } };
+    }
+    if (filter === "active" && resolvedTodos.some((todo) => todo.completed)) {
+      return { title: "All caught up", detail: "Everything on your list is done.", action: "Show completed", onAction: () => setFilter("completed") };
+    }
+    if (filter === "completed") return { title: "Nothing completed yet", action: "Show active", onAction: () => setFilter("active") };
+    return { title: "Nothing here yet", detail: "Add a task and it'll show up here.", action: "Add a task", onAction: () => setQuickAddOpen(true) };
+  }
+
+  useEffect(() => {
+    if (!leavingView) return undefined;
+    const id = setTimeout(() => setLeavingView(null), 160);
+    return () => clearTimeout(id);
+  }, [leavingView, shownView]);
+
+  useEffect(() => () => { clearTimeout(undoTimerRef.current); clearTimeout(toastLeaveTimerRef.current); }, []);
 
   if (isSupabaseConfigured && authLoading) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Loading your account...</div>;
@@ -533,12 +652,15 @@ export default function App() {
         <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
       </div>
 
-      <div className="mx-auto hidden h-screen max-w-7xl gap-4 overflow-hidden px-4 py-3 md:flex sm:px-6">
+      <div className="hidden h-screen overflow-hidden md:flex">
+      <div className="mx-auto flex h-full min-w-0 max-w-7xl flex-1 gap-4 overflow-hidden px-4 py-3 sm:px-6">
       <aside className="no-scrollbar flex w-72 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pr-1">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Todo</h1>
-          <p className="text-xs text-slate-400">Stay on top of your coursework.</p>
-        </div>
+        {/* The one place the date is said: it answers "where am I" for the whole dashboard */}
+        <header className="pt-1 leading-none">
+          <h1 className="sr-only">Todo</h1>
+          <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
+          <p className="mt-1.5 text-base font-semibold text-slate-500">{monthDate}</p>
+        </header>
 
         <button
           onClick={() => setQuickAddOpen(true)}
@@ -588,10 +710,10 @@ export default function App() {
                       if (e.key === "Enter") submitRenameCourse();
                       if (e.key === "Escape") setEditingCourseId(null);
                     }}
-                    className="min-w-0 flex-1 rounded border border-course-400 px-1.5 py-0.5 text-sm outline-none"
+                    className="field-tint min-w-0 flex-1 rounded border border-course-300 px-1.5 py-0.5 text-sm outline-none"
                   />
                 ) : (
-                  <button onClick={() => startRenameCourse(c)} className="min-w-0 flex-1 truncate text-left text-sm text-slate-700 hover:text-course-600">
+                  <button onClick={() => startRenameCourse(c)} className="press-tint min-w-0 flex-1 truncate rounded text-left text-sm text-slate-700 hover:text-course-600">
                     {c.name}
                   </button>
                 )}
@@ -599,7 +721,7 @@ export default function App() {
                   onClick={() => setCourseArchived(c.id, true)}
                   disabled={isLastActiveCourse(c)}
                   title="Archive category"
-                  className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-slate-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  className="row-action shrink-0 rounded-full p-0.5 text-slate-300 hover:text-slate-600"
                   aria-label={`Archive ${c.name}`}
                 >
                   <ArchiveIcon />
@@ -607,7 +729,7 @@ export default function App() {
                 <button
                   onClick={() => deleteCourse(c.id)}
                   disabled={isLastActiveCourse(c)}
-                  className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-0"
+                  className="row-action shrink-0 rounded-full p-0.5 text-slate-300 hover:text-danger-500"
                   aria-label="Delete category"
                 >
                   ×
@@ -620,7 +742,7 @@ export default function App() {
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
               placeholder="New category..."
-              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none focus:border-course-500"
+              className="field-tint w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none"
             />
             <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-course-600">
               Add
@@ -635,11 +757,11 @@ export default function App() {
               onClick={() => setArchivedOpen((v) => !v)}
               aria-expanded={archivedOpen}
               aria-controls="archived-categories"
-              className="-m-1 flex w-[calc(100%+0.5rem)] items-center gap-1 rounded-lg p-1 text-left text-xs font-semibold text-slate-700 hover:text-slate-900"
+              className="press-tint -m-1 flex w-[calc(100%+0.5rem)] items-center gap-1 rounded-lg p-1 text-left text-xs font-semibold text-slate-700 hover:text-slate-900"
             >
               <Chevron open={archivedOpen} />
               Archived categories
-              <span className="ml-auto text-[10px] font-normal text-slate-300">{archivedCourses.length}</span>
+              <span className="ml-auto text-caption font-normal text-slate-400 tabular-nums">{archivedCourses.length}</span>
             </button>
             <Collapsible open={archivedOpen} id="archived-categories">
               <ul className="space-y-1 pt-2">
@@ -649,14 +771,14 @@ export default function App() {
                     <span className="min-w-0 flex-1 truncate text-sm text-slate-400">{c.name}</span>
                     <button
                       onClick={() => setCourseArchived(c.id, false)}
-                      className="shrink-0 rounded px-1 text-[11px] font-medium text-course-600 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      className="shrink-0 rounded px-1 text-caption font-medium text-course-600 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                       aria-label={`Restore ${c.name}`}
                     >
                       Restore
                     </button>
                     <button
                       onClick={() => deleteCourse(c.id)}
-                      className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                      className="row-action shrink-0 rounded-full p-0.5 text-slate-300 hover:text-danger-500"
                       aria-label={`Delete ${c.name}`}
                     >
                       ×
@@ -667,149 +789,142 @@ export default function App() {
             </Collapsible>
           </div>
         )}
+
+        {/* Commands live with the rest of the app's chrome rather than floating over content */}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          title={`Open shortcuts (${comboLabel(resolvedKeymap.openSettings)} to edit)`}
+          className="press-tint mt-auto flex shrink-0 items-center justify-between rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        >
+          Commands
+          <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span>
+        </button>
       </aside>
 
-      <main ref={taskListRef} className="min-h-0 flex-1 overflow-hidden">
-        {view === "list" ? (
-          <div className="h-full overflow-y-auto pr-1">
-            <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
-              <input ref={searchInputRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-todo-400" />
-              <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="max-w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
-                <option value="all">All categories</option>
-                {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
-              </select>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
-                <option value="task">Tasks</option>
-                <option value="event">Events</option>
-                <option value="milestone">Milestones</option>
-                <option value="all">Everything</option>
-              </select>
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none">
-                <option value="all">All priority</option>
-                <option value="urgent">Urgent</option>
-                <option value="normal">Normal</option>
-              </select>
-              <span className="shrink-0 font-medium">Sort by</span>
-              <SegmentedControl
-                label="Sort by"
-                className="inline-grid shrink-0"
-                options={[
-                  { id: "date", label: "Date" },
-                  { id: "course", label: "Category" },
-                ]}
-                value={sortBy}
-                onChange={setSortBy}
+      <main ref={taskListRef} className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* List ⇄ calendar crossfade: both slots keep their place, so the view being left keeps its scroll while it fades.
+            The list/calendar switch leads each view's own toolbar, so neither view has a strip of chrome to itself. */}
+        <div className="relative min-h-0 flex-1">
+          {(view === "list" || leavingView === "list") && (
+            <div key="list" className={`absolute inset-0 flex flex-col ${view === "list" ? (leavingView ? "view-enter" : "") : "view-leave"}`}>
+            {/* One toolbar for the list, beside what it changes. It wraps onto a second line when the Today panel
+                makes the column narrow, rather than cutting controls off. */}
+            <div className="relative z-20 mb-2 flex shrink-0 flex-wrap items-center gap-2">
+              {viewSwitch}
+              <div className="flex min-w-48 flex-1 items-center gap-2">
+                <input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  aria-label="Search tasks and notes"
+                  className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none"
+                />
+                <FilterMenu courses={courses} filters={{ courseFilter, typeFilter, priorityFilter, dueFilter }} onChange={changeFilters} onReset={resetFilters} />
+              </div>
+              {/* Right-aligned when it shares the line; when the column is narrow enough to wrap, it starts a line of its own at the left */}
+              <div className="ml-auto flex shrink-0 items-center gap-2 @max-[40rem]:ml-0">
+                <SegmentedControl label="Show" className="inline-grid shrink-0" options={STATUS_OPTIONS} value={filter} onChange={setFilter} />
+                <span className="text-caption font-medium text-slate-500" aria-hidden="true">Sort</span>
+                <SegmentedControl label="Sort by" className="inline-grid shrink-0" options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} />
+              </div>
+            </div>
+            <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {/* Rows glide to their new places when the sort or a filter changes (not while typing a search) */}
+              <FlipScope containerRef={listScrollRef} flipKey={[sortBy, filter, courseFilter, typeFilter, priorityFilter, dueFilter].join("|")}>
+              {orderedTasks.length === 0 ? (
+                <EmptyList {...emptyListState()} />
+              ) : groupedTasks ? (
+                <div className="space-y-4 pb-2">
+                  {groupedTasks.map((g) => (
+                    <div key={g.course.id}>
+                      <div data-flip-key={`group:${g.course.id}`} className="mb-1.5 flex items-center gap-1.5 px-0.5">
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: g.course.color }} />
+                        <h3 className="text-xs font-semibold tracking-wide text-slate-400 uppercase">{g.course.name}</h3>
+                      </div>
+                      <ul className="space-y-2">
+                        {g.blocks.map((block) => block.task ? (
+                          <TodoItem
+                            key={block.key}
+                            todo={block.task}
+                            course={courseMap[block.task.courseId]}
+                            project={projectMap[block.task.projectId]}
+                            onToggle={toggleTodo}
+                            onDelete={deleteTodo}
+                            onEdit={editItem}
+                            selected={block.task.id === selectedId}
+                            hideCourse
+                          />
+                        ) : (
+                          <MilestoneCard
+                            key={block.key}
+                            milestone={block.milestone}
+                            tasks={block.tasks}
+                            course={courseMap[g.course.id]}
+                            project={projectMap[block.milestone.projectId]}
+                            onToggle={toggleTodo}
+                            onDelete={deleteTodo}
+                            onEdit={editItem}
+                            selectedId={selectedId}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4 pb-2">
+                  {groupedDates.map((group) => (
+                    <div key={group.key}>
+                      <h3 data-flip-key={`date:${group.key}`} className="mb-1.5 px-0.5 text-xs font-semibold tracking-wide text-slate-400 uppercase">{group.label}</h3>
+                      <ul className="space-y-2">
+                        {group.tasks.map((todo) => (
+                          <TodoItem
+                            key={todo.id}
+                            todo={todo}
+                            course={courseMap[todo.courseId]}
+                            project={projectMap[todo.projectId]}
+                            onToggle={toggleTodo}
+                            onDelete={deleteTodo}
+                            onEdit={editItem}
+                            selected={todo.id === selectedId}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </FlipScope>
+            </div>
+            </div>
+          )}
+          {(view === "calendar" || leavingView === "calendar") && (
+            <div key="calendar" className={`absolute inset-0 ${view === "calendar" ? (leavingView ? "view-enter" : "") : "view-leave"}`}>
+              <CalendarView
+                ref={calendarRef}
+                todos={todosView}
+                courseMap={courseMap}
+                mode={calendarMode}
+                onModeChange={setCalendarMode}
+                onEdit={editItem}
+                onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })}
+                toolbarStart={viewSwitch}
               />
             </div>
-
-            {orderedTasks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
-                No tasks here.
-              </div>
-            ) : groupedTasks ? (
-              <div className="space-y-4 pb-2">
-                {groupedTasks.map((g) => (
-                  <div key={g.course.id}>
-                    <div className="mb-1.5 flex items-center gap-1.5 px-0.5">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: g.course.color }} />
-                      <h3 className="text-xs font-semibold tracking-wide text-slate-400 uppercase">{g.course.name}</h3>
-                    </div>
-                    <ul className="space-y-2">
-                      {g.blocks.map((block) => block.task ? (
-                        <TodoItem
-                          key={block.key}
-                          todo={block.task}
-                          course={courseMap[block.task.courseId]}
-                          project={projectMap[block.task.projectId]}
-                          onToggle={toggleTodo}
-                          onDelete={deleteTodo}
-                          onEdit={editItem}
-                          selected={block.task.id === selectedId}
-                        />
-                      ) : (
-                        <MilestoneCard
-                          key={block.key}
-                          milestone={block.milestone}
-                          tasks={block.tasks}
-                          course={courseMap[g.course.id]}
-                          project={projectMap[block.milestone.projectId]}
-                          onToggle={toggleTodo}
-                          onDelete={deleteTodo}
-                          onEdit={editItem}
-                          selectedId={selectedId}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : groupedDates ? (
-              <div className="space-y-4 pb-2">
-                {groupedDates.map((group) => (
-                  <div key={group.key}>
-                    <h3 className="mb-1.5 px-0.5 text-xs font-semibold tracking-wide text-slate-400 uppercase">{group.label}</h3>
-                    <ul className="space-y-2">
-                      {group.tasks.map((todo) => (
-                        <TodoItem
-                          key={todo.id}
-                          todo={todo}
-                          course={courseMap[todo.courseId]}
-                          project={projectMap[todo.projectId]}
-                          onToggle={toggleTodo}
-                          onDelete={deleteTodo}
-                          onEdit={editItem}
-                          selected={todo.id === selectedId}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ul className="space-y-2 pb-2">
-                {visibleTasks.map((todo) => (
-                  <TodoItem
-                    key={todo.id}
-                    todo={todo}
-                    course={courseMap[todo.courseId]}
-                    project={projectMap[todo.projectId]}
-                    onToggle={toggleTodo}
-                    onDelete={deleteTodo}
-                    onEdit={editItem}
-                    selected={todo.id === selectedId}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-        ) : (
-          <CalendarView
-            ref={calendarRef}
-            todos={todosView}
-            courseMap={courseMap}
-            mode={calendarMode}
-            onModeChange={setCalendarMode}
-            onEdit={editItem}
-            onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })}
-          />
-        )}
+          )}
+        </div>
       </main>
 
-      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-6 pl-1">
-        {session && (
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500">
-            <span className="min-w-0"><span className="block max-w-32 truncate" title={session.user.email}>{session.user.email}</span><span className="block text-[10px] text-slate-400">{syncStatus}</span></span>
-            <button onClick={() => supabase.auth.signOut()} className="font-medium text-course-600 hover:text-course-700">Sign out</button>
-          </div>
-        )}
-        <StatsBar todos={todosView} />
+      <aside className="flex w-56 shrink-0 flex-col gap-3 overflow-y-auto pb-2 pl-1">
+        <StatsBar todos={todosView} dueFilter={dueFilter} onShowDue={showDue} />
 
         <ActivityHeatmap todos={todos} />
 
         <section className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-700">Quick links</p>
-            <span className="text-[10px] text-slate-300">{quickLinks.length}</span>
+            <span className="text-caption text-slate-400 tabular-nums">{quickLinks.length}</span>
           </div>
           {quickLinks.length > 0 && (
             <ul className="mb-2 space-y-1">
@@ -818,7 +933,7 @@ export default function App() {
                   <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate rounded-lg px-1 py-1 text-xs font-medium text-course-600 hover:bg-course-50 hover:text-course-700" title={link.url}>
                     {link.label}
                   </a>
-                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="shrink-0 rounded-full px-1 text-xs text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100" aria-label={`Delete ${link.label}`}>
+                  <button onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="row-action shrink-0 rounded-full px-1 text-xs text-slate-300 hover:text-danger-500" aria-label={`Delete ${link.label}`}>
                     ×
                   </button>
                 </li>
@@ -828,30 +943,32 @@ export default function App() {
           <button onClick={() => setQuickLinkOpen(true)} className="w-full rounded-lg border border-dashed border-course-300 px-2 py-1.5 text-xs font-medium text-course-600 hover:bg-course-50">Add quick link</button>
         </section>
 
-        <SegmentedControl label="Filter" options={["active", "completed", "all"]} value={filter} onChange={setFilter} />
-
-        <SegmentedControl label="View" options={["list", "calendar"]} value={view} onChange={setView} />
-
-        <div className="mt-auto text-right leading-none">
-          <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
-          <p className="mt-1 text-base font-semibold text-slate-400">{monthDate}</p>
-        </div>
+        {/* Account details matter least day to day, so they settle at the bottom */}
+        {session && (
+          <div className="mt-auto flex shrink-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-500">
+            <span className="min-w-0"><span className="block truncate" title={session.user.email}>{session.user.email}</span><span className="block text-caption text-slate-400">{syncStatus}</span></span>
+            <button onClick={() => supabase.auth.signOut()} className="shrink-0 font-medium text-course-600 hover:text-course-700">Sign out</button>
+          </div>
+        )}
       </aside>
-
-      <button
-        onClick={() => setPaletteOpen(true)}
-        title={`Open shortcuts (${comboLabel(resolvedKeymap.openSettings)} to edit)`}
-        className="glass-light fixed bottom-4 right-4 z-40 flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-slate-500 hover:text-slate-700"
-      >
-        <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span> Cmds
-      </button>
-
-
       </div>
-      {undoAction && (
-        <div className="undo-toast toast-layer glass-dark fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-xs text-white">
-          <span>Action completed</span>
-          <button onClick={undoLastAction} className="font-semibold text-todo-300 hover:text-todo-200">Undo</button>
+
+      <TodayPanel
+        open={todayOpen}
+        onToggle={() => setTodayOpen((v) => !v)}
+        shortcut={resolvedKeymap.toggleToday}
+        todos={todosView}
+        courseMap={courseMap}
+        planner={planner}
+        updatePlanner={updatePlanner}
+        onToggleTodo={toggleTodo}
+        onOpenPlanner={openPlannerToday}
+      />
+      </div>
+      {toast && (
+        <div key={toast.id} role="status" className={`undo-toast toast-layer glass-dark fixed bottom-4 left-1/2 z-50 flex max-w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-xs text-white ${toastLeaving ? "is-leaving" : ""}`}>
+          <span className="min-w-0 truncate">{toast.message}</span>
+          <button onClick={undoLastAction} className="shrink-0 font-semibold text-todo-300 hover:text-todo-200">Undo</button>
         </div>
       )}
 
@@ -866,6 +983,7 @@ export default function App() {
       <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <PlannerModal
         open={plannerOpen}
+        tabRequest={plannerTabRequest}
         suspended={Boolean(editingItem)}
         onClose={() => setPlannerOpen(false)}
         keymap={resolvedKeymap}

@@ -35,6 +35,14 @@ export function isOverdue(todo, now = new Date()) {
   return getDueMoment(todo) < now;
 }
 
+// "Due soon": open, dated, not an event, and due within the next 48 hours. The stats card counts
+// these and the list's due filter shows them, so a count and the list it opens always agree.
+export function isDueSoon(todo, now = new Date()) {
+  if (todo.completed || todo.type === "event" || !todo.dueDate) return false;
+  const hoursUntil = (getDueMoment(todo) - now) / 36e5;
+  return hoursUntil >= 0 && hoursUntil <= 48;
+}
+
 function matchesRepeat(item, due, cursor) {
   if (item.skipDates?.includes(toDateKey(cursor))) return false;
   if (item.repeat !== "none") {

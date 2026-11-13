@@ -1,4 +1,4 @@
-import { completionTimestamps, currentOccurrence, expandRange, getDueMoment, isOccurrenceCompleted, isOverdue, isRepeating, parseDateKey, resolveTask } from "./occurrences";
+import { completionTimestamps, currentOccurrence, expandRange, isDueSoon, isOccurrenceCompleted, isOverdue, isRepeating, parseDateKey, resolveTask } from "./occurrences";
 
 function startOfWeek(d) {
   const date = new Date(d);
@@ -8,7 +8,9 @@ function startOfWeek(d) {
   return new Date(date.setDate(diff));
 }
 
-export default function StatsBar({ todos }) {
+// With onShowDue, "Due soon" and "Overdue" open the list filtered to those tasks (and close it again);
+// dueFilter says which one is showing
+export default function StatsBar({ todos, dueFilter = null, onShowDue }) {
   const now = new Date();
   const weekStart = startOfWeek(now);
   const weekEnd = new Date(weekStart);
@@ -47,34 +49,45 @@ export default function StatsBar({ todos }) {
   const completionPct = weekTotal ? Math.round((weekDone / weekTotal) * 100) : 0;
 
   const tasks = todos.map(resolveTask);
-  const dueSoon = tasks.filter((t) => {
-    if (t.completed || t.type === "event" || !t.dueDate) return false;
-    const due = getDueMoment(t);
-    const hoursUntil = (due - now) / 36e5;
-    return hoursUntil >= 0 && hoursUntil <= 48;
-  });
+  const dueSoon = tasks.filter((t) => isDueSoon(t, now));
 
   const overdue = tasks.filter((t) => isOverdue(t, now));
 
   return (
-    <div className="space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
-      <div>
+    <div className="space-y-1 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="pb-1">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-slate-700">Week</p>
-          <p className="text-sm font-bold text-slate-900">{completionPct}%</p>
+          <p className="text-sm font-bold text-slate-900 tabular-nums">{completionPct}%</p>
         </div>
         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-todo-500 transition-all duration-500" style={{ width: `${completionPct}%` }} />
         </div>
       </div>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-slate-500">Due soon</p>
-        <p className="text-sm font-bold text-urgent-600">{dueSoon.length}</p>
-      </div>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-slate-500">Overdue</p>
-        <p className={`text-sm font-bold ${overdue.length ? "text-danger-600" : "text-slate-300"}`}>{overdue.length}</p>
-      </div>
+      <StatRow label="Due soon" count={dueSoon.length} tone="text-urgent-600" zeroTone="text-urgent-600" active={dueFilter === "soon"} onClick={onShowDue && (() => onShowDue("soon"))} />
+      <StatRow label="Overdue" count={overdue.length} tone="text-danger-600" active={dueFilter === "overdue"} onClick={onShowDue && (() => onShowDue("overdue"))} />
     </div>
+  );
+}
+
+function StatRow({ label, count, tone, zeroTone = "text-slate-300", active, onClick }) {
+  const content = (
+    <>
+      <span className={`text-xs font-medium ${active ? "text-slate-800" : "text-slate-500"}`}>{label}</span>
+      <span className={`text-sm font-bold tabular-nums ${count ? tone : zeroTone}`}>{count}</span>
+    </>
+  );
+  const layout = "-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between rounded-lg px-1.5 py-0.5";
+  if (!onClick) return <div className={layout}>{content}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? "Show all tasks again" : `Show only tasks that are ${label.toLowerCase()}`}
+      className={`press-tint ${layout} text-left transition-colors ${active ? "bg-slate-100" : "hover:bg-slate-50"}`}
+    >
+      {content}
+    </button>
   );
 }

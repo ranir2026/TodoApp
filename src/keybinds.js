@@ -21,6 +21,7 @@ export const DEFAULT_KEYMAP = {
   quickLink: "shift+l",
   openPlanner: "p",
   plannerSwitchTab: "t",
+  toggleToday: "shift+p",
 };
 
 export const ACTION_LABELS = {
@@ -46,6 +47,7 @@ export const ACTION_LABELS = {
   quickLink: "Add quick link",
   openPlanner: "Open planner",
   plannerSwitchTab: "Switch planner between Today and Timeline",
+  toggleToday: "Show or hide today's plan",
 };
 
 export function normalizeCombo(e) {

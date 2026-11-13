@@ -110,12 +110,12 @@ export default function EditItemModal({ item, courses, projects = [], milestones
           autoFocus
           value={form.title}
           onChange={(e) => update("title", e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-todo-500"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm field-tint outline-none"
         />
         <select
           value={form.courseId}
           onChange={(e) => update("courseId", e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
         >
           {courses.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
@@ -127,7 +127,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
               value={form.projectId}
               onChange={(e) => changeProject(e.target.value)}
               aria-label="Project"
-              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
             >
               <option value="">No project</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -137,7 +137,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
                 value={form.milestoneId}
                 onChange={(e) => update("milestoneId", e.target.value)}
                 aria-label="Milestone"
-                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
               >
                 <option value="">No milestone</option>
                 {projectMilestones.map((m) => <option key={m.id} value={m.id}>◆ {m.title}</option>)}
@@ -151,7 +151,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
             value={form.dueDate ?? ""}
             onChange={(e) => update("dueDate", e.target.value)}
             title={form.type === "event" ? "Event date" : form.type === "milestone" ? "Milestone date" : "Due date"}
-            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
           />
           {form.type === "event" && (
             <>
@@ -161,7 +161,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
                 value={form.endDate ?? ""}
                 onChange={(e) => update("endDate", e.target.value)}
                 title="Event end date (optional, for multi-day events)"
-                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+                className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
               />
             </>
           )}
@@ -172,14 +172,14 @@ export default function EditItemModal({ item, courses, projects = [], milestones
             type="time"
             value={form.startTime ?? ""}
             onChange={(e) => update("startTime", e.target.value)}
-            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
           />
           <span className="text-xs text-slate-300">to</span>
           <input
             type="time"
             value={form.endTime ?? ""}
             onChange={(e) => update("endTime", e.target.value)}
-            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+            className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
           />
         </div>
         )}
@@ -188,14 +188,14 @@ export default function EditItemModal({ item, courses, projects = [], milestones
           onChange={(e) => update("description", e.target.value)}
           placeholder="Notes (optional)"
           rows={3}
-          className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
+          className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 field-tint outline-none"
         />
         {!isMilestone && (
         <>
         <select
           value={form.repeat}
           onChange={(e) => update("repeat", e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+          className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
         >
           {REPEAT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
@@ -203,8 +203,8 @@ export default function EditItemModal({ item, courses, projects = [], milestones
         </select>
         {form.repeat !== "none" && (
           <div className="flex items-center gap-1.5">
-            <input type="date" value={form.repeatUntil} onChange={(e) => update("repeatUntil", e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
-            <input type="number" min="1" value={form.repeatCount} onChange={(e) => update("repeatCount", e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+            <input type="date" value={form.repeatUntil} onChange={(e) => update("repeatUntil", e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none" />
+            <input type="number" min="1" value={form.repeatCount} onChange={(e) => update("repeatCount", e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none" />
           </div>
         )}
         <button

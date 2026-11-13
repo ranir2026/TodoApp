@@ -26,8 +26,9 @@ function dueLabel(todo, isEvent) {
   const diffDays = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
-  if (diffDays === 0) return { text: "Due today", tone: "text-urgent-600 bg-urgent-500/10" };
-  if (diffDays === 1) return { text: "Due tmrw", tone: "text-todo-700 bg-todo-500/10" };
+  // Status colors: red is overdue, amber is due soon (strongest today), violet is kept for Urgent priority
+  if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 bg-todo-100 font-semibold" };
+  if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700 bg-todo-500/10" };
   if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700 bg-todo-500/10" };
   return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
@@ -46,7 +47,7 @@ function openLink(event, href) {
   window.open(href, "_blank", "noopener,noreferrer");
 }
 
-const SMALL_CHIP = "shrink-0 rounded-full px-1.5 py-px text-[11px] font-medium";
+const SMALL_CHIP = "shrink-0 rounded-full px-1.5 py-px text-caption font-medium";
 
 // A milestone's tasks in one card: the milestone heads it (click to edit), and each task is a slim
 // row with its checkbox and only the chips that differ from task to task. Category and project are
@@ -55,23 +56,23 @@ export function MilestoneCard({ milestone, tasks, course, project, onToggle, onD
   const due = dueLabel(milestone, false);
   const progress = milestone.progress;
   return (
-    <li className="overflow-hidden rounded-xl border border-l-4 border-slate-200 bg-white transition-shadow hover:shadow-sm" style={courseAccentStyle(course)}>
+    <li data-flip-key={`milestone:${milestone.id}`} className="overflow-hidden rounded-xl border border-l-4 border-slate-200 bg-white transition-shadow hover:shadow-sm" style={courseAccentStyle(course)}>
       <button
         type="button"
         data-task-id={milestone.id}
         onClick={() => onEdit(milestone)}
         title={`Edit milestone ${milestone.title}`}
-        className="flex w-full min-w-0 items-center gap-2 px-3.5 pt-2.5 pb-2 text-left hover:bg-slate-50/70"
+        className="row-press milestone-head flex w-full min-w-0 items-center gap-2 px-3.5 pt-2.5 pb-2 text-left transition-colors hover:bg-slate-50/70"
       >
         <span className={`h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] border-2 ${milestone.completed ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
         <span className="min-w-0 truncate text-xs font-semibold text-slate-700">{milestone.title}</span>
-        {project && <span className="min-w-0 truncate text-[11px] text-slate-400">▸ {project.name}</span>}
+        {project && <span className="min-w-0 truncate text-caption text-slate-400">▸ {project.name}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
           {milestone.completed
             ? <span className={`${SMALL_CHIP} bg-success-500/10 text-success-600`}>Reached</span>
             : due && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
           {progress?.total > 0 && (
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-500 tabular-nums" title={`${progress.done} of ${progress.total} tasks done`}>
+            <span className="flex items-center gap-1.5 text-caption text-slate-500 tabular-nums" title={`${progress.done} of ${progress.total} tasks done`}>
               <span className="h-1 w-8 overflow-hidden rounded-full bg-slate-100">
                 <span className="block h-full rounded-full bg-success-500" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
               </span>
@@ -95,19 +96,20 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
   const timeRange = timeRangeLabel(todo);
   const links = extractLinks(todo.description);
   return (
-    <li data-task-id={todo.id} className={`group flex items-center gap-2.5 py-1.5 pr-2 pl-3.5 ${selected ? "bg-todo-500/5 ring-2 ring-todo-400/30 ring-inset" : "hover:bg-slate-50/70"}`}>
+    <li data-task-id={todo.id} className={`task-row group flex items-center gap-2.5 py-1.5 pr-2 pl-3.5 transition-colors ${selected ? "is-selected bg-course-500/5 ring-2 ring-course-500/25 ring-inset" : "hover:bg-slate-50/70"}`}>
+      {/* 16px to look at, 28px to hit */}
       <button
         type="button"
         onClick={() => onToggle(todo.id, todo.occurrenceDate)}
-        className={`task-complete-toggle flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+        className={`task-complete-toggle relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors before:absolute before:-inset-1.5 before:content-[''] ${
           done ? "border-success-500 bg-success-500 text-white" : todo.priority === "urgent" ? "border-urgent-500 hover:border-urgent-600" : "border-slate-300 hover:border-todo-500"
         }`}
         aria-label={`Toggle ${todo.title} complete`}
       >
         {done && <CheckIcon className="h-2.5 w-2.5" />}
       </button>
-      <button type="button" onClick={() => onEdit(todo)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-        <span className={`min-w-0 flex-1 text-[13px] leading-snug break-words transition-colors ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>
+      <button type="button" onClick={() => onEdit(todo)} className="row-press flex min-w-0 flex-1 items-center gap-2 text-left">
+        <span className={`min-w-0 flex-1 text-subhead leading-snug break-words transition-colors ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>
           {todo.title}
           {todo.description && !links.length && (
             <svg viewBox="0 0 20 20" fill="currentColor" className="ml-1 inline-block h-3 w-3 -translate-y-px text-slate-300" aria-hidden="true">
@@ -115,6 +117,11 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
             </svg>
           )}
         </span>
+        {/* When it's due leads; the rest follow in falling order of importance */}
+        {due && !done && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
+        {timeRange && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`}>{timeRange}</span>}
+        {todo.priority === "urgent" && !done && <span className={`${SMALL_CHIP} bg-urgent-100 text-urgent-700`}>Urgent</span>}
+        {todo.repeat && todo.repeat !== "none" && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`} title={`Repeats ${todo.repeat}`}>↻</span>}
         {links.map((link) => (
           <span
             key={link.href}
@@ -128,15 +135,11 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
             ↗ {link.label}
           </span>
         ))}
-        {todo.priority === "urgent" && !done && <span className={`${SMALL_CHIP} bg-urgent-100 text-urgent-700`}>Urgent</span>}
-        {timeRange && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`}>{timeRange}</span>}
-        {todo.repeat && todo.repeat !== "none" && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`} title={`Repeats ${todo.repeat}`}>↻</span>}
-        {due && !done && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
       </button>
       <button
         type="button"
         onClick={() => onDelete(todo.id, todo.occurrenceDate)}
-        className="shrink-0 rounded-full p-0.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger-500 focus-visible:opacity-100"
+        className="row-action shrink-0 rounded-full p-0.5 text-slate-300 hover:text-danger-500"
         aria-label={`Delete ${todo.title}`}
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -147,7 +150,8 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
   );
 }
 
-export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false }) {
+// hideCourse: the list is already grouped by category (header + accent stripe), so the chip would say it a third time
+export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false, hideCourse = false }) {
   const isEvent = todo.type === "event";
   const isMilestone = todo.type === "milestone";
   const links = extractLinks(todo.description);
@@ -218,7 +222,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
     <button
       onClick={handleToggle}
       className={`task-complete-toggle flex shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-        mobile ? "task-toggle-mobile mobile-hit" : "mt-0.5 h-5 w-5"
+        mobile ? "task-toggle-mobile mobile-hit" : "relative mt-0.5 h-5 w-5 before:absolute before:-inset-1 before:content-['']"
       } ${completing ? "task-check-pop" : ""} ${
         done
           ? mobile ? "task-toggle-done" : "border-success-500 bg-success-500 text-white"
@@ -237,7 +241,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
   );
 
   const details = (
-    <button onClick={() => onEdit(todo)} className="min-w-0 flex-1 text-left">
+    <button onClick={() => onEdit(todo)} className={`min-w-0 flex-1 text-left ${mobile ? "" : "row-press"}`}>
       <p className={`${mobile ? "task-title-mobile" : "text-sm"} font-medium transition-colors ${done ? "text-slate-400 line-through" : "text-slate-800"}`}>
         {todo.title}
         {todo.description && (
@@ -246,7 +250,19 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
           </svg>
         )}
       </p>
+      {/* When it's due leads, then when in the day, then what kind of thing it is and where it belongs */}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {due && !todo.completed && (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
+        )}
+        {timeRange && (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
+        )}
+        {todo.priority === "urgent" && (
+          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
+            Urgent
+          </span>
+        )}
         {isEvent && (
           <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={courseChipStyle(course)}>Event</span>
         )}
@@ -263,24 +279,13 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
         {project && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">▸ {project.name}</span>
         )}
-        {course && (
+        {course && !hideCourse && (
           <span
             className="rounded-full px-2 py-0.5 text-xs font-medium"
             style={courseChipStyle(course)}
           >
             {course.name}
           </span>
-        )}
-        {todo.priority === "urgent" && (
-          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
-            Urgent
-          </span>
-        )}
-        {due && !todo.completed && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
-        )}
-        {timeRange && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
         )}
         {todo.repeat && todo.repeat !== "none" && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
@@ -331,8 +336,9 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
   return (
     <li
       data-task-id={todo.id}
-      className={`group flex items-start gap-3 rounded-xl border bg-white px-4 py-3 transition-shadow hover:shadow-sm ${
-        selected ? "border-todo-400 ring-2 ring-todo-400/30" : "border-slate-200"
+      data-flip-key={todo.id}
+      className={`task-card group flex items-start gap-3 rounded-xl border bg-white px-4 py-3 transition-[box-shadow,background-color] hover:shadow-sm ${
+        selected ? "is-selected border-course-300 ring-2 ring-course-500/25" : "border-slate-200"
       } border-l-4`}
       style={courseAccentStyle(course)}
     >
@@ -340,7 +346,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
       {details}
       <button
         onClick={() => onDelete(todo.id, todo.occurrenceDate)}
-        className="shrink-0 rounded-full p-1 text-slate-300 opacity-40 transition-opacity hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="row-action shrink-0 rounded-full p-1 text-slate-300 hover:text-danger-500"
         aria-label="Delete"
       >
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">

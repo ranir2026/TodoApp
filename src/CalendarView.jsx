@@ -108,7 +108,8 @@ function withLanes(segments) {
 
 const MODE_DEPTH = { month: 0, week: 1, day: 2 };
 
-const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, compact = false, onModeChange, onEdit, onQuickAdd, onSelectDate }, ref) {
+// toolbarStart: something to lead the toolbar with (the dashboard's list/calendar switch)
+const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, compact = false, onModeChange, onEdit, onQuickAdd, onSelectDate, toolbarStart }, ref) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -179,6 +180,18 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
           return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
         })()
       : cursor.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  // For a narrow card (the dashboard with the Today panel open), so the title stays on one line beside the view switch
+  const shortTitle =
+    mode === "month"
+      ? cursor.toLocaleDateString(undefined, { month: "short", year: "numeric" })
+      : mode === "week"
+      ? (() => {
+          const start = startOfWeek(cursor);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 6);
+          return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        })()
+      : cursor.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
   function handleTouchStart(event) {
     touchStartX.current = event.touches[0]?.clientX ?? null;
@@ -200,10 +213,13 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
     <div className="mobile-calendar-shell flex h-full flex-col rounded-sheet border border-slate-200 bg-white p-4 shadow-sm" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="calendar-toolbar mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2.5">
         <div className="flex items-center gap-2">
+          {toolbarStart}
           <button onClick={() => ref.current?.shift(-1)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
             ‹
           </button>
-          <h2 className="min-w-[180px] text-sm font-semibold text-slate-800">{title}</h2>
+          <h2 className="min-w-[180px] text-sm font-semibold text-slate-800" title={toolbarStart ? title : undefined}>
+            {toolbarStart ? <><span className="calendar-title-long">{title}</span><span className="calendar-title-short">{shortTitle}</span></> : title}
+          </h2>
           <button onClick={() => ref.current?.shift(1)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next">
             ›
           </button>

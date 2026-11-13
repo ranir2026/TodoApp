@@ -207,7 +207,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
             autoCorrect="off"
             enterKeyHint="done"
             placeholder={planner ? "Write intro @Draft due tomorrow" : "Essay @Math tomorrow 3pm !weekly tk"}
-            className="w-full rounded-lg border border-todo-300 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
+            className="w-full rounded-lg border border-todo-300 px-3 py-2 text-sm field-tint outline-none"
           />
 
           {suggestions.length > 0 && (

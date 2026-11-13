@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { expandRange, isOccurrenceCompleted, parseDateKey, resolveTask } from "./occurrences";
+import { parseDateKey, resolveTask } from "./occurrences";
 import { courseChipStyle, getCourseColor } from "./courseColors";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon } from "./icons";
-import { EMPTY_DAY, addDays, formatClock, layoutColumns, minutesToTime, timeToMinutes, toDateKey } from "./planner";
+import { EMPTY_DAY, addDays, fixedItemsOn, formatClock, edgeMask, layoutColumns, minutesToTime, resolveDayBlocks, timeToMinutes, toDateKey } from "./planner";
 
 const HOUR_HEIGHT = 52;
 const SNAP = 15;
@@ -39,12 +39,6 @@ function trayMeta(sectionId, todo) {
   if (sectionId === "overdue" || sectionId === "upcoming") return shortDue(todo.dueDate);
   if (sectionId === "today" && todo.startTime) return formatClock(timeToMinutes(todo.startTime));
   return todo.priority === "urgent" ? "Urgent" : null;
-}
-
-// Fade the list only at an edge where more content is hidden behind it
-function edgeMask({ top, bottom }) {
-  if (!top && !bottom) return undefined;
-  return `linear-gradient(to bottom, ${top ? "transparent 0, black 16px" : "black 0"}, ${bottom ? "black calc(100% - 16px), transparent 100%" : "black 100%"})`;
 }
 
 export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit }) {
@@ -124,22 +118,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const todoById = useMemo(() => new Map(todos.map((todo) => [todo.id, todo])), [todos]);
   const day = { ...EMPTY_DAY, ...planner.days[dateKey] };
 
-  // Blocks pointing at real tasks follow the task: its current title and completion, and they
-  // disappear if the task is deleted
-  const blocks = day.blocks
-    .filter((block) => !block.todoId || todoById.has(block.todoId))
-    .map((block) => {
-      const todo = block.todoId ? todoById.get(block.todoId) : null;
-      return {
-        ...block,
-        todo,
-        title: todo ? todo.title : block.title,
-        done: todo ? isOccurrenceCompleted(todo, block.occurrenceDate ?? todo.dueDate) : Boolean(block.done),
-        course: todo ? courseMap[todo.courseId] : null,
-        startMinutes: timeToMinutes(block.start),
-        endMinutes: timeToMinutes(block.end),
-      };
-    });
+  const blocks = resolveDayBlocks(day, todoById, courseMap);
   const scheduledIds = new Set(blocks.map((block) => block.todoId).filter(Boolean));
 
   // Every open task can be planned, grouped by when it's due
@@ -160,16 +139,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const inboxItems = searching ? day.inbox.filter((item) => item.title.toLowerCase().includes(needle)) : day.inbox;
 
   // Things already pinned to a time that day (events, timed tasks): shown so you can plan around them
-  const fixedItems = (expandRange(todos, parseDateKey(dateKey), parseDateKey(dateKey))[dateKey] ?? [])
-    .filter((item) => item.type !== "milestone" && !scheduledIds.has(item.id));
-  const timedItems = fixedItems
-    .filter((item) => item.startTime)
-    .map((item) => {
-      const startMinutes = timeToMinutes(item.startTime);
-      const endMinutes = item.endTime ? Math.max(timeToMinutes(item.endTime), startMinutes + SNAP) : startMinutes + 30;
-      return { ...item, startMinutes, endMinutes };
-    });
-  const allDayItems = fixedItems.filter((item) => !item.startTime && item.type === "event");
+  const { timed: timedItems, allDay: allDayItems } = fixedItemsOn(todos, dateKey, scheduledIds);
 
   function updateDay(change) {
     updatePlanner((current) => ({
@@ -410,7 +380,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const label = dayLabel(dateKey, todayKey);
   const traySections = [
     { id: "overdue", title: dateKey === todayKey ? "Overdue" : `Due before ${parseDateKey(dateKey).toLocaleDateString(undefined, { weekday: "short" })}`, items: tray.overdue, tone: "text-danger-600" },
-    { id: "today", title: dateKey === todayKey ? "Due today" : dateKey === addDays(todayKey, 1) ? "Due tomorrow" : "Due this day", items: tray.dueToday, tone: "text-urgent-600" },
+    { id: "today", title: dateKey === todayKey ? "Due today" : dateKey === addDays(todayKey, 1) ? "Due tomorrow" : "Due this day", items: tray.dueToday, tone: "text-todo-700" },
     { id: "undated", title: "No date", items: tray.undated, tone: "text-slate-500" },
     { id: "upcoming", title: "Upcoming", items: tray.upcoming, tone: "text-slate-500" },
   ];

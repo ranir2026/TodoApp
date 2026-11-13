@@ -85,12 +85,12 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder={type === "event" ? "Add an event..." : "Add a task..."}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-todo-500 focus:ring-2 focus:ring-todo-500/20"
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm field-tint outline-none"
       />
       <select
         value={selectedCourseId}
         onChange={(e) => setCourseId(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-course-500"
+        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
       >
         {courses.map((c) => (
           <option key={c.id} value={c.id}>{c.name}</option>
@@ -102,7 +102,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
           title={type === "event" ? "Event date" : "Due date"}
-          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
         />
         {type === "event" && (
           <>
@@ -112,7 +112,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               title="Event end date (optional, for multi-day events)"
-              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+              className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
             />
           </>
         )}
@@ -123,7 +123,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
           title="Start time (optional)"
-          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
         />
         <span className="text-xs text-slate-300">to</span>
         <input
@@ -131,7 +131,7 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
           value={endTime}
           onChange={(e) => setEndTime(e.target.value)}
           title="End time (optional)"
-          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+          className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
         />
       </div>
       <textarea
@@ -139,12 +139,12 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Notes (optional)"
         rows={2}
-        className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 outline-none focus:border-todo-500"
+        className="w-full resize-none rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 field-tint outline-none"
       />
       <select
         value={repeat}
         onChange={(e) => setRepeat(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500"
+        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none"
       >
         {REPEAT_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
@@ -152,8 +152,8 @@ const AddTodoForm = forwardRef(function AddTodoForm({ courses, onAdd, collapsed 
       </select>
       {repeat !== "none" && (
         <div className="flex items-center gap-1.5">
-          <input type="date" value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
-          <input type="number" min="1" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 outline-none focus:border-todo-500" />
+          <input type="date" value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} title="Repeat until this date (optional)" className="w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none" />
+          <input type="number" min="1" value={repeatCount} onChange={(e) => setRepeatCount(e.target.value)} placeholder="# times" title="Maximum number of occurrences (optional)" className="w-24 rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-600 field-tint outline-none" />
         </div>
       )}
       <div className="flex items-center gap-1.5">

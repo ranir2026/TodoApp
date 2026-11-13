@@ -1,5 +1,5 @@
 // iOS-style segmented control: equal-width segments and a single white pill that slides to the selection.
-// options: strings, or { id, label } objects
+// options: strings, or { id, label, title } objects (title names an icon-only segment)
 export default function SegmentedControl({ options, value, onChange, label, className = "grid w-full", segmentClassName = "px-2" }) {
   const items = options.map((option) => (typeof option === "string" ? { id: option, label: option } : option));
   const index = Math.max(0, items.findIndex((item) => item.id === value));
@@ -17,6 +17,8 @@ export default function SegmentedControl({ options, value, onChange, label, clas
           type="button"
           role="radio"
           aria-checked={item.id === value}
+          aria-label={item.title}
+          title={item.title}
           onClick={() => onChange(item.id)}
           className={`segmented-option relative z-10 rounded py-1 text-xs font-medium capitalize ${segmentClassName} ${
             item.id === value ? "text-slate-900" : "text-slate-500 hover:text-slate-700"

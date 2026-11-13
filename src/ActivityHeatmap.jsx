@@ -58,7 +58,7 @@ export default function ActivityHeatmap({ todos }) {
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-slate-400">
+      <div className="mt-2 flex items-center justify-end gap-1 text-caption text-slate-400">
         <span>Less</span>
         <div className="heatmap-legend-cell bg-slate-100" />
         <div className="heatmap-legend-cell bg-todo-200" />
