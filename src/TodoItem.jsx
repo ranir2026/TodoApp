@@ -157,6 +157,9 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
   const links = extractLinks(todo.description);
   const due = dueLabel(todo, isEvent);
   const timeRange = timeRangeLabel(todo);
+  // A bare row (just a name) is centered on its checkbox; with chips, the checkbox lines up with the name's line
+  const hasChips = Boolean((due && !todo.completed) || timeRange || todo.priority === "urgent" || isEvent || isMilestone || project || (course && !hideCourse) || (todo.repeat && todo.repeat !== "none") || links.length);
+  const toggleOffset = hasChips ? "mt-0.5" : "";
   const [completing, setCompleting] = useState(false);
   const done = todo.completed || completing;
   const rowRef = useRef(null);
@@ -214,7 +217,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
   const toggleButton = isMilestone ? (
     <span
       title={todo.completed ? "Milestone reached" : "Reached automatically when its tasks are done"}
-      className={`flex shrink-0 items-center justify-center ${mobile ? "task-toggle-mobile" : "mt-0.5 h-5 w-5"}`}
+      className={`flex shrink-0 items-center justify-center ${mobile ? "task-toggle-mobile" : `${toggleOffset} h-5 w-5`}`}
     >
       <span className={`block h-3 w-3 rotate-45 rounded-[2px] border-2 ${done ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
     </span>
@@ -222,7 +225,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
     <button
       onClick={handleToggle}
       className={`task-complete-toggle flex shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-        mobile ? "task-toggle-mobile mobile-hit" : "relative mt-0.5 h-5 w-5 before:absolute before:-inset-1 before:content-['']"
+        mobile ? "task-toggle-mobile mobile-hit" : `relative ${toggleOffset} h-5 w-5 before:absolute before:-inset-1 before:content-['']`
       } ${completing ? "task-check-pop" : ""} ${
         done
           ? mobile ? "task-toggle-done" : "border-success-500 bg-success-500 text-white"
@@ -251,7 +254,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
         )}
       </p>
       {/* When it's due leads, then when in the day, then what kind of thing it is and where it belongs */}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {hasChips && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {due && !todo.completed && (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
         )}
@@ -312,7 +315,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
             ↗ {link.label}
           </span>
         ))}
-      </div>
+      </div>}
     </button>
   );
 
@@ -337,7 +340,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
     <li
       data-task-id={todo.id}
       data-flip-key={todo.id}
-      className={`task-card group flex items-start gap-3 rounded-xl border bg-white px-4 py-3 transition-[box-shadow,background-color] hover:shadow-sm ${
+      className={`task-card group flex ${hasChips ? "items-start" : "items-center"} gap-3 rounded-xl border bg-white px-4 py-3 transition-[box-shadow,background-color] hover:shadow-sm ${
         selected ? "is-selected border-course-300 ring-2 ring-course-500/25" : "border-slate-200"
       } border-l-4`}
       style={courseAccentStyle(course)}

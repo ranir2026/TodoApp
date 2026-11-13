@@ -177,10 +177,6 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .menu-leave { animation: menu-out 120ms cubic-bezier(0.4, 0, 1, 1) both; transform-origin: top right; pointer-events: none; }
 @keyframes menu-out { to { opacity: 0; transform: scale(.96); } }
 
-/* List ⇄ calendar: the incoming view fades up while the outgoing one fades away on top of it */
-.view-enter { animation: modal-backdrop-in 200ms ease-out both; }
-.view-leave { animation: tab-fade-out 160ms ease-in both; pointer-events: none; }
-
 /* Frosted backdrop behind modals */
 .modal-backdrop, .modal-scrim {
   -webkit-backdrop-filter: blur(6px) saturate(140%);
@@ -315,8 +311,6 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .today-dock:not([data-open="true"]) .today-tab:hover { translate: none; }
   .menu-pop { animation: modal-backdrop-in 120ms ease both; }
   .menu-leave { animation: tab-fade-out 100ms ease both; }
-  .view-enter { animation-duration: 150ms; }
-  .view-leave { animation-duration: 120ms; }
   .task-complete-toggle { transition-duration: 100ms; }
   .task-complete-toggle:active { transform: none; }
   button:not(:disabled):active { scale: 1; }

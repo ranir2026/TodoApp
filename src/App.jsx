@@ -99,11 +99,12 @@ export default function App() {
   const [dueFilter, setDueFilter] = useState(null);
   const [sortBy, setSortBy] = useState("course"); // date | course
   const [view, setView] = useState("list"); // list | calendar
-  // List ⇄ calendar crossfade: the view being left stays mounted (scroll and all) while it fades out
+  // The list and calendar each lead their toolbar with their own copy of the view switch, so the copy
+  // that appears on a switch starts with its pill on the view just left and slides it across
   const [shownView, setShownView] = useState(view);
-  const [leavingView, setLeavingView] = useState(null);
+  const [previousView, setPreviousView] = useState(null);
   if (view !== shownView) {
-    setLeavingView(shownView);
+    setPreviousView(shownView);
     setShownView(view);
   }
   const [calendarMode, setCalendarMode] = useState("day");
@@ -584,7 +585,7 @@ export default function App() {
     [view],
   );
 
-  const viewSwitch = <SegmentedControl label="View" className="inline-grid shrink-0" segmentClassName="px-2" options={VIEW_OPTIONS} value={view} onChange={setView} />;
+  const viewSwitch = <SegmentedControl label="View" className="inline-grid shrink-0" segmentClassName="px-2" options={VIEW_OPTIONS} value={view} fromValue={previousView} onChange={setView} />;
 
   function emptyListState() {
     // Category view holds back project work that's more than a week out
@@ -611,12 +612,6 @@ export default function App() {
     if (filter === "completed") return { title: "Nothing completed yet", action: "Show active", onAction: () => setFilter("active") };
     return { title: "Nothing here yet", detail: "Add a task and it'll show up here.", action: "Add a task", onAction: () => setQuickAddOpen(true) };
   }
-
-  useEffect(() => {
-    if (!leavingView) return undefined;
-    const id = setTimeout(() => setLeavingView(null), 160);
-    return () => clearTimeout(id);
-  }, [leavingView, shownView]);
 
   useEffect(() => () => { clearTimeout(undoTimerRef.current); clearTimeout(toastLeaveTimerRef.current); }, []);
 
@@ -802,11 +797,10 @@ export default function App() {
       </aside>
 
       <main ref={taskListRef} className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* List ⇄ calendar crossfade: both slots keep their place, so the view being left keeps its scroll while it fades.
-            The list/calendar switch leads each view's own toolbar, so neither view has a strip of chrome to itself. */}
+        {/* The list/calendar switch leads each view's own toolbar, so neither view has a strip of chrome to itself */}
         <div className="relative min-h-0 flex-1">
-          {(view === "list" || leavingView === "list") && (
-            <div key="list" className={`absolute inset-0 flex flex-col ${view === "list" ? (leavingView ? "view-enter" : "") : "view-leave"}`}>
+          {view === "list" && (
+            <div key="list" className="absolute inset-0 flex flex-col">
             {/* One toolbar for the list, beside what it changes. It wraps onto a second line when the Today panel
                 makes the column narrow, rather than cutting controls off. */}
             <div className="relative z-20 mb-2 flex shrink-0 flex-wrap items-center gap-2">
@@ -899,8 +893,8 @@ export default function App() {
             </div>
             </div>
           )}
-          {(view === "calendar" || leavingView === "calendar") && (
-            <div key="calendar" className={`absolute inset-0 ${view === "calendar" ? (leavingView ? "view-enter" : "") : "view-leave"}`}>
+          {view === "calendar" && (
+            <div key="calendar" className="absolute inset-0">
               <CalendarView
                 ref={calendarRef}
                 todos={todosView}

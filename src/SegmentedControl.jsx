@@ -1,8 +1,21 @@
+import { useEffect, useState } from "react";
+
 // iOS-style segmented control: equal-width segments and a single white pill that slides to the selection.
 // options: strings, or { id, label, title } objects (title names an icon-only segment)
-export default function SegmentedControl({ options, value, onChange, label, className = "grid w-full", segmentClassName = "px-2" }) {
+// fromValue: for a control that appears as the result of a choice (it replaces another copy of itself),
+// the pill first sits on this option, then slides to `value`, so the choice still reads as one motion
+export default function SegmentedControl({ options, value, fromValue = null, onChange, label, className = "grid w-full", segmentClassName = "px-2" }) {
   const items = options.map((option) => (typeof option === "string" ? { id: option, label: option } : option));
-  const index = Math.max(0, items.findIndex((item) => item.id === value));
+  const indexOf = (id) => Math.max(0, items.findIndex((item) => item.id === id));
+  const [arriving, setArriving] = useState(() => fromValue != null && fromValue !== value);
+  const index = indexOf(arriving ? fromValue : value);
+
+  // Let the starting position paint for a frame, then release the pill to slide
+  useEffect(() => {
+    if (!arriving) return undefined;
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setArriving(false)));
+    return () => cancelAnimationFrame(id);
+  }, [arriving]);
 
   return (
     <div role="radiogroup" aria-label={label} className={`segmented relative auto-cols-fr grid-flow-col rounded-lg bg-slate-100 p-1 ${className}`}>
