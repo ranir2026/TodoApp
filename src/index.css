@@ -429,11 +429,11 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-group-label { display: flex; align-items: center; gap: 7px; margin: 0 0 8px 4px; color: #5b6475; font-size: 13px; font-weight: 600; }
 .mobile-empty, .mobile-muted { border: 1px dashed #dbe2ea; border-radius: var(--mobile-radius-panel); padding: 28px 16px; color: var(--mobile-muted); font-size: 13px; text-align: center; }
 .mobile-calendar-shell { width: calc(100% + 32px); margin: -22px -16px 0; min-height: 0; border: 0; border-radius: 0; padding: 10px 16px 12px; box-shadow: none; }
-.mobile-calendar-shell > div:first-child { display: block; margin-bottom: 7px; }
-.mobile-calendar-shell > div:first-child > div:first-child { justify-content: space-between; width: 100%; }
-.mobile-calendar-shell > div:first-child > div:first-child h2 { min-width: 0; flex: 1; text-align: center; font-size: 13px; }
-.mobile-calendar-shell > div:first-child > div:last-child { width: 100%; margin-top: 6px; }
-.mobile-calendar-shell > div:first-child > div:last-child button { flex: 1; padding: 6px 2px; }
+.mobile-calendar-shell > .calendar-toolbar { display: block; margin-bottom: 7px; }
+.mobile-calendar-shell > .calendar-toolbar > div:first-child { justify-content: space-between; width: 100%; }
+.mobile-calendar-shell > .calendar-toolbar > div:first-child h2 { min-width: 0; flex: 1; text-align: center; font-size: 13px; }
+.mobile-calendar-shell > .calendar-toolbar > div:last-child { width: 100%; margin-top: 6px; }
+.mobile-calendar-shell > .calendar-toolbar > div:last-child button { flex: 1; padding: 6px 2px; }
 .mobile-calendar-shell .min-h-0 { min-height: 0; height: auto; }
 .mobile-calendar-shell .mobile-month-grid { height: 100%; }
 .mobile-calendar-shell .mobile-month-row { height: auto; flex: 1 1 0%; min-height: 56px; }
@@ -554,14 +554,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .mobile-calendar-shell .month-quick-add { display: block; }
   /* The mobile calendar is an edge-to-edge sheet pulled up under its floating header; on desktop it's
      a card like the rest of the dashboard, sitting below the view switch */
-  .mobile-calendar-shell { width: auto; margin: 0; border: 1px solid var(--color-slate-200); border-radius: var(--radius-sheet); padding: 1rem; box-shadow: var(--shadow-sm); container: calendar / inline-size; }
-  /* The title says the full date when there's room, and a short one when the card is narrow, always on one line */
-  .calendar-title-long, .calendar-title-short { white-space: nowrap; }
-  .calendar-title-short { display: none; }
-  @container calendar (max-width: 36rem) {
-    .calendar-title-long { display: none; }
-    .calendar-title-short { display: inline; }
-  }
+  .mobile-calendar-shell { width: auto; margin: 0; border: 1px solid var(--color-slate-200); border-radius: var(--radius-sheet); padding: 1rem; box-shadow: var(--shadow-sm); }
 }
 
 @media (max-width: 767px) {

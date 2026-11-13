@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import SegmentedControl from "./SegmentedControl";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
 import { expandRange, parseDateKey } from "./occurrences";
 import { courseChipStyle } from "./courseColors";
 
@@ -209,46 +210,78 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
     }
   }
 
+  function goToToday() {
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+    setZoom(0);
+    setPageDirection(Math.sign(today - cursor));
+    setCursor(today);
+  }
+
+  const modeSwitch = <SegmentedControl label="Calendar view" className="inline-grid shrink-0" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={(next) => { setZoomOrigin(null); onModeChange(next); }} />;
+
+  const page = (
+    <div
+      ref={pageRef}
+      key={compact ? `${mode}:${title}` : undefined}
+      className={`min-h-0 flex-1 ${compact ? (zoom > 0 ? "calendar-zoom-in" : zoom < 0 ? "calendar-zoom-out" : "calendar-page-enter") : ""}`}
+      style={compact ? { "--page-shift": `${pageDirection * 72}px`, transformOrigin: zoom > 0 && zoomOrigin ? zoomOrigin : "50% 0" } : undefined}
+    >
+      {mode === "month" && (
+        <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={selectMonthDate} />
+      )}
+      {mode !== "month" && <TimeGrid days={days} todos={todos} courseMap={courseMap} occByDay={occByDay} onEdit={onEdit} now={now} compact={compact} />}
+    </div>
+  );
+
+  // Dashboard: the toolbar sits on the page above the card, laid out like the task list's, so the
+  // list/calendar switch that leads it (toolbarStart) is in the same place in both views. It wraps
+  // when the Today panel narrows the column, and the title shortens rather than breaking.
+  if (toolbarStart) {
+    const navButton = "grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700";
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+          {toolbarStart}
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" onClick={() => ref.current?.shift(-1)} className={navButton} aria-label="Previous"><ChevronLeftIcon className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={goToToday} className="h-7 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300">Today</button>
+            <button type="button" onClick={() => ref.current?.shift(1)} className={navButton} aria-label="Next"><ChevronRightIcon className="h-3.5 w-3.5" /></button>
+          </div>
+          <h2 className="min-w-0 truncate px-1 text-sm font-semibold whitespace-nowrap text-slate-800" title={title}>
+            <span className="@max-[36rem]:hidden">{title}</span>
+            <span className="hidden @max-[36rem]:inline">{shortTitle}</span>
+          </h2>
+          {/* Right-aligned when it shares the line; when the row wraps, it starts its own line at the left */}
+          <div className="ml-auto @max-[40rem]:ml-0">{modeSwitch}</div>
+        </div>
+        <div className="mobile-calendar-shell flex min-h-0 flex-1 flex-col rounded-sheet border border-slate-200 bg-white p-4 shadow-sm" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+          {page}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mobile-calendar-shell flex h-full flex-col rounded-sheet border border-slate-200 bg-white p-4 shadow-sm" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="calendar-toolbar mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          {toolbarStart}
           <button onClick={() => ref.current?.shift(-1)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous">
             ‹
           </button>
-          <h2 className="min-w-[180px] text-sm font-semibold text-slate-800" title={toolbarStart ? title : undefined}>
-            {toolbarStart ? <><span className="calendar-title-long">{title}</span><span className="calendar-title-short">{shortTitle}</span></> : title}
-          </h2>
+          <h2 className="min-w-[180px] text-sm font-semibold text-slate-800">{title}</h2>
           <button onClick={() => ref.current?.shift(1)} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next">
             ›
           </button>
           <button
-            onClick={() => {
-              const today = new Date(new Date().setHours(0, 0, 0, 0));
-              setZoom(0);
-              setPageDirection(Math.sign(today - cursor));
-              setCursor(today);
-            }}
+            onClick={goToToday}
             className="rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 hover:border-slate-300"
           >
             Today
           </button>
         </div>
-        <SegmentedControl label="Calendar view" className="inline-grid" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={(next) => { setZoomOrigin(null); onModeChange(next); }} />
+        {modeSwitch}
       </div>
-
-      <div
-        ref={pageRef}
-        key={compact ? `${mode}:${title}` : undefined}
-        className={`min-h-0 flex-1 ${compact ? (zoom > 0 ? "calendar-zoom-in" : zoom < 0 ? "calendar-zoom-out" : "calendar-page-enter") : ""}`}
-        style={compact ? { "--page-shift": `${pageDirection * 72}px`, transformOrigin: zoom > 0 && zoomOrigin ? zoomOrigin : "50% 0" } : undefined}
-      >
-        {mode === "month" && (
-          <MonthGrid compact={compact} cells={cells} todos={todos} occByDay={occByDay} courseMap={courseMap} onEdit={onEdit} onQuickAdd={onQuickAdd} onSelectDate={selectMonthDate} />
-        )}
-        {mode !== "month" && <TimeGrid days={days} todos={todos} courseMap={courseMap} occByDay={occByDay} onEdit={onEdit} now={now} compact={compact} />}
-      </div>
+      {page}
     </div>
   );
 });
