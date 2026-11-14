@@ -220,7 +220,10 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .collapsible-chevron { transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1); }
 .collapsible-chevron.is-open { transform: rotate(90deg); }
 
-/* Planner: tab content fades in; a block placed with "+" pulses once so you can spot it */
+/* Planner: tab content fades in; a block placed with "+" pulses once so you can spot it. A new day
+   slides in from the side you moved toward (--day-shift is signed by direction). */
+.planner-day-enter { animation: planner-day-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both, calendar-page-fade 200ms ease-out both; }
+@keyframes planner-day-in { from { transform: translateX(var(--day-shift, 0px)); } to { transform: none; } }
 .planner-tab-enter { animation: modal-backdrop-in 150ms ease both; }
 .planner-flash { animation: planner-flash 900ms var(--ease-out) both; }
 @keyframes planner-flash {
@@ -321,6 +324,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .calendar-page-enter { animation: modal-backdrop-in 150ms ease both; }
   .task-check-pop { animation: none; }
   .planner-flash { animation: planner-flash-reduced 900ms ease both; }
+  .planner-day-enter { animation: modal-backdrop-in 150ms ease both; }
   .timeline-tip, .quick-dock-enter { animation: modal-backdrop-in 120ms ease both; }
   .planner-draft-dot { animation: none; }
   .project-form-field, .planner-row-enter { animation: modal-backdrop-in 150ms ease both; animation-delay: 0ms; }

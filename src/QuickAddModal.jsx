@@ -303,7 +303,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
 
         {planner ? (
           // Docked over the timeline, the guide stays to one line so the panel covers as little as possible
-          <p className="mt-2.5 text-[11px] leading-relaxed text-slate-600">
+          <p className="mt-2.5 text-caption leading-relaxed text-slate-600">
             {[["@milestone", "milestone"], ["tomorrow / mon / nov 11", "date"], ["3pm", "time"], ["weekly", "repeat"], ["!", "urgent"], ["[note]", "note"]].map(([syntax, meaning]) => (
               <span key={syntax} className="mr-2.5 inline-block whitespace-nowrap">
                 <span className="rounded bg-white/80 px-1 py-0.5 font-mono text-slate-800">{syntax}</span> {meaning}

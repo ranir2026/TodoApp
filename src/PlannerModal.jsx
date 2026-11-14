@@ -9,7 +9,8 @@ import { comboLabel, normalizeCombo } from "./keybinds";
 import { projectColor } from "./planner";
 
 const TABS = [
-  { id: "today", label: "Today" },
+  // "Day", not "Today": the tab can show any day, and the day it shows names itself in the header
+  { id: "today", label: "Day" },
   { id: "timeline", label: "Timeline" },
 ];
 
@@ -150,7 +151,7 @@ export default function PlannerModal({ open, tabRequest, suspended, onClose, key
                 bottomInset={quickAdd ? 220 : 0}
               />
             ) : (
-              <DayPlanner todos={todos} courseMap={courseMap} toolbar={toolbar} planner={planner} updatePlanner={updatePlanner} onToggleTodo={onToggleTodo} onEdit={onEdit} />
+              <DayPlanner todos={todos} courseMap={courseMap} toolbar={toolbar} planner={planner} updatePlanner={updatePlanner} onToggleTodo={onToggleTodo} onEdit={onEdit} suspended={suspended} />
             )}
           </div>
           {/* Docked inside the planner with no scrim, so the timeline stays in view and scrollable */}

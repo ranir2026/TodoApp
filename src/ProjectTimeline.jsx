@@ -7,6 +7,7 @@ import { COLOR_PALETTE, getCourseColor } from "./courseColors";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
+import { edgeDepth } from "./dragEdges";
 import { CheckIcon, CloseIcon, PencilIcon, PlusIcon } from "./icons";
 import TimelineTooltip from "./TimelineTooltip";
 
@@ -19,13 +20,18 @@ const ROW = 32;
 const TASK_ROW = 28;
 const DRAG_THRESHOLD = 4;
 const VELOCITY_WINDOW = 100;
+// Auto-scroll while dragging near the timeline's left or right edge: the deeper in, the faster
+const EDGE_SPEED = 18;
 
 let measureContext = null;
-// Width of a label in the app's font, so the name column can fit the longest name
+// Width of a label in the app's font, so the name column can fit the longest name. `font` is a
+// weight and a size in rem ("600 0.875"), since the type scale follows the browser's font size.
 function textWidth(text, font) {
   measureContext ??= document.createElement("canvas").getContext("2d");
   const family = getComputedStyle(document.body).fontFamily;
-  measureContext.font = `${font} ${family}`;
+  const rootSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const [weight, rem] = font.split(" ");
+  measureContext.font = `${weight} ${Number(rem) * rootSize}px ${family}`;
   // The app opens small text up slightly (0.012em), so allow for it
   return measureContext.measureText(text).width * 1.02;
 }
@@ -115,6 +121,11 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   }
   useEffect(() => () => closeTimersRef.current.forEach(clearTimeout), []);
   const [popover, setPopover] = useState(null);
+  // Popovers shrink back toward where they opened from before they go
+  const [popoverClosing, setPopoverClosing] = useState(false);
+  const [colorMenuClosing, setColorMenuClosing] = useState(false);
+  const popoverTimerRef = useRef(null);
+  const colorMenuTimerRef = useRef(null);
   const [renaming, setRenaming] = useState(null);
   const [drag, setDrag] = useState(null);
   const [pressed, setPressed] = useState(null);
@@ -127,6 +138,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const tipHiddenAtRef = useRef(0);
   const tipOpenRef = useRef(false);
   const runningSettleRef = useRef(null);
+  // Set when the zoom changes: the date that was in the middle of the view, to keep it there
+  const zoomAnchorRef = useRef(null);
 
   const dayWidth = DAY_WIDTH[zoom] ?? DAY_WIDTH.weeks;
   const todayKey = toDateKey(new Date());
@@ -140,14 +153,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     for (const project of projects) {
       const items = projectTodos.filter((todo) => todo.projectId === project.id);
       const taskCount = items.filter((todo) => todo.type !== "milestone").length;
-      widest = Math.max(widest, 12 + 18 + 6 + 16 + 6 + textWidth(project.name, "600 14px") + (taskCount ? 6 + textWidth(`${taskCount}/${taskCount}`, "400 11px") : 0) + 8);
+      widest = Math.max(widest, 12 + 18 + 6 + 16 + 6 + textWidth(project.name, "600 0.875") + (taskCount ? 6 + textWidth(`${taskCount}/${taskCount}`, "400 0.6875") : 0) + 8);
       if (project.collapsed) continue;
-      for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 12px") + 8);
+      for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 0.75") + 8);
       for (const milestone of items.filter((todo) => todo.type === "milestone")) {
-        widest = Math.max(widest, 12 + 16 + 4 + 8 + 6 + textWidth(milestone.title, "400 12px") + 6 + textWidth("00/00", "400 11px") + 8);
+        widest = Math.max(widest, 12 + 16 + 4 + 8 + 6 + textWidth(milestone.title, "400 0.75") + 6 + textWidth("00/00", "400 0.6875") + 8);
         if (openMilestones.has(milestone.id) || closingMilestones.has(milestone.id)) {
           for (const task of items.filter((todo) => todo.milestoneId === milestone.id)) {
-            widest = Math.max(widest, 28 + 14 + 8 + textWidth(task.title, "400 12px") + 8 + textWidth("Nov 30", "400 11px") + 8);
+            widest = Math.max(widest, 28 + 14 + 8 + textWidth(task.title, "400 0.75") + 8 + textWidth("Nov 30", "400 0.6875") + 8);
           }
         }
       }
@@ -262,15 +275,31 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.projectId, draft?.milestoneId, draft?.dueDate]);
 
+  // Opening lands on today; a zoom change keeps whatever date was in the middle of the view in the middle
   useLayoutEffect(() => {
-    scrollToToday();
+    const anchor = zoomAnchorRef.current;
+    zoomAnchorRef.current = null;
+    const scroller = scrollRef.current;
+    if (anchor && scroller) scroller.scrollLeft = Math.max(0, xOf(anchor) + dayWidth / 2 - (scroller.clientWidth - labelWidth) / 2);
+    else scrollToToday();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom]);
 
-  function scrollToToday() {
+  function changeZoom(next) {
+    const scroller = scrollRef.current;
+    if (scroller && next !== zoom) {
+      const middle = scroller.scrollLeft + (scroller.clientWidth - labelWidth) / 2;
+      zoomAnchorRef.current = addDays(rangeStart, Math.floor(middle / dayWidth));
+    }
+    setZoom(next);
+  }
+
+  function scrollToToday({ smooth = false } = {}) {
     const scroller = scrollRef.current;
     if (!scroller) return;
-    scroller.scrollLeft = Math.max(0, xOf(todayKey) - (scroller.clientWidth - labelWidth) * 0.2);
+    const left = Math.max(0, xOf(todayKey) - (scroller.clientWidth - labelWidth) * 0.2);
+    if (smooth && !prefersReducedMotion()) scroller.scrollTo({ left, behavior: "smooth" });
+    else scroller.scrollLeft = left;
   }
 
   // ── Planner updates ─────────────────────────────────────────────────────
@@ -323,6 +352,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     const anchor = event.currentTarget.getBoundingClientRect();
     const x = Math.max(Math.min(anchor.left - root.left - 8, root.width - 208), 8);
     const y = Math.min(anchor.bottom - root.top + 6, root.height - 150);
+    clearTimeout(colorMenuTimerRef.current);
+    setColorMenuClosing(false);
     setColorMenu({ x, y, originX: anchor.left - root.left + anchor.width / 2 - x, originY: anchor.top - root.top - y, value, categoryColor, onChange });
   }
 
@@ -344,7 +375,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       });
       extendProject(project.id, [date]);
     }
-    setPopover(null);
+    closePopover();
   }
 
   function commitRename() {
@@ -382,26 +413,48 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     if (state.kind !== "group") hideTip();
     runningSettleRef.current?.();
     runningSettleRef.current = null;
-    dragRef.current = { ...state, originX: event.clientX, active: false, delta: 0, dx: 0, samples: [] };
+    const scroller = scrollRef.current;
+    dragRef.current = { ...state, originX: event.clientX, lastX: event.clientX, originScroll: scroller.scrollLeft, active: false, delta: 0, dx: 0, samples: [] };
     setPressed(`${state.kind}:${state.id}`);
+    let frame = null;
+
+    // How far the item has travelled: the pointer's movement plus however far the timeline scrolled under it
+    const update = (current) => {
+      current.dx = current.lastX - current.originX + (scroller.scrollLeft - current.originScroll);
+      current.delta = Math.round(current.dx / dayWidth);
+      setDrag({ ...current });
+    };
+    // Near the left or right edge the timeline keeps scrolling, even while the pointer holds still
+    const tick = () => {
+      const current = dragRef.current;
+      if (!current?.active) { frame = null; return; }
+      const view = scroller.getBoundingClientRect();
+      const depth = edgeDepth(current.lastX, view.left + labelWidth, view.right);
+      if (depth) {
+        const before = scroller.scrollLeft;
+        scroller.scrollLeft += Math.sign(depth) * Math.ceil(EDGE_SPEED * depth * depth);
+        if (scroller.scrollLeft !== before) update(current);
+      }
+      frame = requestAnimationFrame(tick);
+    };
 
     const handleMove = (moveEvent) => {
       const current = dragRef.current;
       if (!current) return;
-      const dx = moveEvent.clientX - current.originX;
-      if (!current.active && Math.abs(dx) < DRAG_THRESHOLD) return;
+      if (!current.active && Math.abs(moveEvent.clientX - current.originX) < DRAG_THRESHOLD) return;
       if (!current.active) hideTip();
       const now = performance.now();
       current.samples = [...current.samples.filter((sample) => now - sample.time < VELOCITY_WINDOW), { x: moveEvent.clientX, time: now }];
       current.active = true;
-      current.dx = dx;
-      current.delta = Math.round(dx / dayWidth);
-      setDrag({ ...current });
+      current.lastX = moveEvent.clientX;
+      frame ??= requestAnimationFrame(tick);
+      update(current);
     };
     const stop = () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleCancel);
+      if (frame) cancelAnimationFrame(frame);
       setPressed(null);
     };
     const handleUp = () => {
@@ -449,6 +502,26 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     }
   }
 
+  // A focused diamond, dot or stack: Enter opens it, Left/Right move it a day, Shift+Left/Right a week
+  function pointKeys({ kind, id, ids, projectId, date, dragKeys, onOpen }) {
+    return (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        hideTip();
+        onOpen();
+        return;
+      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const delta = (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 7 : 1);
+      hideTip();
+      runningSettleRef.current?.();
+      settleRef.current = { keys: dragKeys, point: true, velocity: 0, dLeft: -delta * dayWidth, dWidth: 0 };
+      commitDrag({ kind, id, ids, projectId, mode: "move", range: { start: date, end: date }, delta });
+    };
+  }
+
   function liveRange(kind, id, range) {
     return drag && drag.kind === kind && drag.id === id ? shiftRange(range, drag.mode, drag.delta) : range;
   }
@@ -484,7 +557,25 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     return { move: start("move"), start: start("start"), end: start("end") };
   }
 
+  function closePopover() {
+    if (!popover || popoverClosing) return;
+    setPopoverClosing(true);
+    clearTimeout(popoverTimerRef.current);
+    popoverTimerRef.current = setTimeout(() => { setPopover(null); setPopoverClosing(false); }, 120);
+  }
+
+  function closeColorMenu() {
+    if (!colorMenu || colorMenuClosing) return;
+    setColorMenuClosing(true);
+    clearTimeout(colorMenuTimerRef.current);
+    colorMenuTimerRef.current = setTimeout(() => { setColorMenu(null); setColorMenuClosing(false); }, 120);
+  }
+
+  useEffect(() => () => { clearTimeout(popoverTimerRef.current); clearTimeout(colorMenuTimerRef.current); }, []);
+
   function openPopover(event, project, { kind = "milestone", date } = {}) {
+    clearTimeout(popoverTimerRef.current);
+    setPopoverClosing(false);
     const root = rootRef.current.getBoundingClientRect();
     let key = date;
     if (!key) {
@@ -554,7 +645,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       ? { label: "All done", tone: "success" }
       : days < 0
       ? { label: `${open.length} overdue`, tone: "danger" }
-      : { label: `Due ${fromNow(date)}`, tone: days <= 2 ? "urgent" : "neutral" };
+      : { label: `Due ${fromNow(date)}`, tone: days <= 2 ? "soon" : "neutral" };
     return {
       kind: "Tasks",
       color,
@@ -597,7 +688,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       ? { label: "Done", tone: "success" }
       : days < 0
       ? { label: "Overdue", tone: "danger" }
-      : { label: `Due ${fromNow(task.dueDate)}`, tone: days <= 2 ? "urgent" : "neutral" };
+      : { label: `Due ${fromNow(task.dueDate)}`, tone: days <= 2 ? "soon" : "neutral" };
     return {
       kind: "Task",
       color,
@@ -613,7 +704,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       ? { label: "Reached", tone: "success" }
       : tone === "overdue"
       ? { label: "Overdue", tone: "danger" }
-      : { label: `Due ${fromNow(milestone.dueDate)}`, tone: tone === "soon" ? "urgent" : "neutral" };
+      : { label: `Due ${fromNow(milestone.dueDate)}`, tone: tone === "soon" ? "soon" : "neutral" };
     return {
       kind: "Milestone",
       color,
@@ -644,11 +735,11 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         <PlusIcon className="h-3.5 w-3.5" />
         Project
       </button>
-      <button type="button" onClick={scrollToToday} className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300">
+      <button type="button" onClick={() => scrollToToday({ smooth: true })} className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300">
         Today
       </button>
       <div className="flex-1" />
-      <SegmentedControl label="Timeline zoom" className="inline-grid shrink-0" segmentClassName="px-3" options={[{ id: "weeks", label: "Weeks" }, { id: "months", label: "Months" }]} value={zoom} onChange={setZoom} />
+      <SegmentedControl label="Timeline zoom" className="inline-grid shrink-0" segmentClassName="px-3" options={[{ id: "weeks", label: "Weeks" }, { id: "months", label: "Months" }]} value={zoom} onChange={changeZoom} />
     </>
   );
 
@@ -676,13 +767,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
           <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-10 w-px bg-danger-500/60" style={{ left: labelWidth + xOf(todayKey) + dayWidth / 2 }} />
 
           <div className="sticky top-0 z-30 flex border-b border-slate-200 bg-white">
-            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase" style={{ width: "var(--label-width)" }}>
+            <div className="sticky left-0 z-10 flex shrink-0 items-end border-r border-slate-100 bg-white px-3 pb-1.5 text-caption font-semibold tracking-wide text-slate-500 uppercase" style={{ width: "var(--label-width)" }}>
               Projects
             </div>
             <div className="relative shrink-0" style={{ width: timelineWidth, height: 40 }}>
               {months.map((month) => (
-                <div key={month.key} className="absolute top-0 truncate border-l border-slate-100 px-1.5 pt-1 text-[11px] font-semibold text-slate-600" style={{ left: month.start * dayWidth, width: month.days * dayWidth }}>
-                  {month.label}
+                // overflow-clip, not hidden: the name inside sticks to the left edge (past the name column) while its month is in view
+                <div key={month.key} className="absolute top-0 overflow-clip border-l border-slate-100 pt-1 text-caption font-semibold whitespace-nowrap text-slate-600" style={{ left: month.start * dayWidth, width: month.days * dayWidth }}>
+                  <span className="sticky inline-block px-1.5" style={{ left: "var(--label-width)" }}>{month.label}</span>
                 </div>
               ))}
               {Array.from({ length: totalDays }, (_, i) => {
@@ -691,7 +783,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                 if (zoom === "months" && date.getDay() !== 0) return null;
                 const isToday = key === todayKey;
                 return (
-                  <div key={key} className={`absolute bottom-1 text-center text-[11px] ${isToday ? "font-bold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-400" : "text-slate-500"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
+                  <div key={key} className={`absolute bottom-1 text-center text-caption ${isToday ? "font-bold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-400" : "text-slate-500"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
                     {date.getDate()}
                   </div>
                 );
@@ -722,7 +814,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
               const handlers = barHandlers("todo", todo.id, project.id, { start: todo.dueDate, end: todo.dueDate }, () => onEdit(todo));
               const dragKey = `todo:${todo.id}`;
               const tip = tipHandlers(dragKey, () => (kind === "milestone" ? milestoneTip(todo, color) : taskTip(todo, color)));
-              const state = { dragKey, pressed: pressed === dragKey, onPointerDown: handlers.move, tip };
+              const onKeyDown = pointKeys({ kind: "todo", id: todo.id, projectId: project.id, date: todo.dueDate, dragKeys: [dragKey], onOpen: () => onEdit(todo) });
+              const state = { dragKey, pressed: pressed === dragKey, onPointerDown: handlers.move, onKeyDown, tip };
               return (
                 <span key={todo.id} className="contents">
                   {landing !== null && <PointLanding left={landing} diamond={kind === "milestone"} color={color} />}
@@ -764,6 +857,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       pressed={pressed === dragKey}
                       tip={tipHandlers(dragKey, () => stackTip(sorted, date, milestone, color))}
                       onPointerDown={(event) => beginDrag(event, { kind: "group", id, ids, projectId: project.id, mode: "move", range: { start: date, end: date } })}
+                      // Enter opens the first task still open; the hover card lists the rest
+                      onKeyDown={pointKeys({ kind: "group", id, ids, projectId: project.id, date, dragKeys: [dragKey, ...ids.map((taskId) => `todo:${taskId}`)], onOpen: () => onEdit((sorted.find((task) => !task.resolved.completed) ?? sorted[0]).raw) })}
                     />
                   </span>
                 );
@@ -831,10 +926,10 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                           {project.name}
                         </button>
                       )}
-                      {tasks.length > 0 && <span className="shrink-0 text-[11px] text-slate-500">{doneCount}/{tasks.length}</span>}
+                      {tasks.length > 0 && <span className="shrink-0 text-caption text-slate-500">{doneCount}/{tasks.length}</span>}
                       <HoverActions>
                         {onQuickAdd && (
-                          <button type="button" onClick={() => onQuickAdd(project.id)} className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-course-600" aria-label={`Quick add a task to ${project.name}`} title="Quick add a task to this project">
+                          <button type="button" onClick={() => onQuickAdd(project.id)} className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-caption font-medium text-slate-500 hover:bg-slate-100 hover:text-course-600" aria-label={`Quick add a task to ${project.name}`} title="Quick add a task to this project">
                             <PlusIcon className="h-3 w-3" />
                             Task
                           </button>
@@ -869,10 +964,9 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     handlers={spanHandlers}
                     active={isDragging("project", project.id)}
                     pressed={pressed === `project:${project.id}`}
-                  >
-                    <div className="h-full rounded-full" style={{ width: `${tasks.length ? (doneCount / tasks.length) * 100 : 0}%`, backgroundColor: `${color}99` }} />
-                  </Bar>
-                  {milestones.filter((milestone) => milestone.dueDate).map((milestone) => renderPoint(milestone, "milestone"))}
+                  />
+                  {/* Expanded, each milestone has a row of its own; collapsed, the bar carries them so they stay in view */}
+                  {!expanded && milestones.filter((milestone) => milestone.dueDate).map((milestone) => renderPoint(milestone, "milestone"))}
                 </Row>
 
                 {expanded && (
@@ -923,7 +1017,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                             active={isDragging("phase", phase.id)}
                             pressed={pressed === `phase:${phase.id}`}
                           >
-                            {width > 60 && <span className="block truncate px-2 text-[11px] font-medium leading-5">{phase.name}</span>}
+                            {width > 60 && <span className="block truncate px-2 text-caption font-medium leading-5">{phase.name}</span>}
                           </Bar>
                         </Row>
                       );
@@ -949,9 +1043,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                                 className="-ml-1 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1 text-left text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                               >
                                 <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400"><Chevron open={listOpen} /></span>
-                                <span className={`mr-0.5 h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] border-urgent-500"}`} />
+                                <span
+                                  className={`mr-0.5 h-2 w-2 shrink-0 rotate-45 rounded-[1px] ${milestone.completed ? "bg-success-500" : "border-[1.5px] bg-white"}`}
+                                  style={milestone.completed ? undefined : { borderColor: milestoneTone(milestone, todayKey) === "overdue" ? "var(--color-danger-500)" : color }}
+                                />
                                 <span className="line-clamp-2 min-w-0 leading-tight break-words">{milestone.title}</span>
-                                <span className="ml-0.5 shrink-0 text-[11px] text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
+                                <span className="ml-0.5 shrink-0 text-caption text-slate-500">{milestone.progress?.total ? `${milestone.progress.done}/${milestone.progress.total}` : "no tasks"}</span>
                               </button>
                               <HoverActions>
                                 {onQuickAdd && (
@@ -989,7 +1086,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     {(looseTasks.length > 0 || (draftHere?.dueDate && !draftHere.milestoneId)) && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
 
                     {isEmpty && !draftHere?.dueDate && (
-                      <Row height={ROW} indent label={<span className="text-[11px] text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)} />
+                      <Row height={ROW} indent label={<span className="text-caption text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)} />
                     )}
                   </>
                 )}
@@ -1024,7 +1121,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         className="group/resize absolute inset-y-0 z-30 flex w-2.5 -translate-x-1/2 cursor-col-resize justify-center outline-none"
         style={{ left: labelWidth }}
       >
-        <span className="h-full w-0.5 rounded-full transition-colors group-hover/resize:bg-course-400 group-focus-visible/resize:bg-course-400 group-active/resize:bg-course-500" />
+        <span className="h-full w-0.5 rounded-full transition-colors group-hover/resize:bg-course-300 group-focus-visible/resize:bg-course-300 group-active/resize:bg-course-500" />
       </div>
       </div>
 
@@ -1032,28 +1129,30 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 
       {colorMenu && (
         <>
-          <div className="absolute inset-0 z-40" onPointerDown={() => setColorMenu(null)} />
+          {!colorMenuClosing && <div className="absolute inset-0 z-40" onPointerDown={closeColorMenu} />}
           <ColorMenu
             menu={colorMenu}
+            closing={colorMenuClosing}
             onChange={(next) => {
               colorMenu.onChange(next);
               setColorMenu((current) => current && { ...current, value: next });
             }}
-            onClose={() => setColorMenu(null)}
+            onClose={closeColorMenu}
           />
         </>
       )}
 
       {popover && activeProject && (
         <>
-          <div className="absolute inset-0 z-40" onPointerDown={() => setPopover(null)} />
+          {!popoverClosing && <div className="absolute inset-0 z-40" onPointerDown={closePopover} />}
           <AddPopover
             key={`${popover.projectId}-${popover.date}-${popover.kind}`}
             popover={popover}
+            closing={popoverClosing}
             project={activeProject}
             milestones={projectTodos.filter((todo) => todo.type === "milestone" && todo.projectId === activeProject.id).sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))}
             onAdd={(item) => addItem(activeProject, item)}
-            onClose={() => setPopover(null)}
+            onClose={closePopover}
           />
         </>
       )}
@@ -1076,7 +1175,7 @@ function Row({ height, label, sublabel, indent = false, onTimelineDoubleClick, c
     <div className={`flex ${className}`} style={{ minHeight: height, ...style }}>
       <div className={`sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-slate-100 py-1 pr-2 ${labelClassName} ${indent ? "pl-8" : "pl-3"}`} style={{ width: "var(--label-width)" }}>
         {label}
-        {sublabel && <span className="truncate text-[11px] leading-tight text-slate-500">{sublabel}</span>}
+        {sublabel && <span className="truncate text-caption leading-tight text-slate-500">{sublabel}</span>}
       </div>
       <div className={`relative min-w-0 flex-1 ${contentClassName}`} onDoubleClick={onTimelineDoubleClick}>
         {children}
@@ -1128,14 +1227,15 @@ function PointLanding({ left, diamond, color }) {
   );
 }
 
+// Diamonds take the project's color; due within a week adds an amber halo, overdue turns red
 const DIAMOND_TONES = {
   reached: "bg-success-500 border-success-500",
   overdue: "bg-white border-danger-500",
-  soon: "bg-white border-urgent-500 ring-4 ring-urgent-500/20",
+  soon: "bg-white ring-4 ring-todo-400/35",
   open: "bg-white",
 };
 
-function Diamond({ milestone, tone, color, left, dragKey, pressed, tip, onPointerDown }) {
+function Diamond({ milestone, tone, color, left, dragKey, pressed, tip, onPointerDown, onKeyDown }) {
   const status = tone === "reached" ? "reached" : tone === "overdue" ? "overdue" : tone === "soon" ? "due soon" : "upcoming";
   const progress = milestone.progress?.total ? ` · ${milestone.progress.done}/${milestone.progress.total} tasks` : " · no tasks linked";
   return (
@@ -1145,14 +1245,16 @@ function Diamond({ milestone, tone, color, left, dragKey, pressed, tip, onPointe
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
       {...tip}
+      onKeyDown={onKeyDown}
       aria-label={`Milestone ${milestone.title}, ${status}${progress}`}
-      className={`absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-grab touch-none rounded-[3px] border-2 transition-[scale,box-shadow] duration-150 ${pressed ? "scale-110 shadow-md" : "shadow-sm"} ${DIAMOND_TONES[tone]}`}
-      style={{ left, ...(tone === "open" ? { borderColor: color } : null) }}
+      aria-keyshortcuts="Enter ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight"
+      className={`absolute top-1/2 z-10 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-grab touch-none rounded-[3px] border-2 transition-[scale,box-shadow] duration-150 before:absolute before:-inset-1.5 before:content-[''] ${pressed ? "scale-110 shadow-md" : "shadow-sm"} ${DIAMOND_TONES[tone]}`}
+      style={{ left, ...(tone === "open" || tone === "soon" ? { borderColor: color } : null) }}
     />
   );
 }
 
-function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPointerDown }) {
+function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPointerDown, onKeyDown }) {
   return (
     <button
       type="button"
@@ -1160,46 +1262,38 @@ function TaskDot({ task, done, overdue, color, left, dragKey, pressed, tip, onPo
       onPointerDown={onPointerDown}
       onDoubleClick={(event) => event.stopPropagation()}
       {...tip}
+      onKeyDown={onKeyDown}
       aria-label={`Task ${task.title}, ${shortDate(task.dueDate)}${done ? ", done" : overdue ? ", overdue" : ""}`}
-      className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-[scale,box-shadow] duration-150 hover:scale-125 ${pressed ? "scale-125 shadow-md" : ""} ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
+      aria-keyshortcuts="Enter ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight"
+      className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 transition-[scale,box-shadow] duration-150 before:absolute before:-inset-2 before:rounded-full before:content-[''] hover:scale-125 ${pressed ? "scale-125 shadow-md" : ""} ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
       style={{ left, ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
     />
   );
 }
 
-// Several tasks due the same day: up to three overlapping dots (overdue and open ones in front of
-// done ones), dragged as one. Hovering shows every task in the stack.
+// Several tasks due the same day, dragged as one: a badge with how many there are. It's filled in
+// the project's color once they're all done, and outlined in red while any are overdue. Hovering
+// shows every task in the stack.
 const STACK_MAX = 3;
-const STACK_STEP = 5;
 
-function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, onPointerDown }) {
-  const rank = (task) => (task.resolved.completed ? 2 : date < todayKey ? 0 : 1);
-  const shown = [...tasks].sort((a, b) => rank(a) - rank(b)).slice(0, STACK_MAX);
-  const width = 10 + (shown.length - 1) * STACK_STEP;
+function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, onPointerDown, onKeyDown }) {
   const open = tasks.filter((task) => !task.resolved.completed).length;
+  const overdue = open > 0 && date < todayKey;
+  const allDone = open === 0;
   return (
     <button
       type="button"
       data-drag-key={dragKey}
       onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
       onDoubleClick={(event) => event.stopPropagation()}
       {...tip}
       aria-label={`${tasks.length} tasks on ${shortDate(date)}, ${open ? `${open} open` : "all done"}: ${tasks.map((task) => task.raw.title).join(", ")}`}
-      className={`absolute top-1/2 z-10 h-2.5 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none transition-[scale] duration-150 hover:scale-115 ${pressed ? "scale-115" : ""}`}
-      style={{ left, width }}
+      aria-keyshortcuts="Enter ArrowLeft ArrowRight Shift+ArrowLeft Shift+ArrowRight"
+      className={`absolute top-1/2 z-10 grid h-4 min-w-4 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none place-items-center rounded-full border-2 px-0.5 text-caption leading-none font-semibold tabular-nums transition-[scale] duration-150 before:absolute before:-inset-1.5 before:rounded-full before:content-[''] hover:scale-110 ${pressed ? "scale-110" : ""} ${allDone ? "text-white" : "bg-white"} ${overdue ? "border-danger-500 text-danger-600" : ""}`}
+      style={{ left, ...(overdue ? null : { borderColor: color }), ...(allDone ? { backgroundColor: color } : overdue ? null : { color }) }}
     >
-      {shown.map((task, index) => {
-        const done = task.resolved.completed;
-        const overdue = !done && date < todayKey;
-        return (
-          <span
-            key={task.raw.id}
-            className={`absolute top-0 h-2.5 w-2.5 rounded-full border-2 ${overdue ? "border-danger-500" : ""} ${done ? "" : "bg-white"}`}
-            // Front dots sit on top; a white ring keeps overlapping dots apart
-            style={{ left: index * STACK_STEP, zIndex: STACK_MAX - index, boxShadow: "0 0 0 1.5px white", ...(overdue ? null : { borderColor: color }), ...(done ? { backgroundColor: color } : null) }}
-          />
-        );
-      })}
+      {tasks.length}
     </button>
   );
 }
@@ -1218,7 +1312,7 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milest
   if (!sorted.length) {
     return (
       <Row height={TASK_ROW} label={
-        <span className={`${motion} flex items-center gap-2 pl-7 text-[11px] text-slate-400`}>
+        <span className={`${motion} flex items-center gap-2 pl-7 text-caption text-slate-400`}>
           No tasks yet
           {onAdd && <button type="button" onClick={onAdd} className="rounded px-1 font-medium text-course-600 hover:bg-course-50">Add one</button>}
         </span>
@@ -1268,7 +1362,7 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milest
               {done && <CheckIcon className="h-2.5 w-2.5" />}
             </span>
             <span className={`line-clamp-2 min-w-0 flex-1 leading-tight break-words ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{task.raw.title}</span>
-            <span className={`shrink-0 text-[11px] ${overdue ? "text-danger-600" : "text-slate-400"}`}>{task.raw.dueDate ? shortDate(task.raw.dueDate) : "No date"}</span>
+            <span className={`shrink-0 text-caption ${overdue ? "text-danger-600" : "text-slate-400"}`}>{task.raw.dueDate ? shortDate(task.raw.dueDate) : "No date"}</span>
           </button>
         }
       >
@@ -1303,7 +1397,7 @@ function DraftDot({ left, title, color }) {
   return (
     <span data-draft-dot="" aria-hidden="true" className="pointer-events-none absolute top-1/2 z-20 flex -translate-y-1/2 items-center gap-1.5" style={{ left: left - 6, color }}>
       <span className="planner-draft-dot h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-current bg-white" />
-      <span className="max-w-48 truncate rounded bg-white/90 px-1 text-[11px] font-medium shadow-sm">{title}</span>
+      <span className="max-w-48 truncate rounded bg-white/90 px-1 text-caption font-medium shadow-sm">{title}</span>
     </span>
   );
 }
@@ -1322,7 +1416,7 @@ function RenameInput({ value, onChange, onCommit, onCancel }) {
           onCancel();
         }
       }}
-      className="min-w-0 flex-1 rounded border border-course-400 px-1.5 py-0.5 text-xs outline-none"
+      className="field-tint min-w-0 flex-1 rounded border border-course-300 px-1.5 py-0.5 text-xs outline-none"
     />
   );
 }
@@ -1346,7 +1440,7 @@ function NewProjectForm({ courses, todayKey, canCancel, focusName, onCreate, onC
 
   return (
     <form onSubmit={submit} className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5">
-      <div {...field(0)} className="project-form-field flex min-w-40 flex-1 items-center gap-1.5 rounded-lg border border-slate-200 bg-white pl-1 focus-within:border-course-400">
+      <div {...field(0)} className="project-form-field flex min-w-40 flex-1 items-center gap-1.5 rounded-lg border border-slate-200 bg-white pl-1 transition-[border-color,box-shadow] focus-within:border-course-300 focus-within:shadow-[0_0_0_3px_rgb(99_102_241/0.12)]">
         <button
           type="button"
           onClick={(event) => onPickColor(event, { value: color, categoryColor, onChange: setColor })}
@@ -1372,12 +1466,12 @@ function NewProjectForm({ courses, todayKey, canCancel, focusName, onCreate, onC
           className="min-w-0 flex-1 bg-transparent py-1.5 pr-2.5 text-sm outline-none"
         />
       </div>
-      <select {...field(1)} value={courseId} onChange={(event) => setCourseId(event.target.value)} aria-label="Category" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none">
+      <select {...field(1)} value={courseId} onChange={(event) => setCourseId(event.target.value)} aria-label="Category" className="field-tint project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none">
         {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
       </select>
-      <input {...field(2)} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-label="Start date" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
+      <input {...field(2)} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-label="Start date" className="field-tint project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
       <span {...field(3)} className="project-form-field text-xs text-slate-400">to</span>
-      <input {...field(4)} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
+      <input {...field(4)} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="field-tint project-form-field rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none" />
       <button {...field(5)} type="submit" disabled={!name.trim()} className="project-form-field rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600 disabled:opacity-40">Create</button>
       {canCancel && <button {...field(6)} type="button" onClick={onCancel} className="project-form-field rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>}
     </form>
@@ -1385,7 +1479,7 @@ function NewProjectForm({ courses, todayKey, canCancel, focusName, onCreate, onC
 }
 
 // Swatches for a project's color: its category's color (the default), the presets, or any custom color
-function ColorMenu({ menu, onChange, onClose }) {
+function ColorMenu({ menu, closing = false, onChange, onClose }) {
   const custom = menu.value && !COLOR_PALETTE.includes(menu.value.toLowerCase());
   const swatch = (selected) => `flex h-7 w-7 items-center justify-center rounded-full ring-offset-2 transition-shadow ${selected ? "ring-2 ring-slate-400" : "hover:ring-2 hover:ring-slate-200"}`;
   const pick = (value) => {
@@ -1403,7 +1497,7 @@ function ColorMenu({ menu, onChange, onClose }) {
           onClose();
         }
       }}
-      className="modal-surface absolute z-50 w-52 rounded-card border border-slate-200 bg-white p-3 shadow-xl"
+      className={`${closing ? "menu-leave" : "modal-surface"} absolute z-50 w-52 rounded-card border border-slate-200 bg-white p-3 shadow-xl`}
       style={{ left: menu.x, top: menu.y, transformOrigin: `${menu.originX}px ${menu.originY}px` }}
     >
       <button
@@ -1443,7 +1537,7 @@ const KIND_OPTIONS = [
   { id: "task", label: "Task" },
 ];
 
-function AddPopover({ popover, project, milestones, onAdd, onClose }) {
+function AddPopover({ popover, closing = false, project, milestones, onAdd, onClose }) {
   const [kind, setKind] = useState(popover.kind);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(popover.date);
@@ -1467,7 +1561,7 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
           onClose();
         }
       }}
-      className="modal-surface absolute z-50 w-72 space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-xl"
+      className={`${closing ? "menu-leave" : "modal-surface"} absolute z-50 w-72 space-y-2 rounded-card border border-slate-200 bg-white p-3 shadow-xl`}
       style={{ left: popover.x, top: popover.y, transformOrigin: `${popover.originX}px ${popover.originY}px` }}
     >
       <div className="flex items-center justify-between">
@@ -1483,19 +1577,19 @@ function AddPopover({ popover, project, milestones, onAdd, onClose }) {
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         placeholder={kind === "phase" ? "Phase name (e.g. Research)" : kind === "milestone" ? "Milestone (e.g. Draft due)" : "Task"}
-        className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-course-400"
+        className="field-tint w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none"
       />
       <div className="flex items-center gap-1.5">
-        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label={kind === "phase" ? "Start date" : "Date"} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
+        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label={kind === "phase" ? "Start date" : "Date"} className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
         {kind === "phase" && (
           <>
             <span className="text-xs text-slate-400">to</span>
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
+            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
           </>
         )}
       </div>
       {kind === "task" && milestones.length > 0 && (
-        <select value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} aria-label="Milestone" className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 outline-none">
+        <select value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} aria-label="Milestone" className="field-tint w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 outline-none">
           <option value="">No milestone</option>
           {milestones.map((milestone) => <option key={milestone.id} value={milestone.id}>Counts toward ◆ {milestone.title}</option>)}
         </select>

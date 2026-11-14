@@ -50,8 +50,8 @@ export default function QuickLinkModal({ open, onAdd, onClose }) {
           </button>
         </div>
         <div className="space-y-2">
-          <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Link name" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-course-400" />
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-course-400" />
+          <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Link name" className="field-tint w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none" />
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="field-tint w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none" />
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:border-slate-300">Cancel</button>

@@ -9,6 +9,8 @@ const TONES = {
   success: "bg-success-500/12 text-success-600",
   danger: "bg-danger-500/12 text-danger-600",
   urgent: "bg-urgent-500/15 text-urgent-700",
+  // Due within a couple of days: amber, as "due soon" is everywhere
+  soon: "bg-todo-500/15 text-todo-700",
   neutral: "bg-slate-100 text-slate-600",
 };
 
@@ -88,12 +90,12 @@ function Card({ card }) {
         {card.kind === "Milestone"
           ? <span className="h-2 w-2 shrink-0 rotate-45 rounded-[1px]" style={{ backgroundColor: card.color }} />
           : <span className={`h-2 w-2 shrink-0 ${card.kind.startsWith("Task") ? "rounded-full" : "rounded-sm"}`} style={{ backgroundColor: card.color }} />}
-        <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: card.color }}>{card.kind}</span>
+        <span className="text-caption font-semibold tracking-wide uppercase" style={{ color: card.color }}>{card.kind}</span>
         {card.status && (
-          <span className={`ml-auto rounded-full px-1.5 py-px text-[11px] font-medium ${TONES[card.status.tone] ?? TONES.neutral}`}>{card.status.label}</span>
+          <span className={`ml-auto rounded-full px-1.5 py-px text-caption font-medium ${TONES[card.status.tone] ?? TONES.neutral}`}>{card.status.label}</span>
         )}
       </div>
-      <p className="mt-1 text-[13px] leading-snug font-semibold break-words text-slate-900">{card.title}</p>
+      <p className="mt-1 text-subhead leading-snug font-semibold break-words text-slate-900">{card.title}</p>
       {card.lines?.map((line) => <p key={line} className="mt-0.5 text-xs leading-snug text-slate-600">{line}</p>)}
       {card.items?.length > 0 && (
         <ul className="-mx-1.5 mt-1.5 max-h-52 overflow-y-auto border-t border-slate-100 pt-1.5">
@@ -111,7 +113,7 @@ function Card({ card }) {
                   style={{ borderColor: item.overdue ? "var(--color-danger-500)" : card.color, backgroundColor: item.done ? card.color : "white" }}
                 />
                 <span className={`min-w-0 flex-1 text-xs leading-snug break-words ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{item.title}</span>
-                {item.meta && <span className={`shrink-0 text-[11px] leading-snug tabular-nums ${item.overdue ? "text-danger-600" : "text-slate-500"}`}>{item.meta}</span>}
+                {item.meta && <span className={`shrink-0 text-caption leading-snug tabular-nums ${item.overdue ? "text-danger-600" : "text-slate-500"}`}>{item.meta}</span>}
               </button>
             </li>
           ))}
@@ -122,7 +124,7 @@ function Card({ card }) {
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
             <span className="block h-full rounded-full" style={{ width: `${(card.progress.done / card.progress.total) * 100}%`, backgroundColor: card.color }} />
           </span>
-          <span className="text-[11px] text-slate-500 tabular-nums">{card.progress.done}/{card.progress.total} tasks</span>
+          <span className="text-caption text-slate-500 tabular-nums">{card.progress.done}/{card.progress.total} tasks</span>
         </div>
       )}
     </>

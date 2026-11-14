@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { courseChipStyle, getCourseColor } from "./courseColors";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon } from "./icons";
 import { EMPTY_DAY, addDays, fixedItemsOn, formatClock, edgeMask, layoutColumns, minutesToTime, resolveDayBlocks, timeToMinutes, toDateKey } from "./planner";
+import { animateSpring } from "./spring";
+import { edgeDepth } from "./dragEdges";
 
 const HOUR_HEIGHT = 52;
 const SNAP = 15;
@@ -11,6 +13,9 @@ const DEFAULT_LENGTH = 60;
 const DAY_MINUTES = 24 * 60;
 const DRAG_THRESHOLD = 4;
 const GHOST_WIDTH = 256;
+const VELOCITY_WINDOW = 100;
+// Auto-scroll while dragging near the schedule's top or bottom: the deeper into the edge, the faster
+const EDGE_SPEED = 16;
 
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -41,9 +46,14 @@ function trayMeta(sectionId, todo) {
   return todo.priority === "urgent" ? "Urgent" : null;
 }
 
-export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit }) {
+const isTyping = (target) => target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
+
+// suspended: another dialog (the item editor) sits on top, so the arrow keys belong to it
+export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit, suspended = false }) {
   const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
   const [dateKey, setDateKey] = useState(todayKey);
+  // Which way the last day change went (-1, 0, 1), so the new day slides in from that side
+  const [dayShift, setDayShift] = useState(0);
   const [nowMinutes, setNowMinutes] = useState(() => new Date().getHours() * 60 + new Date().getMinutes());
   const [drag, setDrag] = useState(null);
   const [pressedKey, setPressedKey] = useState(null);
@@ -59,6 +69,8 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const listRef = useRef(null);
   const dragRef = useRef(null);
   const returnRef = useRef(null);
+  const settleRef = useRef(null);
+  const runningSettleRef = useRef(null);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -77,17 +89,72 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey]);
 
-  // A dropped item that missed the schedule glides back to where it was picked up
+  // A dropped item that missed the schedule springs back to where it was picked up, carrying the
+  // pointer's speed. X and Y are separate springs, so a sideways flick doesn't bend the path home.
   useLayoutEffect(() => {
     const element = returnRef.current;
     if (!returning || !element) return undefined;
-    const animation = element.animate(
-      [{ transform: "translate(0, 0) scale(1.02)", opacity: 1 }, { transform: `translate(${returning.dx}px, ${returning.dy}px) scale(1)`, opacity: 0 }],
-      { duration: 260, easing: "cubic-bezier(0.23, 1, 0.32, 1)", fill: "forwards" },
-    );
-    animation.onfinish = () => setReturning(null);
-    return () => animation.cancel();
+    const { dx, dy, vx = 0, vy = 0 } = returning;
+    const total = Math.hypot(dx, dy) || 1;
+    const offset = { x: 0, y: 0 };
+    let settled = 0;
+    const paint = () => {
+      const remaining = Math.hypot(dx - offset.x, dy - offset.y) / total;
+      element.style.transform = `translate(${offset.x}px, ${offset.y}px) scale(${1 + 0.02 * remaining})`;
+      // It fades as it lands, handing over to the row it came from
+      element.style.opacity = String(Math.min(1, remaining * 2.5));
+    };
+    const done = () => { settled += 1; if (settled === 2) setReturning(null); };
+    const cancels = [
+      animateSpring({ from: 0, to: dx, velocity: vx, damping: 0.9, response: 0.35, onUpdate: (x) => { offset.x = x; paint(); }, onComplete: done }),
+      animateSpring({ from: 0, to: dy, velocity: vy, damping: 0.9, response: 0.35, onUpdate: (y) => { offset.y = y; paint(); }, onComplete: done }),
+    ];
+    return () => cancels.forEach((cancel) => cancel());
   }, [returning]);
+
+  // After a drop, the block glides from where the pointer let go into the 15-minute slot it snapped
+  // to, carrying the pointer's speed, so there is no seam between dragging and settling
+  useLayoutEffect(() => {
+    const settle = settleRef.current;
+    if (!settle) return;
+    settleRef.current = null;
+    const element = scrollRef.current?.querySelector(`[data-block-id="${settle.id}"]`);
+    const distance = Math.abs(settle.dTop) >= Math.abs(settle.dHeight) ? settle.dTop : settle.dHeight;
+    if (!element || Math.abs(distance) < 1 || prefersReducedMotion()) return;
+    const top = parseFloat(element.style.top);
+    const height = parseFloat(element.style.height);
+    const apply = (value) => {
+      const t = value / distance;
+      element.style.top = `${top + settle.dTop * t}px`;
+      element.style.height = `${height + settle.dHeight * t}px`;
+    };
+    apply(distance);
+    const cancel = animateSpring({ from: distance, to: 0, velocity: settle.velocity, damping: 1, response: 0.3, onUpdate: apply, onComplete: () => { runningSettleRef.current = null; } });
+    runningSettleRef.current = () => { cancel(); apply(0); };
+  });
+
+  // Left and right arrows step through the days (not while typing, or while the item editor is open)
+  useEffect(() => {
+    if (suspended) return undefined;
+    const handleKey = (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isTyping(event.target) || dragRef.current) return;
+      event.preventDefault();
+      goToDay(event.key === "ArrowLeft" ? -1 : 1);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  });
+
+  function goToDay(step) {
+    setDayShift(Math.sign(step));
+    setDateKey((key) => addDays(key, step));
+  }
+
+  function goToToday() {
+    setDayShift(todayKey > dateKey ? 1 : -1);
+    setDateKey(todayKey);
+  }
 
   // A block placed with "+" may land out of view: bring it on screen and pulse it once
   useEffect(() => {
@@ -246,47 +313,78 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     return ((clientY - rect.top) / HOUR_HEIGHT) * 60;
   }
 
+  // `start` / `end` are the 15-minute slot it will land in; `rawStart` / `rawEnd` are exactly where the
+  // pointer has it, which is where it's drawn while dragging
   function resolveDrag(state, x, y) {
     const overGrid = isInside(scrollRef.current, x, y);
     const overTray = isInside(trayRef.current, x, y);
     const root = rootRef.current.getBoundingClientRect();
-    let start = state.start;
-    let end = state.end;
+    const pointer = minutesAtY(y);
+    let { start, end } = state;
+    let rawStart = start;
+    let rawEnd = end;
     if (state.kind === "resize") {
-      end = clamp(snap(minutesAtY(y)), state.start + SNAP, DAY_MINUTES);
+      rawEnd = clamp(pointer, state.start + SNAP, DAY_MINUTES);
+      end = clamp(snap(pointer), state.start + SNAP, DAY_MINUTES);
+    } else if (state.kind === "resize-start") {
+      rawStart = clamp(pointer, 0, state.end - SNAP);
+      start = clamp(snap(pointer), 0, state.end - SNAP);
     } else {
       const length = state.end - state.start;
-      start = clamp(snap(minutesAtY(y) - state.grab), 0, DAY_MINUTES - length);
+      rawStart = clamp(pointer - state.grab, 0, DAY_MINUTES - length);
+      start = clamp(snap(pointer - state.grab), 0, DAY_MINUTES - length);
+      rawEnd = rawStart + length;
       end = start + length;
     }
-    return { ...state, start, end, overGrid, overTray, x: x - root.left, y: y - root.top };
+    return { ...state, start, end, rawStart, rawEnd, overGrid, overTray, x: x - root.left, y: y - root.top };
   }
 
-  function autoScroll(clientY) {
+  // One frame of edge auto-scroll; true if the schedule moved
+  function autoScrollStep(clientY) {
     const scroller = scrollRef.current;
     const rect = scroller.getBoundingClientRect();
-    if (clientY < rect.top + 36) scroller.scrollTop -= 14;
-    else if (clientY > rect.bottom - 36) scroller.scrollTop += 14;
+    const depth = edgeDepth(clientY, rect.top, rect.bottom);
+    if (!depth) return false;
+    const before = scroller.scrollTop;
+    scroller.scrollTop += Math.sign(depth) * Math.ceil(EDGE_SPEED * depth * depth);
+    return scroller.scrollTop !== before;
   }
 
   function beginPointer(event, state) {
     if (event.button !== 0) return;
     event.preventDefault();
-    dragRef.current = { ...state, originX: event.clientX, originY: event.clientY, active: false };
+    runningSettleRef.current?.();
+    runningSettleRef.current = null;
+    dragRef.current = { ...state, originX: event.clientX, originY: event.clientY, lastX: event.clientX, lastY: event.clientY, active: false, samples: [] };
     setPressedKey(state.pressKey);
+    let frame = null;
+
+    // While dragging, a frame loop keeps the schedule scrolling near its edges even when the pointer
+    // holds still, and re-resolves the drag so the item stays under the pointer as the grid moves
+    const tick = () => {
+      const current = dragRef.current;
+      if (!current?.active) { frame = null; return; }
+      if (autoScrollStep(current.lastY)) setDrag(resolveDrag(current, current.lastX, current.lastY));
+      frame = requestAnimationFrame(tick);
+    };
 
     const handleMove = (moveEvent) => {
       const current = dragRef.current;
       if (!current) return;
       if (!current.active && Math.hypot(moveEvent.clientX - current.originX, moveEvent.clientY - current.originY) < DRAG_THRESHOLD) return;
       current.active = true;
-      autoScroll(moveEvent.clientY);
+      current.lastX = moveEvent.clientX;
+      current.lastY = moveEvent.clientY;
+      const now = performance.now();
+      current.samples = [...current.samples.filter((sample) => now - sample.time < VELOCITY_WINDOW), { x: moveEvent.clientX, y: moveEvent.clientY, time: now }];
+      frame ??= requestAnimationFrame(tick);
       setDrag(resolveDrag(current, moveEvent.clientX, moveEvent.clientY));
     };
     const stop = () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleCancel);
+      if (frame) cancelAnimationFrame(frame);
       setPressedKey(null);
     };
     const handleUp = (upEvent) => {
@@ -299,19 +397,27 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
         current.onClick?.();
         return;
       }
+      const [first, last] = [current.samples[0], current.samples.at(-1)];
+      const elapsed = first && last ? last.time - first.time : 0;
+      const velocity = elapsed > 0 ? { x: ((last.x - first.x) / elapsed) * 1000, y: ((last.y - first.y) / elapsed) * 1000 } : { x: 0, y: 0 };
       const result = resolveDrag(current, upEvent.clientX, upEvent.clientY);
-      if (result.kind === "new" && result.overGrid) addBlock(result.source, result.start, result.end);
+      // Where it was let go, relative to the slot it lands in, for the settle
+      const px = (minutes) => (minutes / 60) * HOUR_HEIGHT;
+      const settle = (id) => {
+        settleRef.current = { id, dTop: px(result.rawStart - result.start), dHeight: px(result.rawEnd - result.rawStart - (result.end - result.start)), velocity: velocity.y };
+      };
+      if (result.kind === "new" && result.overGrid) settle(addBlock(result.source, result.start, result.end));
       else if (result.kind === "move" && result.overTray) unschedule(result.block);
-      else if (result.kind === "move" && result.overGrid) moveBlock(result.block.id, result.start, result.end);
-      else if (result.kind === "resize") moveBlock(result.block.id, result.start, result.end);
-      else sendBack(result);
+      else if (result.kind === "move" && result.overGrid) { settle(result.block.id); moveBlock(result.block.id, result.start, result.end); }
+      else if (result.kind === "resize" || result.kind === "resize-start") { settle(result.block.id); moveBlock(result.block.id, result.start, result.end); }
+      else sendBack(result, velocity);
     };
     const handleCancel = () => {
       stop();
       const current = dragRef.current;
       dragRef.current = null;
       setDrag(null);
-      if (current?.active && current.kind !== "resize") sendBack(current);
+      if (current?.active && !current.kind.startsWith("resize")) sendBack(current);
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -333,11 +439,11 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     };
   }
 
-  function sendBack(state) {
+  function sendBack(state, velocity = { x: 0, y: 0 }) {
     if (state.x === undefined || prefersReducedMotion()) return;
     const fromX = state.x - state.grabX;
     const fromY = state.y - state.grabY;
-    setReturning({ ...state, fromX, fromY, dx: state.homeX - fromX, dy: state.homeY - fromY });
+    setReturning({ ...state, fromX, fromY, dx: state.homeX - fromX, dy: state.homeY - fromY, vx: velocity.x, vy: velocity.y });
   }
 
   function dragFromTray(event, source, pressKey) {
@@ -360,18 +466,22 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     });
   }
 
-  function resizeBlock(event, block) {
+  // edge: "end" drags the bottom edge, "start" the top
+  function resizeBlock(event, block, edge = "end") {
     event.stopPropagation();
-    beginPointer(event, { kind: "resize", block, pressKey: block.id, start: block.startMinutes, end: block.endMinutes });
+    beginPointer(event, { kind: edge === "start" ? "resize-start" : "resize", block, pressKey: block.id, start: block.startMinutes, end: block.endMinutes });
   }
 
   // ── Layout ──────────────────────────────────────────────────────────────
+  // A block being dragged is laid out in the slot it will land in (so neighbors make room there) but
+  // drawn where the pointer has it; carried off the schedule, it stays dimmed where it was
   const shownBlocks = blocks.map((block) => {
     if (returning?.kind === "move" && returning.block.id === block.id) return { ...block, leaving: true };
     if (drag?.block?.id !== block.id) return block;
-    return { ...block, startMinutes: drag.start, endMinutes: drag.end, dragging: true, leaving: drag.kind === "move" && !drag.overGrid };
+    if (drag.kind === "move" && !drag.overGrid) return { ...block, leaving: true };
+    return { ...block, startMinutes: drag.start, endMinutes: drag.end, rawStart: drag.rawStart, rawEnd: drag.rawEnd, dragging: true };
   });
-  const preview = drag?.kind === "new" && drag.overGrid ? { id: "preview", preview: true, startMinutes: drag.start, endMinutes: drag.end, title: drag.title, course: drag.course } : null;
+  const preview = drag?.kind === "new" && drag.overGrid ? { id: "preview", preview: true, startMinutes: drag.start, endMinutes: drag.end, rawStart: drag.rawStart, rawEnd: drag.rawEnd, title: drag.title, course: drag.course, plannerOnly: drag.plannerOnly } : null;
   const laidOut = layoutColumns(
     [...timedItems.map((item) => ({ ...item, fixed: true })), ...shownBlocks, ...(preview ? [preview] : [])].map((item) => ({ item, start: item.startMinutes, end: item.endMinutes })),
   );
@@ -384,6 +494,12 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     { id: "undated", title: "No date", items: tray.undated, tone: "text-slate-500" },
     { id: "upcoming", title: "Upcoming", items: tray.upcoming, tone: "text-slate-500" },
   ];
+  // The field under the tray says which day its items are for
+  const inboxPlaceholder = dateKey === todayKey
+    ? "Add something just for today…"
+    : dateKey === addDays(todayKey, 1)
+    ? "Add something for tomorrow…"
+    : `Add something for ${parseDateKey(dateKey).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}…`;
   const nothingFound = searching && traySections.every((section) => section.items.length === 0) && inboxItems.length === 0;
   const showGhost = drag && (drag.kind === "new" ? !drag.overGrid : drag.kind === "move" && !drag.overGrid);
   // The picked-up row stays dimmed until its ghost has landed back on it
@@ -392,25 +508,27 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   const controls = (
     <>
       <div className="flex shrink-0 items-center">
-        <button type="button" onClick={() => setDateKey((key) => addDays(key, -1))} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous day">
+        <button type="button" onClick={() => goToDay(-1)} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Previous day" title="Previous day (←)">
           <ChevronLeftIcon />
         </button>
-        <button type="button" onClick={() => setDateKey((key) => addDays(key, 1))} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next day">
+        <button type="button" onClick={() => goToDay(1)} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Next day" title="Next day (→)">
           <ChevronRightIcon />
         </button>
       </div>
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold leading-tight text-slate-900">{label.title}</p>
-        {label.date && <p className="truncate text-[11px] leading-tight text-slate-500">{label.date}</p>}
+        {label.date && <p className="truncate text-caption leading-tight text-slate-500">{label.date}</p>}
       </div>
-      <button
-        type="button"
-        onClick={() => setDateKey(todayKey)}
-        disabled={dateKey === todayKey}
-        className="ml-1 shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 disabled:cursor-default disabled:opacity-40 disabled:hover:border-slate-200"
-      >
-        Today
-      </button>
+      {/* Only offered once you've moved away from today; on today itself it would just repeat the title */}
+      {dateKey !== todayKey && (
+        <button
+          type="button"
+          onClick={goToToday}
+          className="ml-1 shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
+        >
+          Today
+        </button>
+      )}
       <div className="flex-1" />
       {blocks.length > 0 && (
         <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
@@ -441,7 +559,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
             }}
             placeholder="Find any task…"
             aria-label="Find any task"
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:bg-white"
+            className="field-tint mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:bg-white"
           />
         </div>
 
@@ -451,8 +569,8 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
           className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-2"
           style={{ maskImage: edgeMask(listEdges), WebkitMaskImage: edgeMask(listEdges) }}
         >
-          {nothingFound && <p className="text-[11px] text-slate-500">No open tasks match “{query.trim()}”.</p>}
-          {!searching && openTasks.length === 0 && inboxItems.length === 0 && <p className="text-[11px] text-slate-500">Nothing left to plan. Every task is done or on the schedule.</p>}
+          {nothingFound && <p className="text-caption text-slate-500">No open tasks match “{query.trim()}”.</p>}
+          {!searching && openTasks.length === 0 && inboxItems.length === 0 && <p className="text-caption text-slate-500">Nothing left to plan. Every task is done or on the schedule.</p>}
           {traySections.map((section) => section.items.length > 0 && (
             <section key={section.id}>
               <SectionLabel className={section.tone}>{section.title}</SectionLabel>
@@ -502,19 +620,19 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
           <input
             value={draftItem}
             onChange={(event) => setDraftItem(event.target.value)}
-            placeholder="Add something just for today…"
-            aria-label="Add a planner item"
-            className="w-full rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-course-400 focus:border-solid"
+            placeholder={inboxPlaceholder}
+            aria-label={`Add a planner item for ${label.date ?? label.title}`}
+            className="field-tint w-full rounded-lg border border-dashed border-slate-300 bg-white px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:border-solid"
           />
         </form>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div key={dateKey} className={`flex min-w-0 flex-1 flex-col ${dayShift ? "planner-day-enter" : ""}`} style={{ "--day-shift": `${dayShift * 32}px` }}>
         {allDayItems.length > 0 && (
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-slate-100 px-4 py-1.5">
-            <span className="mr-1 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">All day</span>
+            <span className="mr-1 text-caption font-semibold tracking-wide text-slate-500 uppercase">All day</span>
             {allDayItems.map((item) => (
-              <button key={item.id} type="button" onClick={() => onEdit(item)} className="rounded px-1.5 py-0.5 text-[11px]" style={courseChipStyle(courseMap[item.courseId], item.completed)}>
+              <button key={item.id} type="button" onClick={() => onEdit(item)} className="rounded px-1.5 py-0.5 text-caption" style={courseChipStyle(courseMap[item.courseId], item.completed)}>
                 {item.title}
               </button>
             ))}
@@ -523,12 +641,19 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex">
-            <div className="w-14 shrink-0 text-right text-[11px] text-slate-400">
+            <div className="relative w-14 shrink-0 text-right text-caption text-slate-400">
               {Array.from({ length: 24 }, (_, hour) => (
                 <div key={hour} style={{ height: HOUR_HEIGHT }} className="-translate-y-1.5 pr-2">
-                  {hour === 0 ? "" : formatClock(hour * 60).replace(":00", "")}
+                  {/* The now line's time takes the place of an hour label it would run into */}
+                  {hour === 0 || (dateKey === todayKey && Math.abs(nowMinutes - hour * 60) < 20) ? "" : formatClock(hour * 60).replace(":00", "")}
                 </div>
               ))}
+              {dateKey === todayKey && (
+                <span className="absolute right-1.5 -translate-y-1/2 rounded bg-white pl-0.5 font-semibold whitespace-nowrap text-danger-600 tabular-nums" style={{ top: (nowMinutes / 60) * HOUR_HEIGHT }}>
+                  {/* Just the time ("11:05"): the hour labels around it already say AM or PM, and the gutter is narrow */}
+                  {formatClock(nowMinutes).replace(/\s?[AP]M$/i, "")}
+                </span>
+              )}
             </div>
             <div ref={gridRef} className="relative mr-3 min-w-0 flex-1 border-l border-slate-100" style={{ height: HOUR_HEIGHT * 24 }}>
               {Array.from({ length: 24 }, (_, hour) => (
@@ -542,27 +667,35 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
                 const height = Math.max(((item.endMinutes - item.startMinutes) / 60) * HOUR_HEIGHT, 20);
                 const position = { top, height, left: `calc(${(column / columns) * 100}% + 3px)`, width: `calc(${100 / columns}% - 6px)` };
                 if (item.fixed) return <FixedItem key={`fixed-${item.id}`} item={item} course={courseMap[item.courseId]} style={position} onEdit={onEdit} />;
+                // While dragged, the item follows the pointer exactly and a dashed outline marks the slot it will snap to
+                const following = item.rawStart !== undefined;
+                const drawn = following
+                  ? { ...position, top: (item.rawStart / 60) * HOUR_HEIGHT, height: Math.max(((item.rawEnd - item.rawStart) / 60) * HOUR_HEIGHT, 20) }
+                  : position;
+                const landing = following && <SlotLanding style={position} color={item.course && !item.plannerOnly ? getCourseColor(item.course) : null} />;
                 if (item.preview) {
                   return (
-                    <div key="preview" className="pointer-events-none absolute z-20 rounded-lg border-2 border-dashed border-course-300 bg-course-50/80 px-2 py-1 text-[11px] font-medium text-course-700" style={position}>
-                      {item.title}
-                      <span className="ml-1.5 font-normal text-course-600">{formatClock(item.startMinutes)}</span>
-                    </div>
+                    <Fragment key="preview">
+                      {landing}
+                      <PlanBlock block={{ ...item, dragging: true }} style={drawn} compact={drawn.height < 40} ghost />
+                    </Fragment>
                   );
                 }
                 return (
-                  <PlanBlock
-                    key={item.id}
-                    block={item}
-                    style={position}
-                    compact={height < 40}
-                    pressed={pressedKey === item.id}
-                    flash={flashId === item.id}
-                    onPointerDown={(event) => dragBlock(event, item)}
-                    onResize={(event) => resizeBlock(event, item)}
-                    onToggle={() => toggleBlock(item)}
-                    onRemove={() => unschedule(item)}
-                  />
+                  <Fragment key={item.id}>
+                    {landing}
+                    <PlanBlock
+                      block={item}
+                      style={drawn}
+                      compact={drawn.height < 40}
+                      pressed={pressedKey === item.id}
+                      flash={flashId === item.id}
+                      onPointerDown={(event) => dragBlock(event, item)}
+                      onResize={(event, edge) => resizeBlock(event, item, edge)}
+                      onToggle={() => toggleBlock(item)}
+                      onRemove={() => unschedule(item)}
+                    />
+                  </Fragment>
                 );
               })}
 
@@ -599,7 +732,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
 }
 
 function SectionLabel({ className = "", children }) {
-  return <h3 className={`mb-1.5 text-[11px] font-semibold tracking-wide uppercase ${className}`}>{children}</h3>;
+  return <h3 className={`mb-1.5 text-caption font-semibold tracking-wide uppercase ${className}`}>{children}</h3>;
 }
 
 // The category shows as a left stripe, the same as rows in the task list; planner-only items get a neutral one
@@ -615,14 +748,14 @@ function TrayRow({ title, color, meta, plannerOnly = false, pressed, lifted, onP
       style={{ borderLeftColor: plannerOnly ? PLANNER_ONLY_STRIPE : color }}
     >
       <span className="min-w-0 flex-1 truncate">{title}</span>
-      {meta && <span className="shrink-0 text-[11px] text-slate-400">{meta}</span>}
+      {meta && <span className="shrink-0 text-caption text-slate-400">{meta}</span>}
       <button
         type="button"
         onPointerDown={(event) => event.stopPropagation()}
         onClick={onSchedule}
         title="Schedule at the next free hour"
         aria-label={`Schedule ${title} at the next free hour`}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-course-600 focus-visible:opacity-100 group-hover:opacity-100"
+        className="row-action flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600"
       >
         <PlusIcon className="h-3.5 w-3.5" />
       </button>
@@ -632,7 +765,7 @@ function TrayRow({ title, color, meta, plannerOnly = false, pressed, lifted, onP
           onPointerDown={(event) => event.stopPropagation()}
           onClick={onRemove}
           aria-label={`Remove ${title}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-danger-500 focus-visible:opacity-100 group-hover:opacity-100"
+          className="row-action flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500"
         >
           <CloseIcon className="h-3.5 w-3.5" />
         </button>
@@ -654,23 +787,26 @@ function DragGhost({ ref, title, course, plannerOnly, style }) {
   );
 }
 
-function PlanBlock({ block, style, compact, pressed, flash, onPointerDown, onResize, onToggle, onRemove }) {
-  // Done blocks fade to neutral; planner-only blocks are neutral so they never pass for a category
-  const tone = block.done
-    ? "border-slate-200 bg-slate-100 text-slate-400"
-    : !block.course
-    ? "border-slate-300 bg-slate-50 text-slate-700"
-    : "";
-  const tint = !block.done && block.course ? { ...courseChipStyle(block.course), borderColor: `${getCourseColor(block.course)}55` } : null;
+// Dark text on a light tint, with the category as a left stripe (as in the tray), so any category
+// color stays readable. Done blocks fade to neutral; planner-only blocks are neutral so they never
+// pass for a category. `ghost`: the copy that follows the pointer while dragging in from the tray.
+function PlanBlock({ block, style, compact, pressed, flash, ghost = false, onPointerDown, onResize, onToggle, onRemove }) {
+  const color = block.course ? getCourseColor(block.course) : null;
+  const stripe = block.done ? "var(--color-slate-300)" : color ?? PLANNER_ONLY_STRIPE;
+  const surface = block.done
+    ? { backgroundColor: "var(--color-slate-50)", borderColor: "var(--color-slate-200)" }
+    : color
+    ? { backgroundColor: `color-mix(in srgb, ${color} 9%, white)`, borderColor: `${color}40` }
+    : { backgroundColor: "var(--color-slate-50)", borderColor: "var(--color-slate-300)" };
 
   return (
     <div
-      data-block-id={block.id}
+      data-block-id={ghost ? undefined : block.id}
       onPointerDown={onPointerDown}
-      className={`group absolute flex cursor-grab touch-none overflow-hidden rounded-lg border text-left transition-[opacity,box-shadow,scale] duration-150 ease-out ${tone} ${
-        block.dragging ? "z-20 shadow-lg" : pressed ? "z-20 scale-[0.98] shadow-md" : "z-10 shadow-sm hover:shadow"
-      } ${block.leaving ? "opacity-40" : ""} ${flash ? "planner-flash" : ""}`}
-      style={{ ...style, ...tint }}
+      className={`group absolute flex touch-none overflow-hidden rounded-lg border border-l-4 text-left transition-[opacity,box-shadow,scale] duration-150 ease-out ${ghost ? "pointer-events-none" : "cursor-grab"} ${
+        block.done ? "text-slate-400" : "text-slate-800"
+      } ${block.dragging ? "z-20 shadow-lg" : pressed ? "z-20 scale-[0.98] shadow-md" : "z-10 shadow-sm hover:shadow"} ${block.leaving ? "opacity-40" : ""} ${flash ? "planner-flash" : ""}`}
+      style={{ ...style, ...surface, borderLeftColor: stripe }}
     >
       <div className={`flex min-w-0 flex-1 gap-1.5 px-1.5 ${compact ? "items-center" : "items-start py-1"}`}>
         <button
@@ -678,15 +814,16 @@ function PlanBlock({ block, style, compact, pressed, flash, onPointerDown, onRes
           onPointerDown={(event) => event.stopPropagation()}
           onClick={onToggle}
           aria-label={block.done ? `Mark ${block.title} not done` : `Mark ${block.title} done`}
-          className={`task-complete-toggle mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border-[1.5px] ${block.done ? "border-success-500 bg-success-500 text-white" : "border-current bg-white/60"}`}
+          // 14px to look at, 26px to hit
+          className={`task-complete-toggle relative mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border-[1.5px] before:absolute before:-inset-1.5 before:content-[''] ${block.done ? "border-success-500 bg-success-500 text-white" : "border-slate-400 bg-white hover:border-success-500"}`}
         >
           {block.done && (
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-2.5 w-2.5"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7 7a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.4l2.3 2.29 6.3-6.29a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
           )}
         </button>
         <div className={`min-w-0 flex-1 ${compact ? "flex items-baseline gap-1.5" : ""}`}>
-          <p className={`truncate text-[11px] font-semibold ${block.done ? "line-through" : ""}`}>{block.title}</p>
-          <p className="truncate text-[11px] opacity-75">
+          <p className={`truncate text-caption font-semibold ${block.done ? "line-through" : ""}`}>{block.title}</p>
+          <p className={`truncate text-caption ${block.done ? "text-slate-400" : "text-slate-500"}`}>
             {formatClock(block.startMinutes)} – {formatClock(block.endMinutes)}
             {!block.todo && !compact && <span className="ml-1">· planner only</span>}
           </p>
@@ -702,25 +839,47 @@ function PlanBlock({ block, style, compact, pressed, flash, onPointerDown, onRes
           <CloseIcon className="h-3 w-3" />
         </button>
       </div>
-      {/* Resize handle: a wider hit area along the bottom edge, with a grip that shows on hover */}
-      <div onPointerDown={onResize} className={`absolute inset-x-0 bottom-0 flex cursor-ns-resize items-end justify-center pb-0.5 ${compact ? "h-1.5" : "h-2.5"}`} aria-hidden="true">
-        <span className={`h-1 w-6 rounded-full bg-current opacity-0 transition-opacity group-hover:opacity-30 ${compact ? "hidden" : ""}`} />
-      </div>
+      {/* Resize handles: the top edge moves the start, the bottom edge the end. The top one stops short
+          of the corners so it never sits over the checkbox or the unschedule button. */}
+      {!ghost && (
+        <>
+          <div onPointerDown={(event) => onResize(event, "start")} className="absolute top-0 right-6 left-6 flex h-[5px] cursor-ns-resize justify-center pt-px" aria-hidden="true">
+            <span className={`h-1 w-6 rounded-full bg-current opacity-0 transition-opacity group-hover:opacity-25 ${compact ? "hidden" : ""}`} />
+          </div>
+          <div onPointerDown={(event) => onResize(event, "end")} className={`absolute inset-x-0 bottom-0 flex cursor-ns-resize items-end justify-center pb-0.5 ${compact ? "h-1.5" : "h-2.5"}`} aria-hidden="true">
+            <span className={`h-1 w-6 rounded-full bg-current opacity-0 transition-opacity group-hover:opacity-25 ${compact ? "hidden" : ""}`} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
+// The slot a dragged block will snap to
+function SlotLanding({ style, color }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute z-10 rounded-lg border-2 border-dashed"
+      style={{ ...style, borderColor: color ? `${color}99` : "var(--color-slate-300)", backgroundColor: color ? `${color}0d` : "rgb(15 23 42 / 0.02)" }}
+    />
+  );
+}
+
+// Something already pinned to a time (an event, a timed task): dashed, so it reads as fixed rather
+// than planned, but at full strength and with dark text so it stays legible
 function FixedItem({ item, course, style, onEdit }) {
+  const color = getCourseColor(course);
   return (
     <button
       type="button"
       onClick={() => onEdit(item)}
       title={`${item.title} (already scheduled)`}
-      className={`absolute z-0 overflow-hidden rounded-lg border border-dashed px-2 py-1 text-left text-[11px] opacity-70 hover:opacity-100 ${item.completed ? "line-through" : ""}`}
-      style={{ ...style, ...courseChipStyle(course, item.completed), borderColor: `${getCourseColor(course)}66` }}
+      className={`absolute z-0 overflow-hidden rounded-lg border border-dashed px-2 py-1 text-left text-caption transition-colors hover:brightness-[0.98] ${item.completed ? "text-slate-400 line-through" : "text-slate-700"}`}
+      style={{ ...style, backgroundColor: item.completed ? "var(--color-slate-50)" : `color-mix(in srgb, ${color} 8%, white)`, borderColor: item.completed ? "var(--color-slate-300)" : `${color}99` }}
     >
       <span className="font-semibold">{item.title}</span>
-      <span className="ml-1.5 opacity-75">{formatClock(item.startMinutes)}</span>
+      <span className="ml-1.5 text-slate-500">{formatClock(item.startMinutes)}</span>
     </button>
   );
 }
