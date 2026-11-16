@@ -263,7 +263,8 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .today-panel { transform: translateX(100%); transition: transform 320ms var(--today-curve), box-shadow 320ms ease; }
 .today-dock[data-open="true"] .today-panel { transform: none; transition-duration: 420ms; }
 .today-tab { box-shadow: -6px 0 16px -10px rgb(15 23 42 / 0.35); transition: translate 220ms var(--ease-out), color 150ms ease; }
-/* Closed, the tab leans out a little under the pointer: a hint of the pull that opens it. It moves
+/* Closed, the tab leans out a little under the pointer: a hint of the pull that opens it. The vertical
+   -50% repeats the centering from -translate-y-1/2, since `translate` here replaces that value. It moves
    by transform (no layout work); a strip of the same material runs off the window edge behind it, so
    leaning out never opens a gap at the edge. Opening drops the lean at once, so the tab and panel
    leave together. */
@@ -271,7 +272,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   content: ""; position: absolute; top: -1px; bottom: -1px; left: 100%; width: 8px;
   background: inherit; border: 1px solid; border-color: inherit; border-left: 0;
 }
-.today-dock:not([data-open="true"]) .today-tab:hover { translate: -4px 0; }
+.today-dock:not([data-open="true"]) .today-tab:hover { translate: -4px -50%; }
 .today-dock[data-open="true"] .today-tab { transition: color 150ms ease; }
 .today-tab-chevron { transition: rotate 320ms var(--today-curve); }
 .today-dock[data-open="true"] .today-tab-chevron { rotate: 180deg; transition-duration: 420ms; }
@@ -311,7 +312,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .modal-surface { animation-name: modal-backdrop-in; }
   .undo-toast { animation-name: modal-backdrop-in; }
   .undo-toast.is-leaving { animation-name: tab-fade-out; }
-  .today-dock:not([data-open="true"]) .today-tab:hover { translate: none; }
+  .today-dock:not([data-open="true"]) .today-tab:hover { translate: 0 -50%; }
   .menu-pop { animation: modal-backdrop-in 120ms ease both; }
   .menu-leave { animation: tab-fade-out 100ms ease both; }
   .task-complete-toggle { transition-duration: 100ms; }
