@@ -56,6 +56,17 @@ describe("Connect Canvas", () => {
     expect(fetchCanvasFeed).not.toHaveBeenCalled();
   });
 
+  it("asks for nothing but the pasted link", () => {
+    open();
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(screen.getByText(/Calendar Feed/, { selector: "strong" })).toBeTruthy();
+    // With no school known yet there's nothing to link to; a known one gets a direct link
+    expect(screen.queryByRole("link", { name: /Open your Canvas calendar/ })).toBeNull();
+    cleanup();
+    open({ quickLinks: [{ id: "q", label: "Canvas", url: "https://canvas.example.edu/courses" }] });
+    expect(screen.getByRole("link", { name: /Open your Canvas calendar/ }).getAttribute("href")).toBe("https://canvas.example.edu/calendar");
+  });
+
   it("fetches on paste, then shows the link masked", async () => {
     open();
     await connect();
@@ -117,7 +128,7 @@ describe("Connect Canvas", () => {
     const canvas = { feeds: [{ id: `feed:${DOMAIN}`, url: `https://${DOMAIN}/feeds/calendars/user_OLDtoken000000000000000.ics`, domain: DOMAIN, status: "feed_not_found" }], courseMap, dismissedIds: [] };
     const { onImport } = open({ canvas, replaceDomain: DOMAIN });
     expect(screen.getByRole("heading", { name: "Replace Canvas link" })).toBeTruthy();
-    expect(screen.getByLabelText("Your school's Canvas address").value).toBe(DOMAIN);
+    expect(screen.getByRole("link", { name: /Open your Canvas calendar/ }).getAttribute("href")).toBe(`https://${DOMAIN}/calendar`);
     expect(screen.getByText(/Your imported tasks and course choices stay/)).toBeTruthy();
 
     await connect();

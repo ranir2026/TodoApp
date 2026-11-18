@@ -70,11 +70,11 @@ function Instruction({ n, children }) {
   );
 }
 
+// Where to find the link, then one field to paste it in. Nothing to type: when the app already
+// knows the school (an earlier connection, or a Canvas quick link), step 1 links straight to it.
 function ConnectStep({ variant, styles, host, replaceDomain, input, onInput, onBlur, onPaste, onPasteButton, onChange, status, feed, inputRef }) {
-  const [school, setSchool] = useState(host ?? "");
-  const schoolHost = school.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase();
-  const canOpen = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(schoolHost);
   const canPaste = typeof navigator !== "undefined" && Boolean(navigator.clipboard?.readText);
+  const strong = "font-semibold text-slate-800";
   const assignments = feed ? feed.items.filter(isAssignmentKind).length : 0;
   const events = feed ? feed.items.length - assignments : 0;
 
@@ -85,35 +85,24 @@ function ConnectStep({ variant, styles, host, replaceDomain, input, onInput, onB
           Paste the new Calendar Feed link for <strong className="font-semibold">{replaceDomain}</strong>. Your imported tasks and course choices stay as they are.
         </p>
       )}
-      <ol className="space-y-3">
-        <Instruction n={1}>
-          Open <strong className="font-semibold text-slate-800">Calendar</strong> in your school's Canvas.
-          <div className="mt-2 flex items-center gap-2">
-            <input
-              value={school}
-              onChange={(event) => setSchool(event.target.value)}
-              placeholder="school.instructure.com"
-              aria-label="Your school's Canvas address"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              className={variant === "desktop" ? `${styles.input} py-1.5!` : styles.input}
-            />
-            <a
-              href={canOpen ? `https://${schoolHost}/calendar` : undefined}
-              target="_blank"
-              rel="noreferrer"
-              aria-disabled={!canOpen}
-              className={`${styles.small} self-stretch ${canOpen ? "" : "pointer-events-none opacity-40"}`}
-            >
-              Open
-              <ExternalLinkIcon className="h-3.5 w-3.5" />
-            </a>
-          </div>
-        </Instruction>
-        <Instruction n={2}>At the bottom of the right sidebar, choose <strong className="font-semibold text-slate-800">Calendar Feed</strong>.</Instruction>
-        <Instruction n={3}>Copy the link it shows, then paste it here.</Instruction>
-      </ol>
+      <div>
+        <ol className="space-y-2.5">
+          <Instruction n={1}>
+            In Canvas, open <strong className={strong}>Calendar</strong> from the menu on the left.
+            {host && (
+              <a href={`https://${host}/calendar`} target="_blank" rel="noreferrer" className="mt-1 flex w-fit items-center gap-1 text-xs font-semibold text-course-600 hover:text-course-700">
+                Open your Canvas calendar
+                <ExternalLinkIcon className="h-3.5 w-3.5" />
+              </a>
+            )}
+          </Instruction>
+          <Instruction n={2}>Click <strong className={strong}>Calendar Feed</strong>, at the bottom of the right side.</Instruction>
+          <Instruction n={3}>Copy the link it shows and paste it below.</Instruction>
+        </ol>
+        {variant === "mobile" && (
+          <p className="mt-2.5 pl-8 text-caption leading-relaxed text-slate-400">Easiest on a computer: the Canvas app doesn't show this link.</p>
+        )}
+      </div>
 
       {feed ? (
         <div className="flex items-center gap-3 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
