@@ -27,6 +27,8 @@ Canvas import is still being tested, so it only appears at `/TodoApp/admin/` (th
 
 Students connect their Canvas **calendar feed** link (Canvas, then Calendar, then Calendar Feed). The link is a secret, so it's stored only in the user's own `app_state` row (not in localStorage), is shown masked, and is sent only to the `canvas-feed` Edge Function, which fetches and parses the feed server-side. The design and what Canvas's feed really contains are in `CANVAS_INTEGRATION.md`.
 
+Once connected, the app checks each feed while it's open: after it loads the cloud copy (on load, on focus, and coming back online), at most every 10 minutes per feed, and whenever the user presses refresh. A failed check changes nothing. Imported tasks get a Canvas chip linking to the assignment and a flag when Canvas moves a due date. Courses that show up later (a new semester) get a "match them" notice above the list. The Canvas card in the right column (Profile on mobile) opens settings: the masked link, course mapping, import toggles and Disconnect.
+
 ### Deploying the `canvas-feed` function
 
 1. Run the Canvas statements from `supabase-schema.sql` in the Supabase SQL editor: the `canvas` column and the `canvas_feed_requests` rate-limit table and `canvas_feed_allow()` function.

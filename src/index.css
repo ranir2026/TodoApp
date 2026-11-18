@@ -302,6 +302,46 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .today-panel, .today-tab { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #e2e8f0; }
 }
 
+/* Canvas setup: each step slides in from the side it lives on (forward from the right, back from
+   the left), so moving through the flow keeps its sense of place */
+.canvas-step { animation: canvas-step-in 240ms var(--ease-out) both; }
+@keyframes canvas-step-in { from { opacity: 0; transform: translateX(var(--step-shift, 12px)); } to { opacity: 1; transform: none; } }
+/* A notice that arrives settles down into place, like new fields do */
+.notice-enter { animation: project-field-in 280ms var(--ease-out) both; }
+
+/* Switch: the knob travels on the sheet curve, and stretches toward where it's going while pressed */
+.switch {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 2.125rem;
+  height: 1.25rem;
+  margin: 0;
+  border-radius: 9999px;
+  background: var(--color-slate-200);
+  cursor: pointer;
+  transition: background-color 200ms ease;
+}
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.2), 0 0 0 0.5px rgb(15 23 42 / 0.06);
+  transition: translate 280ms cubic-bezier(0.32, 0.72, 0, 1), width 180ms var(--ease-out);
+}
+.switch:checked { background: var(--color-course-500); }
+.switch:checked::before { translate: 0.875rem 0; }
+.switch:not(:disabled):active::before { width: 1.25rem; }
+.switch:checked:not(:disabled):active::before { translate: 0.625rem 0; }
+.switch:focus-visible { outline: 2px solid var(--color-course-300); outline-offset: 2px; }
+.switch:disabled { cursor: default; opacity: 0.5; }
+
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-surface-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 @keyframes undo-toast-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -339,6 +379,10 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .today-entry-submit.is-hidden { scale: 1; }
   .today-panel-body { opacity: 0; transition: opacity 150ms ease; }
   .today-dock[data-open="true"] .today-panel-body { opacity: 1; }
+  .canvas-step, .notice-enter { animation: modal-backdrop-in 150ms ease both; }
+  .switch::before { transition: none; }
+  .switch:not(:disabled):active::before { width: 1rem; }
+  .switch:checked:not(:disabled):active::before { translate: 0.875rem 0; }
 }
 
 @keyframes planner-flash-reduced { 0%, 40% { outline: 2px solid rgb(99 102 241 / 0.6); } 100% { outline: 2px solid rgb(99 102 241 / 0); } }
@@ -358,14 +402,16 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   --mobile-radius-control: 12px;
   --mobile-radius-panel: calc(var(--mobile-radius-control) + 14px);
   --mobile-radius-sheet: calc(var(--mobile-radius-control) + 16px);
+  /* The mobile palette lives here, not on .mobile-app: sheets shared with desktop (quick link,
+     Canvas) mount outside it and need the same ink and tint. One tint for every selected /
+     active state; amber stays the brand color on Add. */
+  --mobile-ink: #172033;
+  --mobile-muted: #7b8494;
+  --tint: #4f46e5;
+  --tint-soft: rgba(79, 70, 229, .1);
 }
 
 .mobile-app {
-  --mobile-ink: #172033;
-  --mobile-muted: #7b8494;
-  /* One tint for every selected / active state; amber stays the brand color on Add */
-  --tint: #4f46e5;
-  --tint-soft: rgba(79, 70, 229, .1);
   --grouped-bg: #f2f2f7;
   min-height: 100vh;
   background: var(--grouped-bg);

@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { isOverdue, parseDateKey } from "./occurrences";
 import { useSwipeToDelete } from "./useSwipeToDelete";
 import { extractLinks } from "./noteLinks";
 import { courseAccentStyle, courseChipStyle } from "./courseColors";
+import { CanvasDueFlag, CanvasSourceChips } from "./CanvasUI";
+import { CanvasActionsContext } from "./canvasStatus";
+
+// Links in the notes, minus the one the Canvas chip already opens
+function noteLinks(todo, canvasOn) {
+  const links = extractLinks(todo.description);
+  return canvasOn && todo.canvas?.url ? links.filter((link) => link.href !== todo.canvas.url) : links;
+}
 
 function formatTime(t) {
   const [h, m] = t.split(":").map(Number);
@@ -94,7 +102,8 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
   const done = todo.completed;
   const due = dueLabel(todo, false);
   const timeRange = timeRangeLabel(todo);
-  const links = extractLinks(todo.description);
+  const { enabled: canvasOn } = useContext(CanvasActionsContext);
+  const links = noteLinks(todo, canvasOn);
   return (
     <li data-task-id={todo.id} className={`task-row group flex items-center gap-2.5 py-1.5 pr-2 pl-3.5 transition-colors ${selected ? "is-selected bg-course-500/5 ring-2 ring-course-500/25 ring-inset" : "hover:bg-slate-50/70"}`}>
       {/* 16px to look at, 28px to hit */}
@@ -119,6 +128,7 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
         </span>
         {/* When it's due leads; the rest follow in falling order of importance */}
         {due && !done && <span className={`${SMALL_CHIP} ${due.tone}`}>{due.text}</span>}
+        <CanvasDueFlag todo={todo} compact />
         {timeRange && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`}>{timeRange}</span>}
         {todo.priority === "urgent" && !done && <span className={`${SMALL_CHIP} bg-urgent-100 text-urgent-700`}>Urgent</span>}
         {todo.repeat && todo.repeat !== "none" && <span className={`${SMALL_CHIP} bg-slate-100 text-slate-500`} title={`Repeats ${todo.repeat}`}>↻</span>}
@@ -135,6 +145,7 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
             ↗ {link.label}
           </span>
         ))}
+        <CanvasSourceChips todo={todo} compact />
       </button>
       <button
         type="button"
@@ -154,11 +165,12 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
 export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false, hideCourse = false }) {
   const isEvent = todo.type === "event";
   const isMilestone = todo.type === "milestone";
-  const links = extractLinks(todo.description);
+  const { enabled: canvasOn } = useContext(CanvasActionsContext);
+  const links = noteLinks(todo, canvasOn);
   const due = dueLabel(todo, isEvent);
   const timeRange = timeRangeLabel(todo);
   // A bare row (just a name) is centered on its checkbox; with chips, the checkbox lines up with the name's line
-  const hasChips = Boolean((due && !todo.completed) || timeRange || todo.priority === "urgent" || isEvent || isMilestone || project || (course && !hideCourse) || (todo.repeat && todo.repeat !== "none") || links.length);
+  const hasChips = Boolean((due && !todo.completed) || timeRange || todo.priority === "urgent" || isEvent || isMilestone || project || (course && !hideCourse) || (todo.repeat && todo.repeat !== "none") || links.length || (canvasOn && todo.canvas));
   const toggleOffset = hasChips ? "mt-0.5" : "";
   const [completing, setCompleting] = useState(false);
   const done = todo.completed || completing;
@@ -258,6 +270,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
         {due && !todo.completed && (
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
         )}
+        <CanvasDueFlag todo={todo} />
         {timeRange && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
         )}
@@ -315,6 +328,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
             ↗ {link.label}
           </span>
         ))}
+        <CanvasSourceChips todo={todo} />
       </div>}
     </button>
   );

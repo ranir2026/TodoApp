@@ -61,6 +61,7 @@ New optional jsonb column `canvas` on `app_state`, registered in `OPTIONAL_COLUM
 {
   feeds: [{ id, url, domain, label, lastSyncedAt, status }],     // a list: students can have 2 schools
   courseMap: { "<domain>:<canvasCourseId>": "<categoryId>" | null },   // null = skipped ("Don't import")
+  courseLabels: { "<domain>:<canvasCourseId>": "<label from the feed>" },   // added in Phase 5: names courses in settings without refetching
   dismissedIds: [],            // tombstones: user-deleted imports must not return
   includeNonAssignments: false,   // calendar events etc.; assignments only by default
   includePastDue: false

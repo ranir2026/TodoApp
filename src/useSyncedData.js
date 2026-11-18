@@ -33,6 +33,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const columnsRef = useRef(Object.fromEntries(OPTIONAL_COLUMNS.map((column) => [column, true])));
   const hasPendingSaveRef = useRef(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  // When the cloud copy was last pulled in (on load, focus, or coming back online), so work that
+  // should run against fresh data, like a Canvas check, can follow it
+  const [pulledAt, setPulledAt] = useState(0);
 
   useEffect(() => {
     latestDataRef.current = { todos, courses, quickLinks, planner, canvas };
@@ -139,6 +142,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         saveToCloud(user.id, payload, columnsRef, onError);
       }
       loadedUserRef.current = user.id;
+      setPulledAt(Date.now());
     };
 
     fetchRemoteState();
@@ -240,7 +244,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     };
   }, [user, todos, courses, quickLinks, planner, canvas, onError]);
 
-  return { lastSyncedAt: user ? lastSyncedAt : null };
+  return { lastSyncedAt: user ? lastSyncedAt : null, pulledAt: user ? pulledAt : 0 };
 }
 
 function isAuthError(error) {
