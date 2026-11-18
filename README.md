@@ -19,4 +19,19 @@ npm install
 npm run dev
 ```
 
-Create a production build with `npm run build` and check code quality with `npm run lint`.
+Create a production build with `npm run build`, check code quality with `npm run lint`, and run the tests with `npm test`.
+
+## Canvas import (admin preview)
+
+Canvas import is still being tested, so it only appears at `/TodoApp/admin/` (the build copies the page there). That's a hidden page, not access control: anyone with the link can open it, and they still sign in and see only their own data.
+
+Students connect their Canvas **calendar feed** link (Canvas, then Calendar, then Calendar Feed). The link is a secret, so it's stored only in the user's own `app_state` row (not in localStorage), is shown masked, and is sent only to the `canvas-feed` Edge Function, which fetches and parses the feed server-side. The design and what Canvas's feed really contains are in `CANVAS_INTEGRATION.md`.
+
+### Deploying the `canvas-feed` function
+
+1. Run the Canvas statements from `supabase-schema.sql` in the Supabase SQL editor: the `canvas` column and the `canvas_feed_requests` rate-limit table and `canvas_feed_allow()` function.
+2. Sign in to the Supabase CLI once: `npx supabase login`.
+3. Deploy: `npx supabase functions deploy canvas-feed --project-ref <your project ref>` (the ref is the subdomain of your Supabase URL). `supabase/config.toml` sets `verify_jwt = false` for it because the function checks the caller's sign-in itself, which works with both old and new Supabase signing keys.
+4. Optional: if the app is served from somewhere other than `https://ranir2026.github.io` or localhost, set the allowed origins: `npx supabase secrets set ALLOWED_ORIGINS=https://your.site --project-ref <ref>`.
+
+The function needs no other secrets: it uses the `SUPABASE_URL` Supabase provides, and the app's own public key from the request. It accepts only `https` links shaped like `/feeds/calendars/*.ics` on public hostnames, never follows redirects, times out after 10 seconds, caps feeds at 3 MB, allows 30 fetches per user per 10 minutes, and returns error codes only, so the link never appears in responses or logs.

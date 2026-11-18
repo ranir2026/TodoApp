@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useLocalStorage } from "./useLocalStorage";
 import StatsBar from "./StatsBar";
@@ -29,6 +29,9 @@ import { COLOR_PALETTE } from "./courseColors";
 import FilterMenu from "./FilterMenu";
 import { DEFAULT_FILTERS, activeFilterCount } from "./filters";
 import FlipScope from "./FlipScope";
+import { isAdminPage } from "./adminMode";
+import { hasCanvasData } from "./canvasSync";
+import { settingsBeforeImport } from "./canvasImport";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -45,6 +48,8 @@ const TYPE_NOUNS = { task: "tasks", event: "events", milestone: "milestones", al
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
 const COURSE_COLOR_PALETTE = COLOR_PALETTE;
 const DEFAULT_QUICK_LINKS = [];
+// Only the admin page offers Canvas import, so everyone else never downloads it
+const CanvasConnectModal = lazy(() => import("./CanvasConnectModal"));
 
 function ArchiveIcon() {
   return (
@@ -88,6 +93,9 @@ export default function App() {
   const [storedPlanner, setPlanner] = useLocalStorage("planner", EMPTY_PLANNER);
   const planner = useMemo(() => normalizePlanner(storedPlanner), [storedPlanner]);
   const updatePlanner = useCallback((change) => setPlanner((current) => change(normalizePlanner(current))), [setPlanner]);
+  // Canvas settings hold the feed link, a secret, so they stay out of localStorage and live only in
+  // the user's own synced row. {} until that row loads (or if Canvas was never connected).
+  const [canvas, setCanvas] = useState({});
   const [addFormCollapsed, setAddFormCollapsed] = useLocalStorage("addFormCollapsed", false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [filter, setFilter] = useState("active"); // active | completed | all
@@ -118,6 +126,8 @@ export default function App() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const closeCanvas = useCallback(() => setCanvasOpen(false), []);
   // Asks the planner to open on a particular tab: { tab }, a new object each time
   const [plannerTabRequest, setPlannerTabRequest] = useState(null);
   const [todayOpen, setTodayOpen] = useLocalStorage("todayPanelOpen", false);
@@ -181,7 +191,7 @@ export default function App() {
   }, []);
 
   const handleSyncError = useCallback((message) => setSyncError(message), []);
-  const { lastSyncedAt } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, storedPlanner, setPlanner, handleSyncError);
+  const { lastSyncedAt } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, storedPlanner, setPlanner, canvas, setCanvas, handleSyncError);
   const syncStatus = !session
     ? "Saved on this device only"
     : syncError
@@ -189,6 +199,28 @@ export default function App() {
     : lastSyncedAt
     ? `Synced at ${lastSyncedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
     : "Connecting…";
+  // Canvas import needs the server, and the saved settings loaded first so an import can't
+  // replace settings this device hasn't seen yet
+  const canvasAvailable = isAdminPage && isSupabaseConfigured && Boolean(session);
+  const canvasReady = canvasAvailable && Boolean(lastSyncedAt);
+  const canvasDomain = canvas.feeds?.[0]?.domain ?? null;
+
+  // Commits a Connect Canvas plan. Undo takes back the tasks and categories it added and the
+  // connection itself.
+  function importCanvas(plan) {
+    const previousCanvas = settingsBeforeImport(canvas);
+    const addedIds = new Set(plan.addedIds);
+    const createdIds = new Set(plan.createdCategoryIds);
+    const fallbackId = (activeCourses[0] ?? courses[0])?.id ?? null;
+    setTodos(plan.todos);
+    setCourses(plan.courses);
+    setCanvas(plan.canvas);
+    showUndo(() => {
+      setTodos((prev) => prev.filter((todo) => !addedIds.has(todo.id)).map((todo) => (createdIds.has(todo.courseId) ? { ...todo, courseId: fallbackId } : todo)));
+      setCourses((prev) => prev.filter((course) => !createdIds.has(course.id)));
+      setCanvas(previousCanvas);
+    }, plan.addedIds.length ? `Added ${plan.addedIds.length} from Canvas` : "Connected Canvas");
+  }
 
   function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays, projectId, milestoneId }) {
     const independentDates = type === "event" && repeat === "none" && dueDates?.length > 1 ? dueDates : [dueDate];
@@ -286,7 +318,13 @@ export default function App() {
     const deleted = todos[index];
     if (!deleted) return;
     setTodos((prev) => prev.filter((t) => t.id !== id));
-    showUndo(() => setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]), `Deleted “${deleted.title}”`);
+    // A deleted Canvas import is remembered so a later sync doesn't bring it back
+    const tombstone = Boolean(deleted.canvas) && hasCanvasData(canvas);
+    if (tombstone) setCanvas((current) => ({ ...current, dismissedIds: [...new Set([...(current.dismissedIds ?? []), id])] }));
+    showUndo(() => {
+      setTodos((prev) => [...prev.slice(0, index), deleted, ...prev.slice(index)]);
+      if (tombstone) setCanvas((current) => ({ ...current, dismissedIds: (current.dismissedIds ?? []).filter((dismissed) => dismissed !== id) }));
+    }, `Deleted “${deleted.title}”`);
     setEditingItem(null);
   }
 
@@ -559,7 +597,7 @@ export default function App() {
         else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen,
+    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen && !canvasOpen,
   );
 
   const commands = useMemo(
@@ -641,7 +679,7 @@ export default function App() {
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
           <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
           <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todosView} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
-          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
+          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3>{canvasAvailable && <section className="mobile-panel"><div className="mobile-panel-heading"><h3>Canvas</h3><span>Admin preview</span></div><p className="mobile-muted">{canvasDomain ? `Connected to ${canvasDomain}` : "Import assignments from your school's Canvas calendar."}</p><button type="button" onClick={() => setCanvasOpen(true)} disabled={!canvasReady} className="mobile-panel-action disabled:opacity-50">{!canvasReady ? "Loading…" : canvasDomain ? "Reconnect Canvas" : "Connect Canvas"}</button></section>}<section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
         </main>
         <div className="mobile-dock"><button type="button" onClick={() => setMobileAddOpen(true)} className="mobile-add-fab" aria-label="Add task or event"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) * 100}%)` }} />{MOBILE_TABS.map((item) => <button type="button" key={item.id} onPointerDown={(event) => event.isPrimary && event.button === 0 && switchMobileTab(item.id)} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav></div>
         <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
@@ -655,6 +693,7 @@ export default function App() {
           <h1 className="sr-only">Todo</h1>
           <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
           <p className="mt-1.5 text-base font-semibold text-slate-500">{monthDate}</p>
+          {isAdminPage && <p className="mt-2 inline-flex rounded-full border border-todo-200 bg-todo-50 px-2 py-0.5 text-caption font-semibold text-todo-700">Admin preview</p>}
         </header>
 
         <button
@@ -672,6 +711,17 @@ export default function App() {
           Planner
           <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono text-xs text-course-600">{comboLabel(resolvedKeymap.openPlanner)}</span>
         </button>
+
+        {canvasAvailable && (
+          <button
+            onClick={() => setCanvasOpen(true)}
+            disabled={!canvasReady}
+            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 disabled:opacity-50"
+          >
+            {canvasDomain ? "Canvas" : "Connect Canvas"}
+            <span className="min-w-0 truncate pl-2 text-caption font-normal text-slate-400">{!canvasReady ? "Loading…" : canvasDomain ? "Reconnect" : "Import assignments"}</span>
+          </button>
+        )}
 
         <AddTodoForm
           ref={addInputRef}
@@ -1012,6 +1062,11 @@ export default function App() {
         onClose={() => setQuickAddOpen(false)}
       />
       <QuickLinkModal open={quickLinkOpen} onAdd={addQuickLink} onClose={() => setQuickLinkOpen(false)} />
+      {canvasAvailable && (
+        <Suspense fallback={null}>
+          <CanvasConnectModal open={canvasOpen} onClose={closeCanvas} onImport={importCanvas} canvas={canvas} courses={courses} todos={todos} quickLinks={quickLinks} />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -1,0 +1,7 @@
+# Supabase CLI settings for this repo's Edge Functions (see README, "Canvas feed function").
+project_id = "TodoApp"
+
+[functions.canvas-feed]
+# The handler checks the caller's JWT itself by asking Supabase Auth, which works with both
+# the legacy and the newer signing keys.
+verify_jwt = false

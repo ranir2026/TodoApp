@@ -1,0 +1,263 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:icalendar-ruby
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Sam Student Calendar (Canvas)
+X-WR-CALDESC:Calendar events for the user\, Sam Student
+BEGIN:VEVENT
+DTSTAMP:20261103T151200Z
+UID:event-assignment-1001
+DTSTART:20261120T040000Z
+DTEND:20261120T040000Z
+CLASS:PUBLIC
+DESCRIPTION:Chapter 21 problems 3\, 7\, 12 and 18. Show all work.
+SEQUENCE:0
+SUMMARY:Problem Set 7 [PHYS1153.30001.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_501&month=11&year=2026#assignment_1001
+X-ALT-DESC;FMTTYPE=text/html:<p>Chapter 21 problems 3\, 7\, 12 and 18. Show
+  all work.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20260925T145100Z
+UID:event-assignment-1002
+DTSTART;VALUE=DATE;VALUE=DATE:20261122
+CLASS:PUBLIC
+DESCRIPTION:Read sections 21.1–21.4 before the quiz.\n\nThe quiz opens Fr
+ iday at 9:00 AM and closes Sunday at 11:59 PM. You get two attempts\; the 
+ higher score counts.\n \nQuestions? Post in the Q&A board 📝
+SEQUENCE:0
+SUMMARY:Reading Quiz 8  [PHYS1153.30001.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_501&month=11&year=2026#assignment_1002
+X-ALT-DESC;FMTTYPE=text/html:<p>Read sections 21.1&ndash\;21.4 before the q
+ uiz.</p>\n<p>The quiz opens Friday at 9:00 AM and closes Sunday at 11:59 P
+ M. You get two attempts\; the higher score counts.</p>\n<p>&nbsp\;</p>\n<p
+ >Questions? Post in the Q&amp\;A board 📝</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261110T120000Z
+UID:event-assignment-1003
+DTSTART:20261124T170000Z
+DTEND:20261124T170000Z
+CLASS:PUBLIC
+DESCRIPTION:
+SEQUENCE:0
+SUMMARY:Lab 6 Report [PHYS1156.30002.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_502&month=11&year=2026#assignment_1003
+X-ALT-DESC;FMTTYPE=text/html:
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261001T090000Z
+UID:event-assignment-1004
+DTSTART:20261030T030000Z
+DTEND:20261030T030000Z
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:Lab 5 Report [PHYS1156.30002.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_502&month=10&year=2026#assignment_1004
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261015T180000Z
+UID:event-assignment-1005
+DTSTART;VALUE=DATE;VALUE=DATE:20261116
+CLASS:PUBLIC
+DESCRIPTION:Section 6.2\, exercises 1-25 odd.
+SEQUENCE:0
+SUMMARY:Homework 9 [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=11&year=2026#assignment_1005
+X-ALT-DESC;FMTTYPE=text/html:<p>Section 6.2\, exercises 1-25 odd.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261020T130000Z
+UID:event-assignment-1006
+DTSTART:20261101T053000Z
+DTEND:20261101T053000Z
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:Midterm 2 Corrections [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=11&year=2026#assignment_1006
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261020T130500Z
+UID:event-assignment-1007
+DTSTART:20261101T063000Z
+DTEND:20261101T063000Z
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:Homework 8 [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=11&year=2026#assignment_1007
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261112T164000Z
+UID:event-assignment-1008
+DTSTART:20261208T045900Z
+DTEND:20261208T045900Z
+CLASS:PUBLIC
+DESCRIPTION:
+SEQUENCE:0
+SUMMARY:Homework 10 [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=12&year=2026#assignment_1008
+X-ALT-DESC;FMTTYPE=text/html:
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261105T140000Z
+UID:event-assignment-1009
+DTSTART:20261119T130000Z
+DTEND:20261119T130000Z
+CLASS:PUBLIC
+DESCRIPTION:Covers stoichiometry.
+SEQUENCE:0
+SUMMARY:Week 11 Quiz [CHEM1211.30004.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_504&month=11&year=2026#assignment_1009
+X-ALT-DESC;FMTTYPE=text/html:<p>Covers stoichiometry.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261105T140200Z
+UID:event-assignment-1010
+DTSTART:20261119T130000Z
+DTEND:20261119T130000Z
+CLASS:PUBLIC
+DESCRIPTION:Covers stoichiometry.
+SEQUENCE:0
+SUMMARY:Week 11 Quiz [CHEM1211.30005.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_505&month=11&year=2026#assignment_1010
+X-ALT-DESC;FMTTYPE=text/html:<p>Covers stoichiometry.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261020T171100Z
+UID:event-assignment-override-7001
+DTSTART:20261118T190000Z
+DTEND:20261118T190000Z
+CLASS:PUBLIC
+DESCRIPTION:
+SEQUENCE:0
+SUMMARY:Essay 3 Draft (ENGL1010 30006 First-Year Writing SEC 06 Fall 2026) 
+ [ENGL1010.MERGED.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_506&month=11&year=2026#assignment_1011
+X-ALT-DESC;FMTTYPE=text/html:
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261114T101500Z
+UID:event-assignment-override-7002
+DTSTART:20261125T000000Z
+DTEND:20261125T000000Z
+CLASS:PUBLIC
+DESCRIPTION:Review two classmates' drafts using the rubric.
+SEQUENCE:0
+SUMMARY:Peer Review 3 (1 student) [ENGL1010.MERGED.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_506&month=11&year=2026#assignment_1012
+X-ALT-DESC;FMTTYPE=text/html:<p>Review two classmates' drafts using the rub
+ ric.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261109T200000Z
+UID:event-assignment-1013
+DTSTART:20261203T170000Z
+DTEND:20261203T170000Z
+CLASS:PUBLIC
+DESCRIPTION:Push your branch and open a pull request: https://code.example.
+ org/cs2100/project-3
+SEQUENCE:0
+SUMMARY:Project 3 Milestone [CS2100.30008.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_508&month=12&year=2026#assignment_1013
+X-ALT-DESC;FMTTYPE=text/html:<p>Push your branch and open a pull request: <
+ a href="https://code.example.org/cs2100/project-3">project-3</a></p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261110T150000Z
+UID:event-calendar-event-4001
+DTSTART:20261202T230000Z
+DTEND:20261203T003000Z
+CLASS:PUBLIC
+DESCRIPTION:Bring questions from the practice exam.
+LOCATION:Room 101\, Science Hall
+SEQUENCE:0
+SUMMARY:Exam 2 Review Session [CS2100.30008.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_508&month=12&year=2026#calendar_event_4001
+X-ALT-DESC;FMTTYPE=text/html:<p>Bring questions from the practice exam.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261112T090000Z
+UID:event-calendar-event-4002
+DTSTART:20261119T193000Z
+DTEND:20261119T200000Z
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:Advising appointment
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=use
+ r_9001&month=11&year=2026#calendar_event_4002
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20260820T120000Z
+UID:event-calendar-event-4003
+DTSTART;VALUE=DATE;VALUE=DATE:20261126
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:No class: Thanksgiving break [PHYS1153.30001.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_501&month=11&year=2026#calendar_event_4003
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261101T120000Z
+UID:event-assignment-1014
+DTSTART;VALUE=DATE;VALUE=DATE:20270310
+CLASS:PUBLIC
+DESCRIPTION:
+SEQUENCE:0
+SUMMARY:Spring Housing Form [Peer.Mentoring.Community.26.27]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_507&month=03&year=2027#assignment_1014
+X-ALT-DESC;FMTTYPE=text/html:
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261108T110000Z
+UID:event-sub-assignment-5001
+DTSTART:20261120T030000Z
+DTEND:20261120T030000Z
+CLASS:PUBLIC
+DESCRIPTION:Post your initial response.
+SEQUENCE:0
+SUMMARY:Week 12 Discussion Reply to Topic [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=11&year=2026#assignment_1015
+X-ALT-DESC;FMTTYPE=text/html:<p>Post your initial response.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261108T110000Z
+UID:event-sub-assignment-5002
+DTSTART:20261122T030000Z
+DTEND:20261122T030000Z
+CLASS:PUBLIC
+DESCRIPTION:Reply to two classmates.
+SEQUENCE:0
+SUMMARY:Week 12 Discussion Required Replies (2) [MATH2010.30003.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_503&month=11&year=2026#assignment_1015
+X-ALT-DESC;FMTTYPE=text/html:<p>Reply to two classmates.</p>
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261002T080000Z
+UID:event-assignment-1016
+DTSTART:20261020T030000Z
+DTEND:20261020T030000Z
+CLASS:PUBLIC
+SEQUENCE:0
+SUMMARY:Problem Set 5 [PHYS1153.30001.202710]
+URL;VALUE=URI:https://example.instructure.com/calendar?include_contexts=cou
+ rse_501&month=10&year=2026#assignment_1016
+END:VEVENT
+END:VCALENDAR

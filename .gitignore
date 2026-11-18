@@ -28,3 +28,12 @@ config.yaml
 
 .claude/
 note
+
+# Supabase CLI local state (project link, caches)
+supabase/.temp
+supabase/.branches
+
+# A real Canvas calendar feed is a secret link (and its file name is the token).
+# Only the scrubbed fixtures may be committed.
+*.ics
+!src/__fixtures__/canvas/*.ics
