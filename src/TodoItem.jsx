@@ -161,8 +161,10 @@ function CompactTaskRow({ todo, onToggle, onDelete, onEdit, selected }) {
   );
 }
 
-// hideCourse: the list is already grouped by category (header + accent stripe), so the chip would say it a third time
-export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false, hideCourse = false }) {
+// hideCourse: the list is already grouped by category (header + accent stripe), so the chip would say it a third time.
+// preview: drawn in the editor to show how the row will look, so it leaves out what only a list row
+// needs (its delete actions, and the ids the list uses to find and animate its rows)
+export default function TodoItem({ todo, course, project, onToggle, onDelete, onEdit, selected, mobile = false, leavesOnComplete = false, hideCourse = false, preview = false }) {
   const isEvent = todo.type === "event";
   const isMilestone = todo.type === "milestone";
   const { enabled: canvasOn } = useContext(CanvasActionsContext);
@@ -335,11 +337,11 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
 
   if (mobile) {
     return (
-      <li ref={rowRef} data-task-id={todo.id} className="task-swipe-row">
-        <button type="button" onClick={remove} tabIndex={swipeOpen ? 0 : -1} className="task-swipe-delete" aria-label={`Delete ${todo.title}`}>Delete</button>
+      <li ref={rowRef} data-task-id={preview ? undefined : todo.id} className="task-swipe-row">
+        {!preview && <button type="button" onClick={remove} tabIndex={swipeOpen ? 0 : -1} className="task-swipe-delete" aria-label={`Delete ${todo.title}`}>Delete</button>}
         <div
           ref={surfaceRef}
-          {...swipeHandlers}
+          {...(preview ? {} : swipeHandlers)}
           className={`task-row-mobile flex items-start gap-3 border-l-4 ${selected ? "ring-2 ring-[var(--tint)]/30" : ""}`}
           style={courseAccentStyle(course)}
         >
@@ -352,8 +354,8 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
 
   return (
     <li
-      data-task-id={todo.id}
-      data-flip-key={todo.id}
+      data-task-id={preview ? undefined : todo.id}
+      data-flip-key={preview ? undefined : todo.id}
       className={`task-card group flex ${hasChips ? "items-start" : "items-center"} gap-3 rounded-xl border bg-white px-4 py-3 transition-[box-shadow,background-color] hover:shadow-sm ${
         selected ? "is-selected border-course-300 ring-2 ring-course-500/25" : "border-slate-200"
       } border-l-4`}
@@ -361,7 +363,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
     >
       {toggleButton}
       {details}
-      <button
+      {!preview && <button
         onClick={() => onDelete(todo.id, todo.occurrenceDate)}
         className="row-action shrink-0 rounded-full p-1 text-slate-300 hover:text-danger-500"
         aria-label="Delete"
@@ -369,7 +371,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
           <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
         </svg>
-      </button>
+      </button>}
     </li>
   );
 }

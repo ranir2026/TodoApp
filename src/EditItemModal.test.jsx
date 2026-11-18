@@ -159,6 +159,38 @@ describe("Edit item (desktop)", () => {
     expect(onSave.mock.calls[0][1].priority).toBe("urgent");
   });
 
+  it("previews the row as the list will show it, and keeps the preview out of reach", () => {
+    setViewport(false);
+    renderEditor({ ...TASK, projectId: "p1" });
+    const preview = document.querySelector(".edit-preview");
+    expect(preview.hasAttribute("inert")).toBe(true);
+    expect(within(preview).getByText("Problem set 7")).toBeTruthy();
+    expect(within(preview).getByText("Physics")).toBeTruthy();
+    expect(within(preview).getByText("▸ Lab report")).toBeTruthy();
+    expect(within(preview).queryByText("Urgent")).toBeNull();
+    // A preview isn't a list row: nothing in it deletes, and the list can't mistake it for the real one
+    expect(preview.querySelector("[data-task-id]")).toBeNull();
+    expect(within(preview).queryByLabelText(/Delete/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Problem set 8" } });
+    fireEvent.click(screen.getByRole("switch", { name: /Urgent/ }));
+    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "c1" } });
+    fireEvent.change(screen.getByLabelText("Repeat"), { target: { value: "weekly" } });
+    expect(within(preview).getByText("Problem set 8")).toBeTruthy();
+    expect(within(preview).getByText("Urgent")).toBeTruthy();
+    expect(within(preview).getByText("General")).toBeTruthy();
+    expect(within(preview).getByText("↻ weekly")).toBeTruthy();
+  });
+
+  it("keeps notes to one line at the end of the form", () => {
+    setViewport(false);
+    renderEditor(TASK);
+    const notes = screen.getByLabelText("Notes");
+    expect(notes.rows).toBe(1);
+    const fields = [...document.querySelectorAll("input, select, textarea")];
+    expect(fields.at(-1)).toBe(notes);
+  });
+
   it("asks a repeating item whether to delete one date or every repeat", () => {
     setViewport(false);
     const { onDelete, onSkipOccurrence } = renderEditor(WEEKLY);

@@ -4,9 +4,10 @@ import { canvasEditedFields, canvasVersion } from "./canvasManage";
 import { CanvasEditPanel } from "./CanvasUI";
 import Collapsible from "./Collapsible";
 import { CloseIcon, PlusIcon } from "./icons";
-import { parseDateKey, REPEAT_OPTIONS } from "./occurrences";
+import { parseDateKey, REPEAT_OPTIONS, resolveTask } from "./occurrences";
 import SegmentedControl from "./SegmentedControl";
 import SwitchRow from "./SwitchRow";
+import TodoItem from "./TodoItem";
 import useDialogFocus from "./useDialogFocus";
 
 const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
@@ -16,7 +17,6 @@ const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const dayName = (index, weekday) => new Date(2026, 0, 4 + index).toLocaleDateString(undefined, { weekday });
 // What "Stop after" counts: a weekly repeat on several days still counts weeks
 const REPEAT_UNITS = { daily: "days", weekly: "weeks", monthly: "months" };
-const NOTES_MAX_HEIGHT = 240;
 const TYPE_OPTIONS = [{ id: "task", label: "Task" }, { id: "event", label: "Event" }];
 
 const STYLES = {
@@ -24,7 +24,9 @@ const STYLES = {
     label: "mb-1 block text-caption font-medium text-slate-500",
     input: "field-tint block h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400",
     title: "field-tint block h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-[15px] font-medium text-slate-900 outline-none",
-    textarea: "field-tint block w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none placeholder:text-slate-400",
+    // One line tall, like the fields around it, and five lines at most before it scrolls
+    textarea: "field-tint block w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-[7px] text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400",
+    notesMax: 116,
     select: "field-tint block h-9 w-full min-w-0 appearance-none truncate rounded-lg border border-slate-200 bg-white pr-8 text-sm text-slate-800 outline-none",
     selectPad: "pl-3",
     selectPadDot: "pl-8",
@@ -56,6 +58,7 @@ const STYLES = {
     input: "mobile-sheet-field",
     title: "mobile-sheet-field font-medium",
     textarea: "mobile-sheet-field resize-none leading-snug",
+    notesMax: 136,
     select: "mobile-sheet-field appearance-none truncate pr-10!",
     selectPad: "",
     selectPadDot: "pl-9!",
@@ -254,9 +257,9 @@ export default function EditItemModal({ item, courses, projects = [], milestones
     if (!notes) return;
     notes.style.height = "auto";
     const height = notes.scrollHeight + notes.offsetHeight - notes.clientHeight;
-    notes.style.height = `${Math.min(height, NOTES_MAX_HEIGHT)}px`;
-    notes.style.overflowY = height > NOTES_MAX_HEIGHT ? "auto" : "hidden";
-  }, [description, current, open]);
+    notes.style.height = `${Math.min(height, s.notesMax)}px`;
+    notes.style.overflowY = height > s.notesMax ? "auto" : "hidden";
+  }, [description, current, open, s.notesMax]);
 
   if (!current || !form) return null;
   if (!mobile && !open) return null;
@@ -364,9 +367,30 @@ export default function EditItemModal({ item, courses, projects = [], milestones
     <button type="button" onClick={() => hide(field)} aria-label={`Remove ${label}`} className={s.remove}>Remove</button>
   );
 
+  // The row as the list will draw it once saved, chips and all. It's only a picture, so it can't
+  // be focused or clicked and screen readers skip it; the fields below say the same thing.
+  const previewTodo = resolveTask({ ...current, ...patch, title: patch.title || "Untitled" });
+  const previewRow = (
+    <div inert aria-hidden="true" className={`edit-preview ${mobile ? "rounded-[var(--mobile-radius-panel)] bg-[#f2f2f7] p-2" : ""}`}>
+      <ul>
+        <TodoItem
+          preview
+          mobile={mobile}
+          todo={previewTodo}
+          course={course}
+          project={projects.find((project) => project.id === previewTodo.projectId)}
+          onToggle={() => {}}
+          onDelete={() => {}}
+          onEdit={() => {}}
+        />
+      </ul>
+    </div>
+  );
+
   const body = (
     <>
       {mobile && subtitle && <p id={id("subtitle")} className="-mt-2 mb-4 text-[13px] text-slate-500">{subtitle}</p>}
+      {mobile && <div className="mb-5">{previewRow}</div>}
       {current.canvas && (
         <div className={mobile ? "mb-5" : "mb-4"}>
           <CanvasEditPanel todo={current} edited={canvasEdited} onRevert={revertToCanvas} mobile={mobile} />
@@ -385,18 +409,6 @@ export default function EditItemModal({ item, courses, projects = [], milestones
           className={s.title}
         />
         {titleMissing && <p id={id("title-error")} className={s.error}>Add a title to save.</p>}
-      </Field>
-      <Field id={id("notes")} label="Notes" s={s} className={s.gap}>
-        <textarea
-          ref={notesRef}
-          id={id("notes")}
-          value={form.description}
-          onChange={(event) => update("description", event.target.value)}
-          onKeyDown={saveShortcut}
-          placeholder="Optional"
-          rows={3}
-          className={s.textarea}
-        />
       </Field>
 
       <div className={s.group}>
@@ -525,6 +537,21 @@ export default function EditItemModal({ item, courses, projects = [], milestones
         </div>
       )}
 
+      <div className={s.group}>
+        <Field id={id("notes")} label="Notes" s={s}>
+          <textarea
+            ref={notesRef}
+            id={id("notes")}
+            value={form.description}
+            onChange={(event) => update("description", event.target.value)}
+            onKeyDown={saveShortcut}
+            placeholder="Optional"
+            rows={1}
+            className={s.textarea}
+          />
+        </Field>
+      </div>
+
       {mobile && (
         <div className="mt-6">
           <button type="button" onClick={startDelete} className={s.danger}>{deleteLabel}</button>
@@ -613,7 +640,12 @@ export default function EditItemModal({ item, courses, projects = [], milestones
               <CloseIcon />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-1 pb-5">{body}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* On a tall enough screen it stays in view while the fields scroll, so every change
+                shows up in it; on a short one it scrolls away and leaves the room to the fields */}
+            <div className="z-20 border-y border-slate-100 bg-slate-50 px-5 py-3 [@media(min-height:720px)]:sticky [@media(min-height:720px)]:top-0">{previewRow}</div>
+            <div className="px-5 pt-4 pb-5">{body}</div>
+          </div>
           <div className="border-t border-slate-100 px-5 py-3">
             {confirm === "discard" && (
               <div className="flex items-center gap-2">
