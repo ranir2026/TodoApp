@@ -59,7 +59,9 @@ describe("Connect Canvas", () => {
   it("asks for nothing but the pasted link", () => {
     open();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
-    expect(screen.getByText(/Calendar Feed/, { selector: "strong" })).toBeTruthy();
+    // It says where the link lives, step by step
+    expect(screen.getAllByText("Calendar Feed", { selector: "strong" }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/ends in .ics/)).toBeTruthy();
     // With no school known yet there's nothing to link to; a known one gets a direct link
     expect(screen.queryByRole("link", { name: /Open your Canvas calendar/ })).toBeNull();
     cleanup();

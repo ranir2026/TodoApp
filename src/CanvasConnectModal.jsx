@@ -61,11 +61,15 @@ function StepDots({ step, count }) {
   );
 }
 
-function Instruction({ n, children }) {
+// One step: what to do, in the body color, then a quieter line on where exactly to look
+function Instruction({ n, children, detail }) {
   return (
     <li className="flex gap-3">
       <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-slate-100 text-caption font-semibold text-slate-500 tabular-nums">{n}</span>
-      <div className="min-w-0 flex-1 text-sm leading-relaxed text-slate-600">{children}</div>
+      <div className="min-w-0 flex-1 text-sm leading-relaxed text-slate-700">
+        {children}
+        {detail && <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{detail}</p>}
+      </div>
     </li>
   );
 }
@@ -86,9 +90,12 @@ function ConnectStep({ variant, styles, host, replaceDomain, input, onInput, onB
         </p>
       )}
       <div>
-        <ol className="space-y-2.5">
-          <Instruction n={1}>
-            In Canvas, open <strong className={strong}>Calendar</strong> from the menu on the left.
+        <p className="mb-3 text-sm leading-relaxed text-slate-600">
+          Canvas gives every student a private <strong className={strong}>Calendar Feed</strong> link. Here's where to find yours:
+        </p>
+        <ol className="space-y-3">
+          <Instruction n={1} detail={host ? "Or jump straight there:" : "Use the same Canvas site you open for classes. The Canvas phone app doesn't show this link, so a computer is easiest."}>
+            Open Canvas in a web browser and sign in.
             {host && (
               <a href={`https://${host}/calendar`} target="_blank" rel="noreferrer" className="mt-1 flex w-fit items-center gap-1 text-xs font-semibold text-course-600 hover:text-course-700">
                 Open your Canvas calendar
@@ -96,12 +103,17 @@ function ConnectStep({ variant, styles, host, replaceDomain, input, onInput, onB
               </a>
             )}
           </Instruction>
-          <Instruction n={2}>Click <strong className={strong}>Calendar Feed</strong>, at the bottom of the right side.</Instruction>
-          <Instruction n={3}>Copy the link it shows and paste it below.</Instruction>
+          <Instruction n={2} detail="It's in the dark menu down the left edge of Canvas, next to Dashboard and Courses.">
+            Click <strong className={strong}>Calendar</strong>.
+          </Instruction>
+          <Instruction n={3} detail="Look in the panel on the right side of the calendar and scroll to its very bottom, below your list of calendars. If there's no right-hand panel, make the window wider.">
+            Click <strong className={strong}>Calendar Feed</strong>.
+          </Instruction>
+          <Instruction n={4} detail="A small window opens with a link that starts with https:// and ends in .ics. Select all of it and copy it (Ctrl+C, or ⌘C on a Mac). Copy it rather than opening it; opening it just downloads a file.">
+            Copy the link it shows.
+          </Instruction>
+          <Instruction n={5}>Paste it in the box below.</Instruction>
         </ol>
-        {variant === "mobile" && (
-          <p className="mt-2.5 pl-8 text-caption leading-relaxed text-slate-400">Easiest on a computer: the Canvas app doesn't show this link.</p>
-        )}
       </div>
 
       {feed ? (
