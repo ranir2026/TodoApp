@@ -32,10 +32,13 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const latestDataRef = useRef({ todos, courses, quickLinks, planner, canvas });
   const columnsRef = useRef(Object.fromEntries(OPTIONAL_COLUMNS.map((column) => [column, true])));
   const hasPendingSaveRef = useRef(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  // The account the refs above describe
+  const accountRef = useRef(null);
+  // Both belong to one account, so another account signing in never inherits them
+  const [synced, setSynced] = useState({ userId: null, at: null });
   // When the cloud copy was last pulled in (on load, focus, or coming back online), so work that
   // should run against fresh data, like a Canvas check, can follow it
-  const [pulledAt, setPulledAt] = useState(0);
+  const [pulled, setPulled] = useState({ userId: null, at: 0 });
 
   useEffect(() => {
     latestDataRef.current = { todos, courses, quickLinks, planner, canvas };
@@ -51,6 +54,14 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     }
 
     loadedUserRef.current = null;
+    if (accountRef.current !== user.id) {
+      // A save still waiting belongs to the account before (it keeps it on this device), so it must
+      // neither hold back this account's cloud copy nor count as this account's change
+      accountRef.current = user.id;
+      hasPendingSaveRef.current = false;
+      isRemoteUpdateRef.current = false;
+      lastSyncedPayloadRef.current = null;
+    }
 
     function remotePlanner(nextState) {
       return columnsRef.current.planner && hasPlannerData(nextState.planner) ? nextState.planner : latestDataRef.current.planner;
@@ -121,7 +132,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       }
 
       // Only claim "synced" when this device has nothing waiting to be saved
-      if (!hasPendingSaveRef.current) setLastSyncedAt(new Date());
+      if (!hasPendingSaveRef.current) setSynced({ userId: user.id, at: new Date() });
       if (res.data) {
         const merged = hasRecoveredOutageEdits(user.id) ? null : mergeOutageEdits(res.data, latestDataRef.current);
         if (merged) {
@@ -137,12 +148,13 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
           applyRemoteState(res.data);
         }
       } else {
+        // A new account: what's on this device is its own copy (see deviceData.js), usually empty
         const payload = { ...latestDataRef.current };
         lastSyncedPayloadRef.current = JSON.stringify(payload);
         saveToCloud(user.id, payload, columnsRef, onError);
       }
       loadedUserRef.current = user.id;
-      setPulledAt(Date.now());
+      setPulled({ userId: user.id, at: Date.now() });
     };
 
     fetchRemoteState();
@@ -225,7 +237,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         return;
       }
       if (lastSyncedPayloadRef.current === currentPayloadString) hasPendingSaveRef.current = false;
-      setLastSyncedAt(new Date());
+      setSynced({ userId: user.id, at: new Date() });
     };
 
     hasPendingSaveRef.current = true;
@@ -244,7 +256,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     };
   }, [user, todos, courses, quickLinks, planner, canvas, onError]);
 
-  return { lastSyncedAt: user ? lastSyncedAt : null, pulledAt: user ? pulledAt : 0 };
+  const mine = (entry, none) => (user && entry.userId === user.id ? entry.at : none);
+  return { lastSyncedAt: mine(synced, null), pulledAt: mine(pulled, 0) };
 }
 
 function isAuthError(error) {

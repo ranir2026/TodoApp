@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { useLocalStorage } from "./useLocalStorage";
+import { useAccountState, useLocalStorage } from "./useLocalStorage";
+import { accountDataKey } from "./deviceData";
 import StatsBar from "./StatsBar";
 import AddTodoForm from "./AddTodoForm";
 import TodoItem, { MilestoneCard } from "./TodoItem";
@@ -94,16 +95,22 @@ function dateGroupLabel(dateKey, today) {
 }
 
 export default function App() {
-  const [courses, setCourses] = useLocalStorage("courses", DEFAULT_COURSES);
-  const [todos, setTodos] = useLocalStorage("todos", []);
+  const [session, setSession] = useState(null);
+  // Tasks and the rest belong to the account signed in: each account has its own copy on this device,
+  // and switching accounts starts from that account's copy, never the last one's
+  const accountId = session?.user?.id ?? null;
+  const dataKey = (name) => accountDataKey(name, { accountsEnabled: isSupabaseConfigured, accountId });
+  const [courses, setCourses] = useLocalStorage(dataKey("courses"), DEFAULT_COURSES);
+  const [todos, setTodos] = useLocalStorage(dataKey("todos"), []);
   const [keymap, setKeymap] = useLocalStorage("keymap", DEFAULT_KEYMAP);
-  const [quickLinks, setQuickLinks] = useLocalStorage("quickLinks", DEFAULT_QUICK_LINKS);
-  const [storedPlanner, setPlanner] = useLocalStorage("planner", EMPTY_PLANNER);
+  const [quickLinks, setQuickLinks] = useLocalStorage(dataKey("quickLinks"), DEFAULT_QUICK_LINKS);
+  const [storedPlanner, setPlanner] = useLocalStorage(dataKey("planner"), EMPTY_PLANNER);
   const planner = useMemo(() => normalizePlanner(storedPlanner), [storedPlanner]);
   const updatePlanner = useCallback((change) => setPlanner((current) => change(normalizePlanner(current))), [setPlanner]);
   // Canvas settings hold the feed link, a secret, so they stay out of localStorage and live only in
-  // the user's own synced row. {} until that row loads (or if Canvas was never connected).
-  const [canvas, setCanvas] = useState({});
+  // the user's own synced row. {} until that row loads (or if Canvas was never connected), and again
+  // whenever the account changes.
+  const [canvas, setCanvas] = useAccountState(accountId, {});
   const [addFormCollapsed, setAddFormCollapsed] = useLocalStorage("addFormCollapsed", false);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [filter, setFilter] = useState("active"); // active | completed | all
@@ -148,7 +155,6 @@ export default function App() {
   // Asks the planner to open on a particular tab: { tab }, a new object each time
   const [plannerTabRequest, setPlannerTabRequest] = useState(null);
   const [todayOpen, setTodayOpen] = useLocalStorage("todayPanelOpen", false);
-  const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [emailConfirmed, setEmailConfirmed] = useState(() => {
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
