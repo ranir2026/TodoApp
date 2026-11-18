@@ -31,6 +31,8 @@ const { useAccountState, useLocalStorage } = await import("./useLocalStorage");
 const { accountDataKey } = await import("./deviceData");
 const { useSyncedData } = await import("./useSyncedData");
 
+// Stable, as App's is (a new one each render would restart syncing)
+const ignoreErrors = () => {};
 const alex = { id: "account-alex" };
 const sam = { id: "account-sam" };
 const now = new Date().toISOString();
@@ -51,7 +53,7 @@ function Account({ user }) {
   const [quickLinks, setQuickLinks] = useLocalStorage(key("quickLinks"), []);
   const [planner, setPlanner] = useLocalStorage(key("planner"), {});
   const [canvas, setCanvas] = useAccountState(accountId, {});
-  const { lastSyncedAt } = useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, planner, setPlanner, canvas, setCanvas, () => {});
+  const { lastSyncedAt } = useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, planner, setPlanner, canvas, setCanvas, ignoreErrors);
   return (
     <div>
       <ul>{todos.map((todo) => <li key={todo.id}>{todo.title}</li>)}</ul>

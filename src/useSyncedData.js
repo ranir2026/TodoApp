@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { hasRecoveredOutageEdits, markOutageEditsRecovered, mergeOutageEdits } from "./outageRecovery";
 import { hasCanvasData } from "./canvasSync";
@@ -72,7 +72,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     }
 
     function applyRemoteState(nextState) {
-      if (!nextState) return;
+      // Nothing from a sync that belonged to an account since signed out
+      if (!nextState || cancelled) return;
       // Don't let stale remote data overwrite local edits that haven't been saved yet
       if (hasPendingSaveRef.current) return;
 
@@ -256,8 +257,23 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
     };
   }, [user, todos, courses, quickLinks, planner, canvas, onError]);
 
+  // Saves what's still waiting right away (signing out can't wait for the pause). True once the
+  // cloud has everything this device has.
+  const saveNow = useCallback(async () => {
+    if (!supabase || !user || !hasPendingSaveRef.current) return true;
+    clearTimeout(saveTimerRef.current);
+    const data = latestDataRef.current;
+    const payload = JSON.stringify(data);
+    const ok = await saveToCloud(user.id, data, columnsRef, onError);
+    if (!ok) return false;
+    lastSyncedPayloadRef.current = payload;
+    if (JSON.stringify(latestDataRef.current) === payload) hasPendingSaveRef.current = false;
+    setSynced({ userId: user.id, at: new Date() });
+    return true;
+  }, [user, onError]);
+
   const mine = (entry, none) => (user && entry.userId === user.id ? entry.at : none);
-  return { lastSyncedAt: mine(synced, null), pulledAt: mine(pulled, 0) };
+  return { lastSyncedAt: mine(synced, null), pulledAt: mine(pulled, 0), saveNow };
 }
 
 function isAuthError(error) {
