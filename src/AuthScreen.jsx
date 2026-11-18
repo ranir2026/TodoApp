@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import BrandMark from "./BrandMark";
+import LandingPreview from "./LandingPreview";
 import SegmentedControl from "./SegmentedControl";
 import { supabase } from "./supabase";
-import TodoItem from "./TodoItem";
 
 const MODES = [{ id: "sign-in", label: "Sign in" }, { id: "sign-up", label: "Create account" }];
 const MIN_PASSWORD = 6;
@@ -33,20 +33,6 @@ function fieldErrors(mode, email, password) {
   if (!password) errors.password = mode === "sign-up" ? "Choose a password." : "Enter your password.";
   else if (mode === "sign-up" && password.length < MIN_PASSWORD) errors.password = `Use at least ${MIN_PASSWORD} characters.`;
   return errors;
-}
-
-// A few rows as the list draws them, dated from today, so the first screen shows what the app is
-function sampleRows() {
-  const day = (offset) => {
-    const date = new Date();
-    date.setDate(date.getDate() + offset);
-    return date.toLocaleDateString("en-CA");
-  };
-  return [
-    { todo: { id: "sample-1", type: "task", title: "Problem set 7", dueDate: day(1), startTime: "23:59", priority: "normal" }, course: { id: "physics", name: "Physics", color: "#f59e0b" } },
-    { todo: { id: "sample-2", type: "task", title: "Essay draft", description: "Outline first", dueDate: day(3), priority: "urgent" }, course: { id: "writing", name: "Writing", color: "#6366f1" } },
-    { todo: { id: "sample-3", type: "event", title: "Study group", dueDate: day(2), startTime: "16:00", endTime: "17:00", repeat: "weekly" }, course: { id: "personal", name: "Personal", color: "#14b8a6" } },
-  ];
 }
 
 function Spinner() {
@@ -82,7 +68,6 @@ export default function AuthScreen() {
   // The address a sign-up link went to; the card then says to check it
   const [sentTo, setSentTo] = useState(null);
   const [resent, setResent] = useState(false);
-  const [samples] = useState(sampleRows);
 
   const signingUp = mode === "sign-up";
   const errors = attempted ? fieldErrors(mode, email, password) : {};
@@ -251,16 +236,9 @@ export default function AuthScreen() {
             Every deadline, in one calm list.
           </h1>
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-pretty text-slate-500 lg:mx-0 lg:mt-5 lg:max-w-md lg:text-base">
-            Tasks, events and repeats in one place, with your Canvas assignments brought in for you. Synced on every device.
+            Tasks, day plans, timelines and a calendar, with your Canvas assignments brought in for you. Synced on every device.
           </p>
-          {/* Only a picture of the list: nothing in it can be focused or clicked */}
-          <div inert aria-hidden="true" className="mt-10 hidden max-w-md space-y-2 lg:block">
-            {samples.map(({ todo, course }, index) => (
-              <ul key={todo.id} className="auth-rise" style={{ "--rise-delay": `${160 + index * 70}ms` }}>
-                <TodoItem preview todo={todo} course={course} onToggle={() => {}} onDelete={() => {}} onEdit={() => {}} />
-              </ul>
-            ))}
-          </div>
+          <LandingPreview className="auth-rise mt-10 hidden max-w-md lg:block" style={{ "--rise-delay": "160ms" }} />
         </section>
 
         <section className="auth-card auth-rise mx-auto w-full max-w-sm rounded-dialog p-6 sm:p-7 lg:mx-0 lg:mt-[5.25rem] lg:justify-self-end" style={{ "--rise-delay": "80ms" }}>
