@@ -368,10 +368,18 @@ export default function App() {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
+  // Removes one date from a repeating item; undo puts just that date back
   function skipOccurrence(id, occurrenceDate) {
-    if (!occurrenceDate) return;
+    const skipped = todos.find((t) => t.id === id);
+    if (!occurrenceDate || !skipped) return;
     setTodos((prev) => prev.map((t) => t.id === id ? { ...t, skipDates: [...new Set([...(t.skipDates ?? []), occurrenceDate])] } : t));
     setEditingItem(null);
+    if (skipped.skipDates?.includes(occurrenceDate)) return;
+    const day = parseDateKey(occurrenceDate).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    showUndo(
+      () => setTodos((prev) => prev.map((t) => t.id === id ? { ...t, skipDates: (t.skipDates ?? []).filter((date) => date !== occurrenceDate) } : t)),
+      `Removed “${skipped.title}” on ${day}`,
+    );
   }
 
   function toggleTodo(id, occurrenceDate) {

@@ -5,7 +5,9 @@ const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: r
 
 // Mobile bottom sheet: springs in, follows the finger when dragged by its header,
 // and dismisses on a downward flick (momentum-projected). children(dismiss) renders the body.
-export default function BottomSheet({ open, onClose, label, title, children }) {
+// canDismiss, when given, can refuse a close the user starts (backdrop, drag, close button), for
+// example to ask about unsaved changes first; the sheet then settles back open.
+export default function BottomSheet({ open, onClose, label, title, className = "", canDismiss, children }) {
   const [mounted, setMounted] = useState(open);
   const sheetRef = useRef(null);
   const backdropRef = useRef(null);
@@ -41,6 +43,11 @@ export default function BottomSheet({ open, onClose, label, title, children }) {
       setMounted(false);
       after();
     });
+  }
+
+  function requestDismiss(velocity = 0) {
+    if (canDismiss && !canDismiss()) springTo(0, velocity);
+    else dismiss(velocity);
   }
 
   // Enter: rise from below the screen
@@ -83,7 +90,7 @@ export default function BottomSheet({ open, onClose, label, title, children }) {
     const elapsed = (lastSample.t - first.t) / 1000;
     const velocity = elapsed > 0 ? (lastSample.y - first.y) / elapsed : 0;
     const projected = yRef.current + projectMomentum(velocity);
-    if (projected > sheetRef.current.offsetHeight * 0.5) dismiss(velocity);
+    if (projected > sheetRef.current.offsetHeight * 0.5) requestDismiss(velocity);
     else springTo(0, velocity);
   }
 
@@ -91,14 +98,14 @@ export default function BottomSheet({ open, onClose, label, title, children }) {
 
   return (
     <>
-      <div ref={backdropRef} className="mobile-sheet-backdrop" style={{ opacity: 0 }} onClick={() => dismiss()} />
-      <section ref={sheetRef} role="dialog" aria-modal="true" className="mobile-add-sheet" aria-label={label} style={{ transform: "translateY(100%)" }}>
+      <div ref={backdropRef} className="mobile-sheet-backdrop" style={{ opacity: 0 }} onClick={() => requestDismiss()} />
+      <section ref={sheetRef} role="dialog" aria-modal="true" className={`mobile-add-sheet ${className}`} aria-label={label} style={{ transform: "translateY(100%)" }}>
         <div className="mobile-sheet-grab" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div className="mobile-sheet-handle" />
           <div className="mb-4 flex items-center justify-between">
             <h2 className="mobile-sheet-title">{title}</h2>
             {/* The grab handle is the visible dismiss affordance; keep a close button for assistive tech */}
-            <button type="button" onClick={() => dismiss()} className="sr-only" aria-label={`Close ${label}`}>Close</button>
+            <button type="button" onClick={() => requestDismiss()} className="sr-only" aria-label={`Close ${label}`}>Close</button>
           </div>
         </div>
         {children(dismiss)}

@@ -1,9 +1,9 @@
 // Canvas's everyday surfaces: the chips on imported tasks, the dashboard card (and its mobile
 // panel), and the notice for courses that still need a category.
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { hasCanvasDates, LINK_BROKEN_CODES } from "./canvasManage";
 import { CanvasActionsContext, feedStatus, formatClock } from "./canvasStatus";
-import { CloseIcon, RefreshIcon, SchoolIcon } from "./icons";
+import { CloseIcon, ExternalLinkIcon, RefreshIcon, SchoolIcon } from "./icons";
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
 
@@ -96,6 +96,67 @@ export function CanvasSourceChips({ todo, compact = false }) {
         </span>
       )}
     </>
+  );
+}
+
+const listWords = (words) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}` : words[0] ?? "");
+
+/**
+ * The item editor's note on an imported task: a real link back to the assignment, what Canvas
+ * keeps up to date (and, once a field is changed in the form, that Canvas won't update it
+ * anymore), and Canvas's latest date when it moved. `edited` comes from canvasEditedFields.
+ */
+export function CanvasEditPanel({ todo, edited, onRevert, mobile = false }) {
+  const { enabled, dismissDueMoved } = useContext(CanvasActionsContext);
+  const [movedSeen, setMovedSeen] = useState(false);
+  const meta = todo.canvas;
+  if (!enabled || !meta) return null;
+  const dates = todo.type === "event" ? "date" : "due date";
+  const words = edited.map((field) => (field === "dates" ? dates : field));
+  const pronoun = words.length > 1 || words[0] === "notes" ? "them" : "it";
+  const moved = !movedSeen && !todo.completed ? meta.dueMoved : null;
+  const text = mobile ? "text-[13px] leading-snug" : "text-caption";
+  const action = `${mobile ? "min-h-11 text-[13px]" : "text-caption"} shrink-0 font-semibold hover:underline`;
+  const dismissMoved = () => {
+    setMovedSeen(true);
+    dismissDueMoved(todo.id);
+  };
+  return (
+    <section aria-label="From Canvas" className={`rounded-xl bg-link-100/50 ring-1 ring-link-200/80 ring-inset ${mobile ? "px-3.5 pt-3 pb-2" : "px-3 py-2.5"}`}>
+      <div className="flex items-center gap-2">
+        <SchoolIcon className="h-3.5 w-3.5 shrink-0 text-link-700" />
+        <span className={`${mobile ? "text-sm" : "text-xs"} font-semibold text-slate-800`}>From Canvas</span>
+        {meta.url && (
+          <a href={meta.url} target="_blank" rel="noopener noreferrer" className={`ml-auto inline-flex items-center gap-1 ${mobile ? "min-h-11 text-sm" : "text-xs"} font-semibold text-link-700 hover:underline`}>
+            Open in Canvas
+            <ExternalLinkIcon className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+      {meta.synced && (
+        <div className={`flex flex-wrap items-baseline gap-x-2 ${mobile ? "" : "mt-0.5"}`}>
+          <p className={`${text} text-slate-600`}>
+            {words.length
+              ? `You've changed the ${listWords(words)}, so Canvas won't update ${pronoun}.`
+              : `Canvas keeps the title, notes and ${dates} up to date. If you change one here, your version stays.`}
+          </p>
+          {words.length > 0 && <button type="button" onClick={onRevert} className={`${action} text-link-700`}>Use Canvas's version</button>}
+        </div>
+      )}
+      {moved && (
+        <div className={`mt-2 flex items-center gap-2 rounded-lg bg-white/80 ring-1 ring-todo-300 ring-inset ${mobile ? "mb-1.5 pl-3 pr-2" : "px-2.5 py-1.5"}`}>
+          <p className={`min-w-0 flex-1 ${text} text-todo-700`}>
+            {hasCanvasDates(todo)
+              ? `Canvas moved the ${dates} from ${formatCanvasDue(moved.from)} to ${formatCanvasDue(moved.to)}.`
+              : `Canvas now says ${formatCanvasDue(moved.to)}. You set your own ${dates}, so it wasn't changed.`}
+          </p>
+          <button type="button" onClick={dismissMoved} className={`${action} px-1 text-todo-700`}>Got it</button>
+        </div>
+      )}
+      {meta.missing && (
+        <p className={`mt-1.5 ${mobile ? "mb-1.5" : ""} ${text} text-slate-500`}>Canvas no longer lists this. It's kept here because you changed or completed it.</p>
+      )}
+    </section>
   );
 }
 

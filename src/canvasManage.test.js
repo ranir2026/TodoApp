@@ -6,6 +6,8 @@ import { planCanvasImport } from "./canvasImport";
 import {
   AUTO_SYNC_INTERVAL_MS,
   applyFeedSync,
+  canvasEditedFields,
+  canvasVersion,
   disconnectFeed,
   hasCanvasDates,
   markFeedStatus,
@@ -248,5 +250,26 @@ describe("due date flags", () => {
     expect(withoutDueMoved(todo).canvas).toEqual({ domain: A, synced: todo.canvas.synced });
     expect(hasCanvasDates(todo)).toBe(true);
     expect(hasCanvasDates({ ...todo, dueDate: "2026-11-25" })).toBe(false);
+  });
+});
+
+describe("editing an imported task", () => {
+  const synced = { title: "Lab 4", description: "Bring goggles", courseId: "c1", dueDate: "2026-11-20", startTime: "23:59", endDate: null, endTime: null };
+
+  it("canvasEditedFields names the Canvas-kept fields that differ, counting empty as null", () => {
+    const fields = { title: "Lab 4", description: "Bring goggles", dueDate: "2026-11-20", startTime: "23:59", endDate: null, endTime: undefined };
+    expect(canvasEditedFields(fields, synced)).toEqual([]);
+    expect(canvasEditedFields({ ...fields, title: "Lab four", startTime: "12:00" }, synced)).toEqual(["title", "dates"]);
+    expect(canvasEditedFields({ ...fields, description: null }, synced)).toEqual(["notes"]);
+    // A category change isn't one: sync only moves tasks when the course's mapping changes
+    expect(canvasEditedFields({ ...fields, courseId: "other" }, synced)).toEqual([]);
+    expect(canvasEditedFields(fields, undefined)).toEqual([]);
+  });
+
+  it("canvasVersion gives form values that canvasEditedFields sees as unchanged", () => {
+    const version = canvasVersion(synced);
+    expect(version).toEqual({ title: "Lab 4", description: "Bring goggles", dueDate: "2026-11-20", startTime: "23:59", endDate: "", endTime: "" });
+    const asSaved = Object.fromEntries(Object.entries(version).map(([key, value]) => [key, value || null]));
+    expect(canvasEditedFields(asSaved, synced)).toEqual([]);
   });
 });

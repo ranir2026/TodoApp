@@ -155,9 +155,33 @@ export function withoutDueMoved(todo) {
   return { ...todo, canvas: meta };
 }
 
+const CANVAS_DUE_FIELDS = ["dueDate", "startTime", "endDate", "endTime"];
+
 // Whether the task still has the dates Canvas last set (so a "moved" flag means it was updated)
 export function hasCanvasDates(todo) {
   const synced = todo.canvas?.synced;
   if (!synced) return false;
-  return ["dueDate", "startTime", "endDate", "endTime"].every((field) => (todo[field] ?? null) === (synced[field] ?? null));
+  return CANVAS_DUE_FIELDS.every((field) => (todo[field] ?? null) === (synced[field] ?? null));
+}
+
+// Which of the fields Canvas keeps up to date a task's values differ from Canvas's last version
+// in ("title", "notes", "dates"). Sync leaves a field alone once it differs, so the editor says
+// which ones Canvas won't update anymore. `fields` uses the task's shape (null for empty).
+export function canvasEditedFields(fields, synced) {
+  if (!synced) return [];
+  const same = (a, b) => (a ?? null) === (b ?? null);
+  const edited = [];
+  if (!same(fields.title, synced.title)) edited.push("title");
+  if (!same(fields.description, synced.description)) edited.push("notes");
+  if (CANVAS_DUE_FIELDS.some((field) => !same(fields[field], synced[field]))) edited.push("dates");
+  return edited;
+}
+
+// The form values that put a task back to what Canvas last said, for those same fields
+export function canvasVersion(synced) {
+  return {
+    title: synced.title ?? "",
+    description: synced.description ?? "",
+    ...Object.fromEntries(CANVAS_DUE_FIELDS.map((field) => [field, synced[field] ?? ""])),
+  };
 }

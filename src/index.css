@@ -582,6 +582,16 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-sheet-field:focus { border-color: var(--tint); box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
 .mobile-sheet-primary { width: 100%; min-height: 50px; border: 0; border-radius: 999px; background: var(--tint); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 8px 18px -8px rgba(79, 70, 229, .6); transition: opacity 150ms ease; }
 .mobile-sheet-primary:disabled { opacity: .4; box-shadow: none; }
+.mobile-sheet-secondary { width: 100%; min-height: 50px; border: 0; border-radius: 999px; background: #eef1f5; color: var(--mobile-ink); font-size: 16px; font-weight: 600; transition: background-color 150ms ease; }
+.mobile-sheet-secondary:active { background: #e2e8f0; }
+/* iOS centers a date or time field's value; the sheet's other fields read from the left */
+.mobile-sheet-field::-webkit-date-and-time-value { text-align: left; }
+/* A sheet with its actions pinned to the bottom edge: the form scrolls under a translucent bar */
+.mobile-add-sheet.has-footer { padding-bottom: 0; }
+.mobile-sheet-footer { position: sticky; bottom: 0; z-index: 30; margin: 20px -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgb(255 255 255 / .86); -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%); box-shadow: 0 -1px 0 rgb(15 23 42 / .06); }
+@media (prefers-reduced-transparency: reduce) {
+  .mobile-sheet-footer { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 /* Task rows: large check target, swipe left to reveal Delete */
 .task-swipe-row { position: relative; overflow: hidden; border-radius: var(--mobile-radius-panel); }
 .task-swipe-delete { position: absolute; inset: 1px; border: 0; border-radius: calc(var(--mobile-radius-panel) - 1px); background: #ff3b30; padding-right: 20px; color: #fff; font-size: 15px; font-weight: 600; text-align: right; }
