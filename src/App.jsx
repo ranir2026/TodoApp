@@ -18,6 +18,7 @@ import { isSupabaseConfigured, supabase } from "./supabase";
 import { useSyncedData } from "./useSyncedData";
 import AuthScreen from "./AuthScreen";
 import EmailConfirmedScreen from "./EmailConfirmedScreen";
+import LoadingScreen from "./LoadingScreen";
 import QuickLinkModal from "./QuickLinkModal";
 import MobileAddSheet from "./MobileAddSheet";
 import Collapsible, { Chevron } from "./Collapsible";
@@ -778,7 +779,7 @@ export default function App() {
   useEffect(() => () => { clearTimeout(undoTimerRef.current); clearTimeout(toastLeaveTimerRef.current); }, []);
 
   if (isSupabaseConfigured && authLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Loading your account...</div>;
+    return <LoadingScreen />;
   }
   if (isSupabaseConfigured && emailConfirmed) {
     return (
