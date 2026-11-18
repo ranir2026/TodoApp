@@ -171,7 +171,7 @@ export function CanvasMobilePanel({ ready, canvas, sync, onConnect, onManage, on
     <section className="mobile-panel">
       <div className="mobile-panel-heading">
         <h3>Canvas</h3>
-        <span>{feed ? plural(canvas.feeds.length, "school") : "Admin preview"}</span>
+        <span>{feed ? plural(canvas.feeds.length, "school") : "Not connected"}</span>
       </div>
       {feed ? (
         <div className="flex items-center justify-between gap-3">

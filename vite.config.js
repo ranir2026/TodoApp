@@ -4,9 +4,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
-// GitHub Pages serves only files that exist, so /TodoApp/admin/ gets its own copy of the page.
-// Assets are linked from the base path, so the copy works unchanged; the app reads the path
-// to decide whether to show admin-only features (src/adminMode.js).
+// Canvas import was first tested at /TodoApp/admin/. It's on the main page now, and this copy of
+// the page stays only so links saved during testing still open the app. (GitHub Pages serves
+// only files that exist; assets are linked from the base path, so the copy works unchanged.)
 function adminPage() {
   return {
     name: 'admin-page',

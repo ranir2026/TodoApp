@@ -29,7 +29,6 @@ import { COLOR_PALETTE } from "./courseColors";
 import FilterMenu from "./FilterMenu";
 import { DEFAULT_FILTERS, activeFilterCount } from "./filters";
 import FlipScope from "./FlipScope";
-import { isAdminPage } from "./adminMode";
 import { hasCanvasData } from "./canvasSync";
 import { settingsBeforeImport } from "./canvasImport";
 import { applyCourseMatches } from "./canvasCourses";
@@ -218,7 +217,7 @@ export default function App() {
     : "Connecting…";
   // Canvas import needs the server, and the saved settings loaded first so an import can't
   // replace settings this device hasn't seen yet
-  const canvasAvailable = isAdminPage && isSupabaseConfigured && Boolean(session);
+  const canvasAvailable = isSupabaseConfigured && Boolean(session);
   const canvasReady = canvasAvailable && Boolean(lastSyncedAt);
   const canvasSync = useCanvasSync({ enabled: canvasReady, userId: session?.user?.id ?? null, pulledAt, todos, courses, canvas, setTodos, setCourses, setCanvas });
   const canvasNoticeCourses = canvasSync.unmapped.filter((course) => !hiddenCourseKeys.includes(course.key));
@@ -227,7 +226,7 @@ export default function App() {
   const showCanvasPill = !syncError && Boolean(canvasQuietError) && canvasQuietError !== seenCanvasError;
 
   const dismissDueMoved = useCallback((id) => setTodos((prev) => prev.map((todo) => (todo.id === id ? withoutDueMoved(todo) : todo))), [setTodos]);
-  const canvasActions = useMemo(() => ({ enabled: isAdminPage, dismissDueMoved }), [dismissDueMoved]);
+  const canvasActions = useMemo(() => ({ enabled: true, dismissDueMoved }), [dismissDueMoved]);
 
   function openCanvasConnect() {
     setCanvasMatch(null);
@@ -810,7 +809,6 @@ export default function App() {
           <h1 className="sr-only">Todo</h1>
           <p className="text-3xl font-extrabold tracking-tight text-slate-900">{dayName}</p>
           <p className="mt-1.5 text-base font-semibold text-slate-500">{monthDate}</p>
-          {isAdminPage && <p className="mt-2 inline-flex rounded-full border border-todo-200 bg-todo-50 px-2 py-0.5 text-caption font-semibold text-todo-700">Admin preview</p>}
         </header>
 
         <button
