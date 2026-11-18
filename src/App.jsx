@@ -490,15 +490,15 @@ export default function App() {
     });
   }, [resolvedTodos, filter, search, courseFilter, typeFilter, priorityFilter, dueFilter]);
 
-  // Category view only: project work stays out of the list until it's coming up (due within the
-  // next week, or already overdue) unless it has no date. A milestone's tasks share one card, headed
+  // Category view only: tasks stay out of the list until they're coming up (due within the next
+  // week, or already overdue) unless they have no date. A milestone's tasks share one card, headed
   // by the milestone, so a project reads as a single block rather than a run of separate cards.
   const todayKey = toDateKey(new Date());
   const groupedTasks = useMemo(() => {
     if (sortBy !== "course") return null;
     const horizon = addDays(todayKey, 7);
     const milestones = Object.fromEntries(todosView.filter((todo) => todo.type === "milestone").map((todo) => [todo.id, todo]));
-    const shown = visibleTasks.filter((task) => !task.projectId || !task.dueDate || task.dueDate <= horizon);
+    const shown = visibleTasks.filter((task) => !task.dueDate || task.dueDate <= horizon);
     return courses.map((course) => {
       const tasks = shown.filter((task) => task.courseId === course.id);
       const isMilestoneTask = (task) => task.type !== "milestone" && milestones[task.milestoneId];
@@ -626,9 +626,9 @@ export default function App() {
   const viewSwitch = <SegmentedControl label="View" className="inline-grid shrink-0" segmentClassName="px-2" options={VIEW_OPTIONS} value={view} fromValue={previousView} onChange={setView} />;
 
   function emptyListState() {
-    // Category view holds back project work that's more than a week out
+    // Category view holds back tasks that are more than a week out
     if (visibleTasks.length > 0) {
-      return { title: "Nothing due this week", detail: "Project tasks due later stay out of the category view until they're a week away.", action: "Sort by date", onAction: () => setSortBy("date") };
+      return { title: "Nothing due this week", detail: "Tasks due later stay out of the category view until they're a week away.", action: "Sort by date", onAction: () => setSortBy("date") };
     }
     const query = search.trim();
     if (query || activeFilterCount({ courseFilter, typeFilter, priorityFilter, dueFilter }) > 0) {
