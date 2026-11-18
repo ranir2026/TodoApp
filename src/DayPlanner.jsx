@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { createPortal } from "react-dom";
 import { parseDateKey, resolveTask } from "./occurrences";
 import { courseChipStyle, getCourseColor } from "./courseColors";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon } from "./icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
 import { EMPTY_DAY, addDays, fixedItemsOn, formatClock, edgeMask, layoutColumns, minutesToTime, resolveDayBlocks, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { edgeDepth } from "./dragEdges";
@@ -49,7 +49,7 @@ function trayMeta(sectionId, todo) {
 const isTyping = (target) => target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
 
 // suspended: another dialog (the item editor) sits on top, so the arrow keys belong to it
-export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit, suspended = false }) {
+export default function DayPlanner({ todos, courseMap, toolbar, planner, updatePlanner, onToggleTodo, onEdit, onDeleteTodo, suspended = false }) {
   const [todayKey, setTodayKey] = useState(() => toDateKey(new Date()));
   const [dateKey, setDateKey] = useState(todayKey);
   // Which way the last day change went (-1, 0, 1), so the new day slides in from that side
@@ -446,8 +446,9 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
     setReturning({ ...state, fromX, fromY, dx: state.homeX - fromX, dy: state.homeY - fromY, vx: velocity.x, vy: velocity.y });
   }
 
-  function dragFromTray(event, source, pressKey) {
-    beginPointer(event, { kind: "new", source, pressKey, title: source.title, course: source.course, plannerOnly: !source.todoId, start: 0, end: DEFAULT_LENGTH, grab: SNAP, ...grip(event) });
+  // A press that never turns into a drag is a click: on a task it opens the task, as on the schedule
+  function dragFromTray(event, source, pressKey, onClick) {
+    beginPointer(event, { kind: "new", source, pressKey, title: source.title, course: source.course, plannerOnly: !source.todoId, start: 0, end: DEFAULT_LENGTH, grab: SNAP, onClick, ...grip(event) });
   }
 
   function dragBlock(event, block) {
@@ -586,8 +587,10 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
                       title={todo.title}
                       color={getCourseColor(course)}
                       meta={trayMeta(section.id, todo)}
-                      onPointerDown={(event) => dragFromTray(event, source, todo.id)}
+                      onPointerDown={(event) => dragFromTray(event, source, todo.id, () => onEdit(todo))}
                       onSchedule={() => scheduleNext(source)}
+                      onEdit={() => onEdit(todo)}
+                      onDelete={onDeleteTodo ? () => onDeleteTodo(todo.id) : null}
                     />
                   );
                 })}
@@ -738,38 +741,46 @@ function SectionLabel({ className = "", children }) {
 // The category shows as a left stripe, the same as rows in the task list; planner-only items get a neutral one
 const PLANNER_ONLY_STRIPE = "var(--color-slate-300)";
 
-function TrayRow({ title, color, meta, plannerOnly = false, pressed, lifted, onPointerDown, onSchedule, onRemove }) {
+// Click a task to open it, drag it onto the schedule, or use the actions that float over the end
+// of the row on hover (so at rest the name gets the row's full width)
+function TrayRow({ title, color, meta, plannerOnly = false, pressed, lifted, onPointerDown, onSchedule, onEdit, onDelete, onRemove }) {
+  const action = "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100";
+  // The buttons sit inside the draggable row; pressing one mustn't pick the row up
+  const keepStill = (event) => event.stopPropagation();
   return (
     <li
       onPointerDown={onPointerDown}
-      className={`group flex cursor-grab touch-none items-center gap-2 rounded-lg border border-l-4 bg-white py-1 pr-1 pl-2 text-xs text-slate-700 transition-[scale,box-shadow,opacity,border-color] duration-150 ease-out ${
+      title={onEdit ? "Click to open, drag to schedule" : undefined}
+      className={`group relative flex min-h-8 cursor-grab touch-none items-center gap-2 overflow-hidden rounded-lg border border-l-4 bg-white py-1 pr-2 pl-2 text-xs text-slate-700 transition-[scale,box-shadow,opacity,border-color] duration-150 ease-out ${
         pressed ? "scale-[0.98] border-slate-300 shadow-md" : "border-slate-200 shadow-sm hover:border-slate-300 hover:shadow"
       } ${lifted ? "opacity-40" : ""}`}
       style={{ borderLeftColor: plannerOnly ? PLANNER_ONLY_STRIPE : color }}
     >
       <span className="min-w-0 flex-1 truncate">{title}</span>
       {meta && <span className="shrink-0 text-caption text-slate-400">{meta}</span>}
-      <button
-        type="button"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={onSchedule}
-        title="Schedule at the next free hour"
-        aria-label={`Schedule ${title} at the next free hour`}
-        className="row-action flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600"
+      <span
+        className="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-0.5 pr-1 pl-6 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+        style={{ backgroundImage: "linear-gradient(to right, transparent, white 1.25rem)" }}
       >
-        <PlusIcon className="h-3.5 w-3.5" />
-      </button>
-      {onRemove && (
-        <button
-          type="button"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={onRemove}
-          aria-label={`Remove ${title}`}
-          className="row-action flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500"
-        >
-          <CloseIcon className="h-3.5 w-3.5" />
+        <button type="button" onPointerDown={keepStill} onClick={onSchedule} title="Schedule at the next free hour" aria-label={`Schedule ${title} at the next free hour`} className={`${action} hover:text-course-600`}>
+          <PlusIcon className="h-3.5 w-3.5" />
         </button>
-      )}
+        {onEdit && (
+          <button type="button" onPointerDown={keepStill} onClick={onEdit} title="Edit task" aria-label={`Edit ${title}`} className={`${action} hover:text-course-600`}>
+            <PencilIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onDelete && (
+          <button type="button" onPointerDown={keepStill} onClick={onDelete} title="Delete task" aria-label={`Delete ${title}`} className={`${action} hover:text-danger-500`}>
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onRemove && (
+          <button type="button" onPointerDown={keepStill} onClick={onRemove} title="Remove from the planner" aria-label={`Remove ${title}`} className={`${action} hover:text-danger-500`}>
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </span>
     </li>
   );
 }

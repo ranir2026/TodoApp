@@ -44,3 +44,7 @@ export function RefreshIcon({ className = "h-4 w-4" }) {
 export function ExternalLinkIcon({ className = "h-4 w-4" }) {
   return <Icon className={className}><path d="M6.5 4H4.25A1.25 1.25 0 0 0 3 5.25v6.5A1.25 1.25 0 0 0 4.25 13h6.5A1.25 1.25 0 0 0 12 11.75V9.5M9 3h4v4M13 3L7.5 8.5" /></Icon>;
 }
+
+export function TrashIcon({ className = "h-4 w-4" }) {
+  return <Icon className={className}><path d="M3 4.5h10M6.25 4.5V3.25h3.5V4.5M4.5 4.5l.6 8.25h5.8l.6-8.25M6.75 7v3.5M9.25 7v3.5" /></Icon>;
+}

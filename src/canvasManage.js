@@ -26,13 +26,16 @@ export function markFeedStatus(canvas, domain, status) {
   return !feed || feed.status === status ? canvas : withFeed(canvas, domain, { status });
 }
 
-// Course labels the feed gave, so settings can name courses without refetching the feed
-function withCourseLabels(canvas, rows) {
+// Course labels the feed gave, so settings can name courses (even ones never matched) without
+// refetching the feed
+export function withCourseLabels(canvas, rows) {
   const labels = { ...(canvas.courseLabels ?? {}) };
   let changed = false;
   for (const row of rows) {
-    if (row.label && labels[row.key] !== row.label) {
-      labels[row.key] = row.label;
+    // A course without a label (personal events, say) is still recorded, as null
+    const label = row.label ?? null;
+    if (!Object.hasOwn(labels, row.key) || (label && labels[row.key] !== label)) {
+      labels[row.key] = label;
       changed = true;
     }
   }
@@ -71,8 +74,13 @@ export function remapCanvasCourse({ todos, domain, courseId, categoryId }) {
   return { todos: moved ? next : todos, moved };
 }
 
-// One row per course this school's settings know about, for the settings panel
-export function settingsCourseRows({ canvas, todos, domain }) {
+/**
+ * One row per course this school has shown, for the settings panel: the matched ones, and the
+ * ones never given a category (say, only past-due work at setup), so no course silently vanishes.
+ * `state` is "mapped", "skipped" ("Don't import"), "deleted" (its category was deleted) or
+ * "unmatched". With the feed's items, `feed` says what the course has right now.
+ */
+export function settingsCourseRows({ canvas, todos, courses = null, domain, items = null, now = new Date(), timeZone }) {
   const prefix = `${domain}:`;
   const counts = {};
   for (const todo of todos) {
@@ -80,15 +88,33 @@ export function settingsCourseRows({ canvas, todos, domain }) {
     const key = canvasCourseKey(domain, todo.canvas.courseId);
     counts[key] = (counts[key] ?? 0) + 1;
   }
-  return Object.entries(canvas.courseMap ?? {})
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([key, categoryId]) => {
+  const feedRows = items ? Object.fromEntries(listFeedCourses(items, domain, new Date(now), timeZone).map((row) => [row.key, row])) : {};
+  const courseMap = canvas.courseMap ?? {};
+  const categoryIds = courses ? new Set(courses.map((course) => course.id)) : null;
+  const keys = new Set([...Object.keys(courseMap), ...Object.keys(canvas.courseLabels ?? {}), ...Object.keys(feedRows)].filter((key) => key.startsWith(prefix)));
+  return [...keys]
+    .map((key) => {
       const courseId = key.slice(prefix.length);
-      const label = canvas.courseLabels?.[key] ?? null;
+      const label = canvas.courseLabels?.[key] ?? feedRows[key]?.label ?? null;
       const name = courseId === "none" ? NO_COURSE_LABEL : cleanCourseLabel(label ?? `Course ${courseId}`);
-      return { key, courseId: courseId === "none" ? null : courseId, label, name, categoryId, count: counts[key] ?? 0 };
+      const categoryId = Object.hasOwn(courseMap, key) ? courseMap[key] : undefined;
+      const state = categoryId === undefined ? "unmatched" : categoryId === null ? "skipped" : categoryIds && !categoryIds.has(categoryId) ? "deleted" : "mapped";
+      const feed = feedRows[key] ? { assignments: feedRows[key].assignments, upcoming: feedRows[key].upcoming, events: feedRows[key].events } : null;
+      return { key, courseId: courseId === "none" ? null : courseId, label, name, categoryId: categoryId ?? null, state, count: counts[key] ?? 0, feed };
     })
     .sort((a, b) => (a.courseId === null) - (b.courseId === null) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Moves a task to another category because its category is going away. A Canvas task's record
+ * of where Canvas put it moves too, so it still counts as untouched and follows the course when
+ * the course is matched again.
+ */
+export function reassignCategory(todo, fromId, toId) {
+  if (todo.courseId !== fromId) return todo;
+  const synced = todo.canvas?.synced;
+  if (!synced || synced.courseId !== fromId) return { ...todo, courseId: toId };
+  return { ...todo, courseId: toId, canvas: { ...todo.canvas, synced: { ...synced, courseId: toId } } };
 }
 
 export function isCanvasCategory(course, domain) {

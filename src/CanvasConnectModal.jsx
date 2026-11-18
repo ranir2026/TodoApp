@@ -70,7 +70,7 @@ function Instruction({ n, children }) {
   );
 }
 
-function ConnectStep({ variant, styles, host, input, onInput, onBlur, onPaste, onPasteButton, onChange, status, feed, inputRef }) {
+function ConnectStep({ variant, styles, host, replaceDomain, input, onInput, onBlur, onPaste, onPasteButton, onChange, status, feed, inputRef }) {
   const [school, setSchool] = useState(host ?? "");
   const schoolHost = school.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase();
   const canOpen = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(schoolHost);
@@ -80,6 +80,11 @@ function ConnectStep({ variant, styles, host, input, onInput, onBlur, onPaste, o
 
   return (
     <div className="space-y-5">
+      {replaceDomain && (
+        <p className="rounded-card bg-course-50 p-3 text-xs leading-relaxed text-course-700">
+          Paste the new Calendar Feed link for <strong className="font-semibold">{replaceDomain}</strong>. Your imported tasks and course choices stay as they are.
+        </p>
+      )}
       <ol className="space-y-3">
         <Instruction n={1}>
           Open <strong className="font-semibold text-slate-800">Calendar</strong> in your school's Canvas.
@@ -116,8 +121,13 @@ function ConnectStep({ variant, styles, host, input, onInput, onBlur, onPaste, o
           <span className="min-w-0 flex-1">
             <span className="block truncate font-mono text-xs text-slate-700">{maskFeedUrl(feed.url)}</span>
             <span className="mt-0.5 block text-caption text-slate-500">
-              Found {plural(assignments, "assignment")}{events > 0 && ` and ${plural(events, "event")}`} in {plural(feed.rows.filter((row) => row.courseId).length, "course")}
+              {feed.items.length === 0
+                ? "The calendar is empty right now, which is normal between terms. Work appears as it's posted."
+                : <>Found {plural(assignments, "assignment")}{events > 0 && ` and ${plural(events, "event")}`} in {plural(feed.rows.filter((row) => row.courseId).length, "course")}</>}
             </span>
+            {replaceDomain && feed.domain !== replaceDomain && (
+              <span className="mt-0.5 block text-caption font-medium text-todo-700">This link is for {feed.domain}, so it will be added as another school.</span>
+            )}
           </span>
           <button type="button" onClick={onChange} className="press-tint shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-course-600 hover:text-course-700">Change</button>
         </div>
@@ -171,6 +181,9 @@ function ConnectStep({ variant, styles, host, input, onInput, onBlur, onPaste, o
 }
 
 function MatchStep({ variant, styles, feed, choices, setChoice, courses, matchOnly }) {
+  if (!feed.rows.length) {
+    return <p className="rounded-card bg-slate-50 p-3 text-sm leading-relaxed text-slate-600">No courses yet. Once Canvas lists work for a course, the app asks where it should go.</p>;
+  }
   return (
     <div className="space-y-3">
       <p className="text-sm leading-relaxed text-slate-600">
@@ -280,7 +293,7 @@ function initialFeed(matchRequest, canvas, now, timeZone) {
   return rows.length ? { url: feed.url, domain: feed.domain, items: matchRequest.items, rows } : null;
 }
 
-function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest, onImport, onCancel, titleId }) {
+function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest, replaceDomain, onImport, onCancel, titleId }) {
   const styles = STYLES[variant];
   const [now] = useState(() => new Date());
   const [timeZone] = useState(deviceTimeZone);
@@ -299,7 +312,8 @@ function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest
   const requestRef = useRef(0);
   const inputRef = useRef(null);
   const headingRef = useRef(null);
-  const host = useMemo(() => knownCanvasHost(canvas, quickLinks), [canvas, quickLinks]);
+  const host = useMemo(() => replaceDomain ?? knownCanvasHost(canvas, quickLinks), [replaceDomain, canvas, quickLinks]);
+  const replacing = Boolean(replaceDomain) && !matchOnly;
 
   useEffect(() => {
     if (variant === "desktop" && !matchOnly) inputRef.current?.focus();
@@ -377,9 +391,11 @@ function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest
     onImport(planCanvasImport({ feed, rows: feed.rows, choices, options, todos, courses, canvas, now: new Date(), timeZone }));
   }
 
-  const titles = ["Connect Canvas", matchOnly ? `Match ${plural(feed?.rows.length ?? 0, "new course")}` : "Match your courses", "Review and import"];
+  const titles = [replacing ? "Replace Canvas link" : "Connect Canvas", matchOnly ? `Match ${plural(feed?.rows.length ?? 0, "new course")}` : "Match your courses", "Review and import"];
   const stepCount = 3 - firstStep;
-  const next = step === 0 ? { label: "Next", disabled: !feed, run: () => go(1) }
+  // A new link for a school that's already set up: when every course is matched, matching is skipped
+  const alreadyMatched = replacing && feed?.domain === replaceDomain && feed.rows.every((row) => Object.hasOwn(canvas.courseMap ?? {}, row.key));
+  const next = step === 0 ? { label: "Next", disabled: !feed, run: () => go(alreadyMatched ? 2 : 1) }
     : step === 1 ? { label: "Next", disabled: !namesValid, run: () => go(2) }
     : { label: plan?.summary.added ? `Import ${plan.summary.added}` : matchOnly ? "Save" : "Connect", disabled: !plan, run: confirmImport };
   const back = step === firstStep ? { label: "Cancel", run: onCancel } : { label: "Back", run: () => go(step - 1) };
@@ -418,6 +434,7 @@ function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest
               variant={variant}
               styles={styles}
               host={host}
+              replaceDomain={replacing ? replaceDomain : null}
               input={input}
               onInput={handleInput}
               onBlur={() => {
@@ -448,7 +465,7 @@ function ConnectFlow({ variant, canvas, courses, todos, quickLinks, matchRequest
 // "Connect Canvas": paste the feed link, match courses to categories, review, import. With a
 // matchRequest it opens at matching, for courses that appeared after connecting.
 // Closing at any point imports nothing; all of the flow's state is dropped.
-export default function CanvasConnectModal({ open, onClose, onImport, canvas, courses, todos, quickLinks, matchRequest = null }) {
+export default function CanvasConnectModal({ open, onClose, onImport, canvas, courses, todos, quickLinks, matchRequest = null, replaceDomain = null }) {
   const [openCount, setOpenCount] = useState(0);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -465,8 +482,8 @@ export default function CanvasConnectModal({ open, onClose, onImport, canvas, co
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  const shared = { canvas, courses, todos, quickLinks, matchRequest };
-  const label = matchRequest ? "Match Canvas courses" : "Connect Canvas";
+  const shared = { canvas, courses, todos, quickLinks, matchRequest, replaceDomain };
+  const label = matchRequest ? "Match Canvas courses" : replaceDomain ? "Replace Canvas link" : "Connect Canvas";
 
   if (isMobile()) {
     return (

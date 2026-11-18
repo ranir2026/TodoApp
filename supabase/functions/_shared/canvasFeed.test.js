@@ -213,6 +213,7 @@ describe("fetchFeedText", () => {
   });
 
   it.each([
+    [400, "feed_not_found"], // what Canvas sends for a feed code it doesn't recognize
     [404, "feed_not_found"],
     [401, "feed_not_found"],
     [410, "feed_not_found"],

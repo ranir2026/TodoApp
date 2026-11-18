@@ -8,7 +8,7 @@ import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { edgeDepth } from "./dragEdges";
-import { CheckIcon, CloseIcon, PencilIcon, PlusIcon } from "./icons";
+import { CheckIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
 import TimelineTooltip from "./TimelineTooltip";
 
 const LABEL_MIN = 180;
@@ -80,7 +80,7 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   // null means "fit the longest name"; dragging the column's edge sets a width of your own
   const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
@@ -1059,6 +1059,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                                 <button type="button" onClick={() => onEdit(milestone)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Edit ${milestone.title}`} title="Edit milestone">
                                   <PencilIcon className="h-3.5 w-3.5" />
                                 </button>
+                                {onDeleteTodo && (
+                                  // Its tasks stay, under "Other tasks"; the toast's Undo brings the milestone back
+                                  <button type="button" onClick={() => onDeleteTodo(milestone.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete ${milestone.title}`} title="Delete milestone (its tasks stay)">
+                                    <TrashIcon className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </HoverActions>
                             </div>,
                             milestoneTasks,
@@ -1076,6 +1082,8 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                               pointX={(todo) => pointGeometry(todo).left}
                               milestoneX={milestone.dueDate ? pointGeometry(milestone).left : null}
                               onToggle={(task) => onToggleTodo?.(task.raw.id, task.resolved.occurrenceDate ?? undefined)}
+                              onEdit={(task) => onEdit(task.raw)}
+                              onDelete={onDeleteTodo ? (task) => onDeleteTodo(task.raw.id) : null}
                               onAdd={onQuickAdd ? () => onQuickAdd(project.id, `@${milestone.title} `) : null}
                             />
                           )}
@@ -1083,7 +1091,51 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       );
                     })}
 
-                    {(looseTasks.length > 0 || (draftHere?.dueDate && !draftHere.milestoneId)) && pointRow("loose", <span className="text-xs text-slate-500">Other tasks</span>, looseTasks, null)}
+                    {/* Tasks outside any milestone drop down the same way, so each one can be checked off, edited or deleted by name */}
+                    {(looseTasks.length > 0 || (draftHere?.dueDate && !draftHere.milestoneId)) && (() => {
+                      const listId = `loose:${project.id}`;
+                      const listOpen = openMilestones.has(listId) && looseTasks.length > 0;
+                      const listClosing = !listOpen && closingMilestones.has(listId);
+                      const rowCount = Math.max(looseTasks.length, 1);
+                      const stagger = `${listStagger(rowCount + 1, listClosing)}ms`;
+                      return (
+                        <div className="contents">
+                          {pointRow(
+                            "loose",
+                            looseTasks.length ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleMilestoneList(listId, rowCount)}
+                                aria-expanded={listOpen}
+                                title={`Other tasks: ${listOpen ? "hide" : "show"} them`}
+                                className="-ml-1 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1 text-left text-xs text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                              >
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-slate-400"><Chevron open={listOpen} /></span>
+                                Other tasks
+                                <span className="ml-0.5 shrink-0 text-caption text-slate-400 tabular-nums">{looseTasks.length}</span>
+                              </button>
+                            ) : <span className="text-xs text-slate-500">Other tasks</span>,
+                            looseTasks,
+                            null,
+                          )}
+                          {(listOpen || listClosing) && looseTasks.length > 0 && (
+                            <MilestoneTaskList
+                              closing={listClosing}
+                              stagger={stagger}
+                              tasks={looseTasks}
+                              color={color}
+                              todayKey={todayKey}
+                              renderPoint={renderPoint}
+                              pointX={(todo) => pointGeometry(todo).left}
+                              milestoneX={null}
+                              onToggle={(task) => onToggleTodo?.(task.raw.id, task.resolved.occurrenceDate ?? undefined)}
+                              onEdit={(task) => onEdit(task.raw)}
+                              onDelete={onDeleteTodo ? (task) => onDeleteTodo(task.raw.id) : null}
+                            />
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {isEmpty && !draftHere?.dueDate && (
                       <Row height={ROW} indent label={<span className="text-caption text-slate-400">Nothing planned yet</span>} onTimelineDoubleClick={(event) => openPopover(event, project)} />
@@ -1160,10 +1212,14 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   );
 }
 
-// Row actions float over the end of the label on hover, so they never cost the name any width
-function HoverActions({ children }) {
+// Row actions float over the end of the label on hover, so they never cost the name any width.
+// `fade`: the label's background, so the fade under the buttons matches a tinted row.
+function HoverActions({ children, fade = "white" }) {
   return (
-    <span className="absolute inset-y-0 right-0 flex items-center pointer-events-none bg-linear-to-r from-transparent via-white via-30% to-white pl-5 opacity-0 transition-opacity group-hover/label:pointer-events-auto group-hover/label:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+    <span
+      className="absolute inset-y-0 right-0 flex items-center pointer-events-none pl-5 opacity-0 transition-opacity group-hover/label:pointer-events-auto group-hover/label:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+      style={{ backgroundImage: `linear-gradient(to right, transparent, ${fade} 30%, ${fade})` }}
+    >
       {children}
     </span>
   );
@@ -1306,7 +1362,7 @@ function TaskStack({ tasks, date, todayKey, color, left, dragKey, pressed, tip, 
 //  - Alternate rows carry a faint wash of the project's color across the name and the timeline,
 //    and the hovered row a stronger one, so the eye can follow a name over to its dot.
 //  - `closing`: collapsing plays the entrance in reverse, bottom row first, before the list goes.
-function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onAdd, closing = false, stagger }) {
+function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milestoneX, onToggle, onEdit, onDelete, onAdd, closing = false, stagger }) {
   const sorted = [...tasks].sort((a, b) => (a.raw.dueDate ?? "9999").localeCompare(b.raw.dueDate ?? "9999") || a.raw.title.localeCompare(b.raw.title));
   const motion = closing ? "milestone-row-exit" : "milestone-row-enter";
   if (!sorted.length) {
@@ -1348,22 +1404,39 @@ function MilestoneTaskList({ tasks, color, todayKey, renderPoint, pointX, milest
         labelClassName="bg-[var(--row-label)] transition-colors duration-150 group-hover/task:bg-[var(--row-label-hover)]"
         contentClassName="bg-[var(--row-wash)] transition-colors duration-150 group-hover/task:bg-[var(--row-wash-hover)]"
         label={
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={done}
-            onClick={() => onToggle(task)}
-            className="group/check -ml-1 flex min-w-0 items-center gap-2 rounded-md py-0.5 pr-1 pl-7 text-left text-xs"
-          >
-            <span
-              className={`task-complete-toggle flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border-[1.5px] ${done ? "text-white" : "bg-white group-hover/check:border-slate-400"}`}
-              style={done ? { backgroundColor: color, borderColor: color } : { borderColor: "var(--color-slate-300)" }}
+          <div className="group/label relative flex min-w-0 items-center">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={done}
+              onClick={() => onToggle(task)}
+              className="group/check -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-md py-0.5 pr-1 pl-7 text-left text-xs"
             >
-              {done && <CheckIcon className="h-2.5 w-2.5" />}
-            </span>
-            <span className={`line-clamp-2 min-w-0 flex-1 leading-tight break-words ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{task.raw.title}</span>
-            <span className={`shrink-0 text-caption ${overdue ? "text-danger-600" : "text-slate-400"}`}>{task.raw.dueDate ? shortDate(task.raw.dueDate) : "No date"}</span>
-          </button>
+              <span
+                className={`task-complete-toggle flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border-[1.5px] ${done ? "text-white" : "bg-white group-hover/check:border-slate-400"}`}
+                style={done ? { backgroundColor: color, borderColor: color } : { borderColor: "var(--color-slate-300)" }}
+              >
+                {done && <CheckIcon className="h-2.5 w-2.5" />}
+              </span>
+              <span className={`line-clamp-2 min-w-0 flex-1 leading-tight break-words ${done ? "text-slate-400 line-through" : "text-slate-700"}`}>{task.raw.title}</span>
+              <span className={`shrink-0 text-caption ${overdue ? "text-danger-600" : "text-slate-400"}`}>{task.raw.dueDate ? shortDate(task.raw.dueDate) : "No date"}</span>
+            </button>
+            {/* Edit and delete by name, without hunting for the task's dot on the timeline */}
+            {(onEdit || onDelete) && (
+              <HoverActions fade="var(--row-label-hover)">
+                {onEdit && (
+                  <button type="button" onClick={() => onEdit(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white/70 hover:text-course-600" aria-label={`Edit ${task.raw.title}`} title="Edit task">
+                    <PencilIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {onDelete && (
+                  <button type="button" onClick={() => onDelete(task)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white/70 hover:text-danger-500" aria-label={`Delete ${task.raw.title}`} title="Delete task">
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </HoverActions>
+            )}
+          </div>
         }
       >
         {spineX !== null && index < lastDated && (

@@ -114,8 +114,11 @@ function RefreshButton({ sync, className, iconClassName = "h-3.5 w-3.5" }) {
   );
 }
 
+const brokenFeed = (canvas) => canvas.feeds?.find((feed) => LINK_BROKEN_CODES.has(feed.status)) ?? null;
+
 // Desktop dashboard card, in the right column with the other links out of the app
-export function CanvasCard({ ready, canvas, sync, onConnect, onManage }) {
+export function CanvasCard({ ready, canvas, sync, onConnect, onManage, onFix }) {
+  const broken = brokenFeed(canvas);
   const feeds = canvas.feeds ?? [];
   return (
     <section className="rounded-card border border-slate-200 bg-white p-3 shadow-sm" aria-labelledby="canvas-card-title">
@@ -146,9 +149,14 @@ export function CanvasCard({ ready, canvas, sync, onConnect, onManage }) {
               );
             })}
           </ul>
-          <button type="button" onClick={onManage} className="mt-2.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-800">
-            {feeds.some((feed) => LINK_BROKEN_CODES.has(feed.status)) ? "Fix link" : "Manage"}
-          </button>
+          {broken ? (
+            <div className="mt-2.5 flex gap-1.5">
+              <button type="button" onClick={() => onFix(broken.domain)} className="flex-1 rounded-lg bg-course-500 px-2 py-1.5 text-xs font-semibold text-white hover:bg-course-600">Fix link</button>
+              <button type="button" onClick={onManage} className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-800">Manage</button>
+            </div>
+          ) : (
+            <button type="button" onClick={onManage} className="mt-2.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-800">Manage</button>
+          )}
         </>
       )}
     </section>
@@ -156,8 +164,8 @@ export function CanvasCard({ ready, canvas, sync, onConnect, onManage }) {
 }
 
 // Mobile Profile panel: the same states in the mobile panel style
-export function CanvasMobilePanel({ ready, canvas, sync, onConnect, onManage }) {
-  const feed = canvas.feeds?.[0];
+export function CanvasMobilePanel({ ready, canvas, sync, onConnect, onManage, onFix }) {
+  const feed = brokenFeed(canvas) ?? canvas.feeds?.[0];
   const status = feed ? feedStatus(feed, sync) : null;
   return (
     <section className="mobile-panel">
@@ -176,10 +184,43 @@ export function CanvasMobilePanel({ ready, canvas, sync, onConnect, onManage }) 
       ) : (
         <p className="mobile-muted">Import assignments from your school's Canvas calendar.</p>
       )}
-      <button type="button" onClick={feed ? onManage : onConnect} disabled={!ready} className="mobile-panel-action disabled:opacity-50">
+      <button type="button" onClick={!feed ? onConnect : status.broken ? () => onFix(feed.domain) : onManage} disabled={!ready} className="mobile-panel-action disabled:opacity-50">
         {!ready ? "Loading…" : feed ? (status.broken ? "Fix Canvas link" : "Manage Canvas") : "Connect Canvas"}
       </button>
+      {feed && status.broken && <button type="button" onClick={onManage} className="mobile-hit mt-2 w-full text-sm font-medium text-slate-500">Manage Canvas</button>}
     </section>
+  );
+}
+
+/**
+ * Shown above the task list when a saved link stopped working (the user reset the feed in
+ * Canvas, say). Nothing is lost; the new link reattaches to the same tasks.
+ */
+export function CanvasLinkNotice({ canvas, onFix, variant = "desktop" }) {
+  const feed = brokenFeed(canvas);
+  if (!feed) return null;
+  const detail = "Paste the new Calendar Feed link. Nothing has been removed.";
+  if (variant === "mobile") {
+    return (
+      <div role="status" className="notice-enter mb-4 flex items-center gap-3 rounded-[var(--mobile-radius-panel)] bg-white px-4 py-3">
+        <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-danger-500/10 text-danger-600"><SchoolIcon className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-800">Canvas link stopped working</span>
+          <span className="block text-xs text-slate-500">{detail}</span>
+        </span>
+        <button type="button" onClick={() => onFix(feed.domain)} className="mobile-hit shrink-0 rounded-full bg-course-600 px-3.5 py-2 text-sm font-semibold text-white">Fix</button>
+      </div>
+    );
+  }
+  return (
+    <div role="status" className="notice-enter mb-3 flex items-center gap-3 rounded-card border border-danger-500/20 bg-danger-500/5 py-2 pr-2 pl-3">
+      <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white text-danger-600 shadow-sm"><SchoolIcon className="h-4 w-4" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-slate-800">Canvas link stopped working</span>
+        <span className="block truncate text-caption text-slate-500">{detail}</span>
+      </span>
+      <button type="button" onClick={() => onFix(feed.domain)} className="shrink-0 rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600">Paste new link</button>
+    </div>
   );
 }
 

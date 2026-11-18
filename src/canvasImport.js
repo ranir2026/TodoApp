@@ -2,6 +2,7 @@
 // settings to save, and the tasks that result. Pure, so the review step can preview exactly
 // what Import will do, and Import commits that same plan.
 import { applyCourseMatches } from "./canvasCourses";
+import { withCourseLabels } from "./canvasManage";
 import { hasCanvasData, reconcile } from "./canvasSync";
 
 export function planCanvasImport({ feed, rows, choices, options, todos, courses, canvas = {}, now, timeZone }) {
@@ -29,7 +30,8 @@ export function planCanvasImport({ feed, rows, choices, options, todos, courses,
   return {
     todos: result.todos,
     courses: applied.courses.filter((course) => !empty.has(course.id)),
-    canvas: { ...canvasState, courseMap },
+    // Every course's name is kept, matched or not, so settings can still show the ones left out
+    canvas: withCourseLabels({ ...canvasState, courseMap }, rows),
     summary: result.summary,
     addedIds: added.map((todo) => todo.id),
     createdCategoryIds: applied.createdCategoryIds.filter((id) => !empty.has(id)),

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseCanvasFeed } from "../supabase/functions/_shared/canvasFeedParse.js";
+import { listFeedCourses } from "./canvasCourses";
 
 const NOW = new Date("2026-11-17T17:00:00Z");
 const FEED = "https://example.instructure.com/feeds/calendars/user_FAKEtoken0123456789abcdef.ics";
@@ -108,6 +109,34 @@ describe("Connect Canvas", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalled();
     expect(onImport).not.toHaveBeenCalled();
+  });
+
+  it("replaces a broken link without asking about matched courses again", async () => {
+    const DOMAIN = "example.instructure.com";
+    const courseMap = Object.fromEntries(listFeedCourses(items, DOMAIN, NOW, "America/New_York").map((row) => [row.key, "c1"]));
+    const canvas = { feeds: [{ id: `feed:${DOMAIN}`, url: `https://${DOMAIN}/feeds/calendars/user_OLDtoken000000000000000.ics`, domain: DOMAIN, status: "feed_not_found" }], courseMap, dismissedIds: [] };
+    const { onImport } = open({ canvas, replaceDomain: DOMAIN });
+    expect(screen.getByRole("heading", { name: "Replace Canvas link" })).toBeTruthy();
+    expect(screen.getByLabelText("Your school's Canvas address").value).toBe(DOMAIN);
+    expect(screen.getByText(/Your imported tasks and course choices stay/)).toBeTruthy();
+
+    await connect();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Review and import" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^(Import|Connect)/ }));
+    const plan = onImport.mock.calls[0][0];
+    expect(plan.canvas.feeds).toEqual([expect.objectContaining({ url: FEED, domain: DOMAIN, status: "ok" })]);
+    expect(plan.canvas.courseMap).toEqual(courseMap);
+    expect(plan.createdCategoryIds).toEqual([]);
+  });
+
+  it("says when a replacement link belongs to another school", async () => {
+    const canvas = { feeds: [{ id: "feed:canvas.example.edu", url: "https://canvas.example.edu/feeds/calendars/user_OLDtoken000000000000000.ics", domain: "canvas.example.edu", status: "feed_not_found" }], courseMap: {} };
+    open({ canvas, replaceDomain: "canvas.example.edu" });
+    await connect();
+    expect(screen.getByText(/This link is for example.instructure.com, so it will be added as another school/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Match your courses" })).toBeTruthy();
   });
 
   it("lets a course be skipped or renamed", async () => {

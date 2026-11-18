@@ -9,6 +9,7 @@ import {
   disconnectFeed,
   hasCanvasDates,
   markFeedStatus,
+  reassignCategory,
   remapCanvasCourse,
   settingsCourseRows,
   shouldAutoSync,
@@ -27,10 +28,10 @@ const FEED_A = `https://${A}/feeds/calendars/user_FAKEtoken0123456789abcdef.ics`
 const FEED_B = `https://${B}/feeds/calendars/user_FAKEtokenBBBBBBBBBBBBBBBB.ics`;
 
 // A user with their own category and task, connected to school A with every course matched
-function connected({ items = itemsA, domain = A, url = FEED_A, todos = [{ id: "mine", title: "My own task", courseId: "gen", dueDate: "2026-11-20" }], courses = [{ id: "gen", name: "General" }], canvas = {} } = {}) {
+function connected({ items = itemsA, domain = A, url = FEED_A, todos = [{ id: "mine", title: "My own task", courseId: "gen", dueDate: "2026-11-20" }], courses = [{ id: "gen", name: "General" }], canvas = {}, options = { includeNonAssignments: true } } = {}) {
   const rows = listFeedCourses(items, domain, NOW, TZ);
   const choices = Object.fromEntries(rows.map((row) => [row.key, suggestCategory(row.courseId ? row.label : null, courses)]));
-  return planCanvasImport({ feed: { domain, url, items }, rows, choices, options: { includeNonAssignments: true }, todos, courses, canvas, now: NOW, timeZone: TZ });
+  return planCanvasImport({ feed: { domain, url, items }, rows, choices, options, todos, courses, canvas, now: NOW, timeZone: TZ });
 }
 
 const imported = (todos, domain = A) => todos.filter((todo) => todo.canvas?.domain === domain);
@@ -175,6 +176,69 @@ describe("disconnectFeed", () => {
     const off = disconnectFeed({ canvas, todos: plan.todos.filter((todo) => todo.id !== deleted), courses: plan.courses, domain: A, removeTasks: false });
     const again = connected({ todos: off.todos, courses: off.courses, canvas: off.canvas });
     expect(again.todos.some((todo) => todo.id === deleted)).toBe(false);
+  });
+});
+
+describe("courses left out", () => {
+  // At setup (default options), a course with only past-due work or only calendar events gets no
+  // category, since nothing would go in it
+  const deferredCourse = () => {
+    const plan = connected({ options: {} });
+    const rows = settingsCourseRows({ canvas: plan.canvas, todos: plan.todos, courses: plan.courses, domain: A, items: itemsA, now: NOW, timeZone: TZ });
+    return { plan, rows, row: rows.find((row) => row.state === "unmatched") };
+  };
+
+  it("keeps every course's name at setup, so a course with nothing imported still shows in settings", () => {
+    const { plan, row } = deferredCourse();
+    expect(row).toBeTruthy();
+    expect(Object.hasOwn(plan.canvas.courseLabels, row.key)).toBe(true);
+    expect(Object.hasOwn(plan.canvas.courseMap, row.key)).toBe(false);
+  });
+
+  it("says why a course has nothing imported", () => {
+    const { row } = deferredCourse();
+    expect(row.feed.upcoming).toBe(0);
+    expect(row.feed.assignments + row.feed.events).toBeGreaterThan(0);
+    // Without the feed loaded, the row is still listed, just without the reason
+    const plan = connected({ options: {} });
+    const bare = settingsCourseRows({ canvas: plan.canvas, todos: plan.todos, courses: plan.courses, domain: A }).find((item) => item.key === row.key);
+    expect(bare).toMatchObject({ state: "unmatched", feed: null });
+  });
+
+  it("marks a course whose category was deleted", () => {
+    const plan = connected();
+    const courseId = busiestCourse(plan.todos);
+    const key = canvasCourseKey(A, courseId);
+    const remaining = plan.courses.filter((course) => course.id !== plan.canvas.courseMap[key]);
+    const rows = settingsCourseRows({ canvas: plan.canvas, todos: plan.todos, courses: remaining, domain: A });
+    expect(rows.find((row) => row.key === key).state).toBe("deleted");
+  });
+});
+
+describe("reassignCategory (deleting a category)", () => {
+  it("moves Canvas tasks so they still follow their course when it's matched again", () => {
+    const plan = connected();
+    const courseId = busiestCourse(plan.todos);
+    const key = canvasCourseKey(A, courseId);
+    const doomed = plan.canvas.courseMap[key];
+    const todos = plan.todos.map((todo) => reassignCategory(todo, doomed, "gen"));
+    const courses = plan.courses.filter((course) => course.id !== doomed);
+    const moved = todos.filter((todo) => todo.canvas?.courseId === courseId);
+    expect(moved.every((todo) => todo.courseId === "gen" && todo.canvas.synced.courseId === "gen")).toBe(true);
+
+    // The course is matched to a new category: its tasks follow, from settings or from setup
+    const fresh = [...courses, { id: "phys-2", name: "Physics again" }];
+    expect(remapCanvasCourse({ todos, domain: A, courseId, categoryId: "phys-2" }).moved).toBe(moved.length);
+    const rematched = applyCourseMatches({ domain: A, matches: [{ key, courseId, choice: { type: "existing", categoryId: "phys-2" } }], courses: fresh, canvasState: plan.canvas });
+    const synced = reconcile({ domain: A, feedItems: itemsA, todos, courses: rematched.courses, canvasState: rematched.canvasState, now: NOW, timeZone: TZ });
+    expect(synced.todos.filter((todo) => todo.canvas?.courseId === courseId).every((todo) => todo.courseId === "phys-2")).toBe(true);
+  });
+
+  it("leaves a task the user had moved by hand as the user's choice", () => {
+    const todo = { id: "t", courseId: "doomed", canvas: { synced: { courseId: "elsewhere" } } };
+    expect(reassignCategory(todo, "doomed", "gen")).toEqual({ ...todo, courseId: "gen" });
+    expect(reassignCategory({ id: "mine", courseId: "doomed" }, "doomed", "gen")).toEqual({ id: "mine", courseId: "gen" });
+    expect(reassignCategory(todo, "other", "gen")).toBe(todo);
   });
 });
 

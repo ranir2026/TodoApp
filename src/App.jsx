@@ -33,8 +33,8 @@ import { isAdminPage } from "./adminMode";
 import { hasCanvasData } from "./canvasSync";
 import { settingsBeforeImport } from "./canvasImport";
 import { applyCourseMatches } from "./canvasCourses";
-import { LINK_BROKEN_CODES, disconnectFeed, remapCanvasCourse, withoutDueMoved } from "./canvasManage";
-import { CanvasCard, CanvasCoursesNotice, CanvasMobilePanel } from "./CanvasUI";
+import { LINK_BROKEN_CODES, disconnectFeed, reassignCategory, remapCanvasCourse, withoutDueMoved } from "./canvasManage";
+import { CanvasCard, CanvasCoursesNotice, CanvasLinkNotice, CanvasMobilePanel } from "./CanvasUI";
 import { CanvasActionsContext } from "./canvasStatus";
 import { useCanvasSync } from "./useCanvasSync";
 
@@ -138,6 +138,8 @@ export default function App() {
   const closeCanvas = useCallback(() => setCanvasOpen(false), []);
   // Set when setup opens at matching, for courses that showed up after connecting: { domain, keys }
   const [canvasMatch, setCanvasMatch] = useState(null);
+  // Set when setup opens to replace a connected school's link: its domain
+  const [canvasReplace, setCanvasReplace] = useState(null);
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
   const closeCanvasSettings = useCallback(() => setCanvasSettingsOpen(false), []);
   // Course keys whose "match them" notice was hidden this session, and the check failure last dismissed
@@ -229,6 +231,15 @@ export default function App() {
 
   function openCanvasConnect() {
     setCanvasMatch(null);
+    setCanvasReplace(null);
+    setCanvasSettingsOpen(false);
+    setCanvasOpen(true);
+  }
+
+  // A new link for a school that's connected (its old link stopped working, say)
+  function openCanvasReplace(domain) {
+    setCanvasMatch(null);
+    setCanvasReplace(domain);
     setCanvasSettingsOpen(false);
     setCanvasOpen(true);
   }
@@ -236,6 +247,7 @@ export default function App() {
   function openCanvasMatch() {
     const domain = canvasNoticeCourses[0]?.domain;
     if (!domain) return;
+    setCanvasReplace(null);
     setCanvasMatch({ domain, keys: canvasNoticeCourses.filter((course) => course.domain === domain).map((course) => course.key) });
     setCanvasOpen(true);
   }
@@ -314,6 +326,8 @@ export default function App() {
     const addedIds = new Set(plan.addedIds);
     const createdIds = new Set(plan.createdCategoryIds);
     const fallbackId = (activeCourses[0] ?? courses[0])?.id ?? null;
+    const domain = plan.canvas.feeds?.at(-1)?.domain;
+    const relinked = Boolean(domain) && (canvas.feeds ?? []).some((feed) => feed.domain === domain);
     setTodos(plan.todos);
     setCourses(plan.courses);
     setCanvas(plan.canvas);
@@ -321,7 +335,7 @@ export default function App() {
       setTodos((prev) => prev.filter((todo) => !addedIds.has(todo.id)).map((todo) => (createdIds.has(todo.courseId) ? { ...todo, courseId: fallbackId } : todo)));
       setCourses((prev) => prev.filter((course) => !createdIds.has(course.id)));
       setCanvas(previousCanvas);
-    }, plan.addedIds.length ? `Added ${plan.addedIds.length} from Canvas` : "Connected Canvas");
+    }, plan.addedIds.length ? `Added ${plan.addedIds.length} from Canvas` : relinked ? "Canvas link updated" : "Connected Canvas");
   }
 
   function addTodo({ type, title, courseId, dueDate, dueDates, endDate, startTime, endTime, priority, description, repeat, repeatUntil, repeatCount, repeatDays, projectId, milestoneId }) {
@@ -555,10 +569,11 @@ export default function App() {
     const remaining = courses.filter((course) => course.id !== id);
     const fallbackId = (remaining.find((c) => !c.archived) ?? remaining[0])?.id ?? null;
     setCourses(remaining);
-    setTodos((prevTodos) => prevTodos.map((todo) => (todo.courseId === id ? { ...todo, courseId: fallbackId } : todo)));
+    // Canvas tasks keep following their course: once it's matched to a new category, they move there
+    setTodos((prevTodos) => prevTodos.map((todo) => reassignCategory(todo, id, fallbackId)));
     showUndo(() => {
       setCourses(previousCourses);
-      setTodos((prevTodos) => prevTodos.map((todo) => (movedTaskIds.has(todo.id) ? { ...todo, courseId: id } : todo)));
+      setTodos((prevTodos) => prevTodos.map((todo) => (movedTaskIds.has(todo.id) ? reassignCategory(todo, fallbackId, id) : todo)));
     }, `Deleted category “${course.name}”`);
   }
 
@@ -779,9 +794,9 @@ export default function App() {
           <div className={`mobile-search-inline ${mobileSearchOpen ? "is-open" : ""}`} inert={!mobileSearchOpen}><input ref={mobileSearchInputRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>
         </header>
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
-          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{canvasAvailable && <CanvasCoursesNotice variant="mobile" courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
+          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{canvasAvailable && <CanvasLinkNotice variant="mobile" canvas={canvas} onFix={openCanvasReplace} />}{canvasAvailable && <CanvasCoursesNotice variant="mobile" courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
           <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todosView} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
-          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3>{canvasAvailable && <CanvasMobilePanel ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} />}<section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
+          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={() => supabase.auth.signOut()} className="mobile-filter-button mobile-hit">Sign out</button>}</div><h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3>{canvasAvailable && <CanvasMobilePanel ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} onFix={openCanvasReplace} />}<section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
         </main>
         <div className="mobile-dock"><button type="button" onClick={() => setMobileAddOpen(true)} className="mobile-add-fab" aria-label="Add task or event"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) * 100}%)` }} />{MOBILE_TABS.map((item) => <button type="button" key={item.id} onPointerDown={(event) => event.isPrimary && event.button === 0 && switchMobileTab(item.id)} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav></div>
         <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
@@ -965,7 +980,7 @@ export default function App() {
               </div>
             </div>
             <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
-              {canvasAvailable && <CanvasCoursesNotice courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}
+              {canvasAvailable && <CanvasLinkNotice canvas={canvas} onFix={openCanvasReplace} />}{canvasAvailable && <CanvasCoursesNotice courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}
               {/* Rows glide to their new places when the sort or a filter changes (not while typing a search) */}
               <FlipScope containerRef={listScrollRef} flipKey={[sortBy, filter, courseFilter, typeFilter, priorityFilter, dueFilter].join("|")}>
               {orderedTasks.length === 0 ? (
@@ -1080,7 +1095,7 @@ export default function App() {
         </section>
 
         {/* Canvas sits with the other ways out to school sites: set up once, then a quiet status line */}
-        {canvasAvailable && <CanvasCard ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} />}
+        {canvasAvailable && <CanvasCard ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} onFix={openCanvasReplace} />}
 
         {/* Account details matter least day to day, so they settle at the bottom */}
         {session && (
@@ -1142,6 +1157,7 @@ export default function App() {
         onAddTodo={addTodo}
         onUpdateTodo={updateTodo}
         onEdit={editItem}
+        onDeleteTodo={deleteTodo}
         onDeleteProject={deleteProject}
       />
       <EditItemModal
@@ -1175,6 +1191,7 @@ export default function App() {
             todos={todos}
             quickLinks={quickLinks}
             matchRequest={canvasMatch && { ...canvasMatch, items: canvasSync.feedItems(canvasMatch.domain) }}
+            replaceDomain={canvasReplace}
           />
           <CanvasSettingsModal
             open={canvasSettingsOpen}
@@ -1183,7 +1200,7 @@ export default function App() {
             courses={courses}
             todos={todos}
             sync={canvasSync}
-            onReplaceLink={openCanvasConnect}
+            onReplaceLink={openCanvasReplace}
             onConnectAnother={openCanvasConnect}
             onChangeMapping={changeCanvasMapping}
             onChangeOption={changeCanvasOption}

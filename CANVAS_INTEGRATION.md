@@ -45,6 +45,8 @@ Other facts:
 - **Window:** 30 days back to 366 days ahead (from the code; the sample began exactly 30 days before download). Items roll off after 30 days, so absence from the feed does NOT mean deleted. 48 of the 82 sample items were already past due.
 - **Not in the feed:** undated assignments, unpublished assignments, submission status, points, grades and course names. The course appears only as the bracket code and in `include_contexts`.
 - **No-course items:** personal (`user_N`) and group (`group_N`) events have no bracket and no course id.
+- **Which courses (checked in Phase 6 against `get_all_pertinent_contexts`):** only courses with a current, active-by-date enrollment, and for students only published assignments they can see, within the window. The user's calendar checkboxes don't matter, and there's no cap on courses (1,000 items per kind). A course the student can see in Canvas can therefore be missing entirely, if its enrollment isn't active yet or it has no published, dated work in the window. Phase 6 found this with a real course that was absent from the feed.
+- **Dead links:** Canvas answers an unknown feed code (reset, mistyped, or a course feed gone private) with **HTTP 400** and an HTML page (`get_feed_context`), not 404. The function maps 400 to `feed_not_found`.
 - **Other fields:** `SEQUENCE` is always 0. `DTSTAMP` is the item's last update. `CLASS:PUBLIC`.
 - **Encoding:** CRLF, folded at 75 octets on character boundaries; text escapes `\,` `\;` `\n`.
 - **Host:** the event `URL` host is the school's Canvas host. Custom domains exist besides `*.instructure.com` (the sample was instructure-hosted). In Phase 2, check that it matches the feed URL's host before namespacing by it.

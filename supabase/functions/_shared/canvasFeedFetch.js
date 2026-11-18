@@ -66,7 +66,9 @@ export async function fetchFeedText(feedUrl, { fetchImpl = fetch, resolveDns, ti
     await response.body?.cancel().catch(() => {});
     throw new FeedError("redirected");
   }
-  if ([401, 403, 404, 410].includes(response.status)) {
+  // Canvas answers a feed code it doesn't recognize (reset, mistyped, or for a course gone
+  // private) with 400 and an HTML page (get_feed_context in canvas-lms), so 400 means a dead link
+  if ([400, 401, 403, 404, 410].includes(response.status)) {
     await response.body?.cancel().catch(() => {});
     throw new FeedError("feed_not_found");
   }

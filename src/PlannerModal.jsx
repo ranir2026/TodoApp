@@ -18,7 +18,7 @@ const isTyping = (target) => target.tagName === "INPUT" || target.tagName === "T
 
 // Desktop planner: plan the hours of a day, or lay projects out over weeks.
 // `suspended` is set while another dialog (the item editor) sits on top, so Escape closes that one first.
-export default function PlannerModal({ open, tabRequest, suspended, onClose, keymap, todos, courses, courseMap, planner, updatePlanner, onToggleTodo, onAddTodo, onUpdateTodo, onEdit, onDeleteProject }) {
+export default function PlannerModal({ open, tabRequest, suspended, onClose, keymap, todos, courses, courseMap, planner, updatePlanner, onToggleTodo, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject }) {
   const [tab, setTab] = useLocalStorage("plannerTab", "today");
   // Opened from somewhere that wants a particular tab (the dashboard's Today panel): switch during
   // render so the planner never shows the other tab first
@@ -143,6 +143,7 @@ export default function PlannerModal({ open, tabRequest, suspended, onClose, key
                 onAddTodo={onAddTodo}
                 onUpdateTodo={onUpdateTodo}
                 onEdit={onEdit}
+                onDeleteTodo={onDeleteTodo}
                 onDeleteProject={onDeleteProject}
                 onToggleTodo={onToggleTodo}
                 onQuickAdd={(projectId, text = "") => setQuickAdd({ projectId, text })}
@@ -151,7 +152,7 @@ export default function PlannerModal({ open, tabRequest, suspended, onClose, key
                 bottomInset={quickAdd ? 220 : 0}
               />
             ) : (
-              <DayPlanner todos={todos} courseMap={courseMap} toolbar={toolbar} planner={planner} updatePlanner={updatePlanner} onToggleTodo={onToggleTodo} onEdit={onEdit} suspended={suspended} />
+              <DayPlanner todos={todos} courseMap={courseMap} toolbar={toolbar} planner={planner} updatePlanner={updatePlanner} onToggleTodo={onToggleTodo} onEdit={onEdit} onDeleteTodo={onDeleteTodo} suspended={suspended} />
             )}
           </div>
           {/* Docked inside the planner with no scrim, so the timeline stays in view and scrollable */}
