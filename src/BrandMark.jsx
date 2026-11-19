@@ -2,7 +2,7 @@
 export default function BrandMark({ size = 56, className = "" }) {
   return (
     <img
-      src="/icon.png"
+      src={`${import.meta.env.BASE_URL}icon.png`}
       alt=""
       aria-hidden="true"
       width={size}
