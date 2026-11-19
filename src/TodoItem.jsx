@@ -28,17 +28,17 @@ function dueLabel(todo, isEvent) {
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
-  if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
+  if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500" };
 
-  if (isOverdue(todo, now)) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
+  if (isOverdue(todo, now)) return { text: "Overdue", tone: "text-danger-600" };
   const diffDays = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 
-  if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
+  if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600" };
   // Status colors: red is overdue, orange is due soon (strongest today), violet is kept for Urgent priority
-  if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 bg-todo-100 font-semibold" };
-  if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700 bg-todo-500/10" };
-  if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700 bg-todo-500/10" };
-  return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
+  if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 font-semibold" };
+  if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700" };
+  if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700" };
+  return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500" };
 }
 
 function CheckIcon({ className }) {
@@ -325,7 +325,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
               event.stopPropagation();
               window.open(link.href, "_blank", "noopener,noreferrer");
             }}
-            className="cursor-pointer text-xs font-medium text-link-700 underline-offset-2 hover:underline"
+            className="cursor-pointer rounded-sm text-xs font-medium text-link-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-course-500"
           >
             ↗ {link.label}
           </span>

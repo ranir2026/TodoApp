@@ -1,4 +1,4 @@
-import { completionTimestamps, currentOccurrence, expandRange, isDueSoon, isOccurrenceCompleted, isOverdue, isRepeating, parseDateKey, resolveTask } from "./occurrences";
+import { expandRange, isDueSoon, isOccurrenceCompleted, isOverdue, isRepeating, parseDateKey, resolveTask } from "./occurrences";
 
 function startOfWeek(d) {
   const date = new Date(d);
@@ -15,35 +15,25 @@ export default function StatsBar({ todos, dueFilter = null, onShowDue }) {
   const weekStart = startOfWeek(now);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
-  const isInWeek = (timestamp) => {
-    if (!timestamp) return false;
-    const date = new Date(timestamp);
-    return date >= weekStart && date < weekEnd;
-  };
   const lastWeekDay = new Date(weekEnd);
   lastWeekDay.setDate(lastWeekDay.getDate() - 1);
 
-  // This week's workload: everything finished this week, plus everything still open that is
-  // due by the end of the week (including leftovers from earlier weeks), undated, or added this week.
+  // Only what is due this week counts: each task due in this week, and each repeat that falls in it,
+  // is one item, done when it has been completed.
   let weekTotal = 0;
   let weekDone = 0;
   for (const t of todos) {
     if ((t.type ?? "task") !== "task") continue;
     if (isRepeating(t)) {
       const weekKeys = Object.keys(expandRange([t], weekStart, lastWeekDay));
-      const doneInWeek = weekKeys.filter((key) => isOccurrenceCompleted(t, key)).length;
-      const doneLate = completionTimestamps(t).filter(isInWeek).length - doneInWeek;
-      const current = currentOccurrence(t);
-      const carriedOver = current && parseDateKey(current) < weekStart ? 1 : 0;
-      weekTotal += weekKeys.length + Math.max(doneLate, 0) + carriedOver;
-      weekDone += doneInWeek + Math.max(doneLate, 0);
-    } else if (t.completed) {
-      if (isInWeek(t.completedAt)) {
+      weekTotal += weekKeys.length;
+      weekDone += weekKeys.filter((key) => isOccurrenceCompleted(t, key)).length;
+    } else if (t.dueDate) {
+      const due = parseDateKey(t.dueDate);
+      if (due >= weekStart && due < weekEnd) {
         weekTotal += 1;
-        weekDone += 1;
+        if (t.completed) weekDone += 1;
       }
-    } else if (!t.dueDate || parseDateKey(t.dueDate) < weekEnd || isInWeek(t.createdAt)) {
-      weekTotal += 1;
     }
   }
   const completionPct = weekTotal ? Math.round((weekDone / weekTotal) * 100) : 0;
@@ -58,10 +48,10 @@ export default function StatsBar({ todos, dueFilter = null, onShowDue }) {
       <div className="pb-1">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-slate-700">This week</p>
-          <p className="text-sm font-semibold text-slate-900 tabular-nums">{weekTotal ? `${weekDone} of ${weekTotal} done` : "No tasks yet"}</p>
+          <p className="text-xs font-medium text-slate-500 tabular-nums">{weekTotal ? `${weekDone} of ${weekTotal} done` : "Nothing due this week"}</p>
         </div>
         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full w-full origin-left rounded-full bg-todo-500 transition-transform duration-500" style={{ transform: `scaleX(${completionPct / 100})` }} />
+          <div className="h-full w-full origin-left rounded-full bg-todo-500 transition-transform duration-300 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${completionPct / 100})` }} />
         </div>
       </div>
       <StatRow label="Due soon" count={dueSoon.length} tone="text-urgent-600" zeroTone="text-urgent-600" active={dueFilter === "soon"} onClick={onShowDue && (() => onShowDue("soon"))} />

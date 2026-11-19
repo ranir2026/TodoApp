@@ -396,6 +396,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .mobile-bottom-nav { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: #e2e8f0; }
   .mobile-header { background: #f2f2f7; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .glass-dark { background: #0f172a; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .auth-card { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 /* Mobile concentric corners: controls are 12px, and anything holding them adds its inset.

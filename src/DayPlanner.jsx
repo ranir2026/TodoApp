@@ -535,7 +535,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
         <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
           <span>{plannedDone} of {blocks.length} planned done</span>
           <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-            <span className="block h-full w-full origin-left rounded-full bg-success-500 transition-transform duration-500" style={{ transform: `scaleX(${blocks.length ? plannedDone / blocks.length : 0})` }} />
+            <span className="block h-full w-full origin-left rounded-full bg-success-500 transition-transform duration-300 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${blocks.length ? plannedDone / blocks.length : 0})` }} />
           </span>
         </div>
       )}
