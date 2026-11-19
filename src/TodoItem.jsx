@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { isOverdue, parseDateKey } from "./occurrences";
 import { useSwipeToDelete } from "./useSwipeToDelete";
 import { extractLinks } from "./noteLinks";
-import { courseAccentStyle } from "./courseColors";
+import { courseAccentStyle, courseChipStyle } from "./courseColors";
 import { CanvasDueFlag, CanvasSourceChips } from "./CanvasUI";
 import { CanvasActionsContext } from "./canvasStatus";
 
@@ -28,17 +28,17 @@ function dueLabel(todo, isEvent) {
   if (!dueDate) return null;
   const due = parseDateKey(dueDate);
   const now = new Date();
-  if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500" };
+  if (isEvent) return { text: `On ${due.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, tone: "text-slate-500 bg-slate-100" };
 
-  if (isOverdue(todo, now)) return { text: "Overdue", tone: "text-danger-600" };
+  if (isOverdue(todo, now)) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   const diffDays = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 
-  if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600" };
+  if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
   // Status colors: red is overdue, orange is due soon (strongest today), violet is kept for Urgent priority
-  if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 font-semibold" };
-  if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700" };
-  if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700" };
-  return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500" };
+  if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 bg-todo-100 font-semibold" };
+  if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700 bg-todo-500/10" };
+  if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700 bg-todo-500/10" };
+  return { text: due.toLocaleDateString(undefined, { month: "short", day: "numeric" }), tone: "text-slate-500 bg-slate-100" };
 }
 
 function CheckIcon({ className }) {
@@ -270,43 +270,43 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
       {/* When it's due leads, then when in the day, then what kind of thing it is and where it belongs */}
       {hasChips && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {due && !todo.completed && (
-          <span className={`text-xs font-medium ${due.tone}`}>{due.text}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
         )}
         <CanvasDueFlag todo={todo} />
         {timeRange && (
-          <span className="text-xs font-medium text-slate-500">{timeRange}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
         )}
         {todo.priority === "urgent" && (
-          <span className="text-xs font-medium text-urgent-700">
+          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
             Urgent
           </span>
         )}
         {isEvent && (
-          <span className="text-xs font-medium text-slate-500">Event</span>
+          <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={courseChipStyle(course)}>Event</span>
         )}
         {isMilestone && (
-          <span className="text-xs font-medium text-urgent-700">
+          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
             {todo.completed ? "Milestone reached" : "Milestone"}
           </span>
         )}
         {isMilestone && todo.progress && (
-          <span className="text-xs font-medium text-slate-500">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
             {todo.progress.total ? `${todo.progress.done}/${todo.progress.total} tasks` : "No tasks linked"}
           </span>
         )}
         {project && (
-          <span className="text-xs font-medium text-slate-500">▸ {project.name}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">▸ {project.name}</span>
         )}
         {course && !hideCourse && (
           <span
-            className="text-xs font-medium text-slate-500"
-           
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            style={courseChipStyle(course)}
           >
             {course.name}
           </span>
         )}
         {todo.repeat && todo.repeat !== "none" && (
-          <span className="text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
         )}
         {links.map((link) => (
           // Span instead of <a>: the whole card is already a button
@@ -325,7 +325,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
               event.stopPropagation();
               window.open(link.href, "_blank", "noopener,noreferrer");
             }}
-            className="cursor-pointer rounded-sm text-xs font-medium text-link-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-course-500"
+            className="cursor-pointer rounded-full bg-link-100 px-2 py-0.5 text-xs font-medium text-link-700 hover:bg-link-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-course-500"
           >
             ↗ {link.label}
           </span>
