@@ -12,7 +12,7 @@ import { parseDateKey } from "./occurrences";
 
 const PHYSICS = { id: "physics", name: "Physics", color: "#f59e0b" };
 const PROGRAMMING = { id: "programming", name: "Programming", color: "#0ea5e9" };
-const WRITING = { id: "writing", name: "Writing", color: "#6366f1" };
+const WRITING = { id: "writing", name: "Writing", color: "#ec4899" };
 const PERSONAL = { id: "personal", name: "Personal", color: "#14b8a6" };
 
 const VIEWS = [

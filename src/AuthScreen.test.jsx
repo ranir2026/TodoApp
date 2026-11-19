@@ -95,9 +95,9 @@ describe("Create account", () => {
 });
 
 describe("Loading", () => {
-  it("tells assistive tech it's loading, and keeps the animation out of its way", () => {
+  it("tells assistive tech it's loading, and keeps the spinner out of its way", () => {
     render(<LoadingScreen />);
     expect(screen.getByRole("status").textContent).toContain("Loading");
-    expect(document.querySelector(".boot-mark").getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector(".boot-spinner").getAttribute("aria-hidden")).toBe("true");
   });
 });

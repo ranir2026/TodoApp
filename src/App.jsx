@@ -53,7 +53,7 @@ const VIEW_OPTIONS = [
 const STATUS_OPTIONS = [{ id: "active", label: "Active" }, { id: "completed", label: "Done" }, { id: "all", label: "All" }];
 const SORT_OPTIONS = [{ id: "date", label: "Date", title: "Sort by date" }, { id: "course", label: "Category", title: "Sort by category" }];
 const TYPE_NOUNS = { task: "tasks", event: "events", milestone: "milestones", all: "items" };
-const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#6366f1" }];
+const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#0071e3" }];
 const COURSE_COLOR_PALETTE = COLOR_PALETTE;
 const DEFAULT_QUICK_LINKS = [];
 // Only the admin page offers Canvas import, so everyone else never downloads it

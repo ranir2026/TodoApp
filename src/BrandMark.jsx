@@ -1,5 +1,4 @@
-// The app's mark: the checkbox every task has, ticked, on an indigo tile. index.html draws the same
-// tile (as the splash) before any script has loaded, so the two must stay alike.
+// The app's mark: the checkbox every task has, ticked, on a tile in the app's accent
 export default function BrandMark({ size = 56, className = "" }) {
   return (
     <span aria-hidden="true" className={`brand-mark ${className}`} style={{ "--mark-size": `${size}px` }}>

@@ -10,22 +10,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" />
     <!-- The splash: shown from the first paint, before any script loads. src/LoadingScreen.jsx draws
-         the same thing once React is running, so keep the two alike (and BrandMark's tile with them). -->
+         the same thing once React is running, so keep the two alike. -->
     <style>
-      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; margin: 0; background: #f8fafc; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-      .boot-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 19px; background: linear-gradient(150deg, #818cf8 0%, #6366f1 52%, #4f46e5 100%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.28), 0 12px 28px -10px rgb(79 70 229 / 0.55), 0 2px 6px -2px rgb(15 23 42 / 0.14); }
-      .boot-mark svg { width: 38px; height: 38px; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-      /* The ring draws itself from the top, the tick follows, both rest a moment and fade, then again */
-      .boot-ring, .boot-check { stroke-dasharray: 1; stroke-dashoffset: 1; animation: 1.8s infinite both; }
-      .boot-ring { transform: rotate(-90deg); transform-origin: center; transform-box: fill-box; animation-name: boot-ring; }
-      .boot-check { animation-name: boot-check; }
-      @keyframes boot-ring { 0% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1); } 46%, 84% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-      @keyframes boot-check { 0%, 40% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1); } 62%, 84% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+      .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; margin: 0; background: #f8fafc; font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      /* A plain spinner: an arc going round a faint ring */
+      .boot-spinner { width: 32px; height: 32px; fill: none; stroke: #0071e3; stroke-width: 2.5; stroke-linecap: round; animation: boot-spin 0.8s linear infinite; }
+      .boot-spinner circle { stroke-opacity: 0.18; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
       .boot-label { margin: 0; font-size: 13px; font-weight: 500; letter-spacing: 0.01em; color: #64748b; animation: boot-label-in 300ms ease-out 600ms both; }
       @keyframes boot-label-in { from { opacity: 0; } to { opacity: 1; } }
-      /* No movement: the mark sits ticked, and only the words fade in */
+      /* Slower, but never still: a stopped spinner would look stuck */
       @media (prefers-reduced-motion: reduce) {
-        .boot-ring, .boot-check { animation: none; stroke-dashoffset: 0; }
+        .boot-spinner { animation-duration: 1.6s; }
       }
     </style>
     <title>Todo</title>
@@ -33,12 +29,10 @@
   <body>
     <div id="root">
       <div class="boot" role="status">
-        <div class="boot-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <circle class="boot-ring" cx="12" cy="12" r="8" pathLength="1" />
-            <path class="boot-check" d="M8.6 12.4l2.3 2.3 4.6-5.1" pathLength="1" />
-          </svg>
-        </div>
+        <svg class="boot-spinner" viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="7.5" />
+          <path d="M17.5 10A7.5 7.5 0 0 0 10 2.5" />
+        </svg>
         <p class="boot-label">Loading…</p>
       </div>
     </div>
