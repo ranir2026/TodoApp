@@ -10,21 +10,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" />
     <!-- The splash: shown from the first paint, before any script loads. src/LoadingScreen.jsx draws
-         the same thing once React is running, so keep the two alike (and BrandMark's tile with them). -->
-    <style>.boot{-webkit-font-smoothing:antialiased;background:#f8fafc;flex-direction:column;justify-content:center;align-items:center;gap:20px;margin:0;font-family:Inter,system-ui,sans-serif;display:flex;position:fixed;inset:0}.boot-mark{background:linear-gradient(150deg,#818cf8 0%,#6366f1 52%,#4f46e5 100%);border-radius:19px;place-items:center;width:64px;height:64px;display:grid;box-shadow:inset 0 1px #ffffff47,0 12px 28px -10px #4f46e58c,0 2px 6px -2px #0f172a24}.boot-mark svg{fill:none;stroke:#fff;stroke-width:2.1px;stroke-linecap:round;stroke-linejoin:round;width:38px;height:38px;overflow:visible}.boot-ring,.boot-check{stroke-dasharray:1;stroke-dashoffset:1px;animation:none}.boot-ring{transform-origin:50%;transform-box:fill-box;animation-name:boot-ring;transform:rotate(-90deg)}.boot-check{animation-name:boot-check}@keyframes boot-ring{0%{stroke-dashoffset:1px;opacity:1;animation-timing-function:cubic-bezier(.45,0,.2,1)}46%,84%{stroke-dashoffset:0;opacity:1}to{stroke-dashoffset:0;opacity:0}}@keyframes boot-check{0%,40%{stroke-dashoffset:1px;opacity:1;animation-timing-function:cubic-bezier(.3,0,.2,1)}62%,84%{stroke-dashoffset:0;opacity:1}to{stroke-dashoffset:0;opacity:0}}.boot-label{letter-spacing:.01em;color:#64748b;margin:0;font-size:13px;font-weight:500;animation:.3s ease-out .6s both boot-label-in}@keyframes boot-label-in{0%{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.boot-ring,.boot-check{stroke-dashoffset:0;animation:none}}</style>
+         the same thing once React is running, so keep the two alike. -->
+    <style>.boot{-webkit-font-smoothing:antialiased;background:#f8fafc;flex-direction:column;justify-content:center;align-items:center;gap:16px;margin:0;font-family:Inter,system-ui,sans-serif;display:flex;position:fixed;inset:0}.boot-spinner{fill:none;stroke:#0071e3;stroke-width:2.5px;stroke-linecap:round;width:32px;height:32px;animation:.8s linear infinite boot-spin}.boot-spinner circle{stroke-opacity:.18}@keyframes boot-spin{to{transform:rotate(360deg)}}.boot-label{letter-spacing:.01em;color:#64748b;margin:0;font-size:13px;font-weight:500;animation:.3s ease-out .6s both boot-label-in}@keyframes boot-label-in{0%{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.boot-spinner{animation-duration:1.6s}}</style>
     <title>Todo</title>
-    <script type="module" crossorigin src="/TodoApp/assets/index-BRkknPzY.js"></script>
-    <link rel="stylesheet" crossorigin href="/TodoApp/assets/index-DjT4bBIm.css">
+    <script type="module" crossorigin src="/TodoApp/assets/index-D8wtOzMv.js"></script>
+    <link rel="stylesheet" crossorigin href="/TodoApp/assets/index-C1nqmT4v.css">
   </head>
   <body>
     <div id="root">
       <div class="boot" role="status">
-        <div class="boot-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <circle class="boot-ring" cx="12" cy="12" r="8" pathLength="1" />
-            <path class="boot-check" d="M8.6 12.4l2.3 2.3 4.6-5.1" pathLength="1" />
-          </svg>
-        </div>
+        <svg class="boot-spinner" viewBox="0 0 20 20" aria-hidden="true">
+          <circle cx="10" cy="10" r="7.5" />
+          <path d="M17.5 10A7.5 7.5 0 0 0 10 2.5" />
+        </svg>
         <p class="boot-label">Loading…</p>
       </div>
     </div>
