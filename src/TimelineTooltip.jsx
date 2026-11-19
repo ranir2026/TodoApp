@@ -9,7 +9,7 @@ const TONES = {
   success: "bg-success-500/12 text-success-600",
   danger: "bg-danger-500/12 text-danger-600",
   urgent: "bg-urgent-500/15 text-urgent-700",
-  // Due within a couple of days: amber, as "due soon" is everywhere
+  // Due within a couple of days: orange, as "due soon" is everywhere
   soon: "bg-todo-500/15 text-todo-700",
   neutral: "bg-slate-100 text-slate-600",
 };

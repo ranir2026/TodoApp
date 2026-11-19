@@ -10,7 +10,7 @@ import { parseDateKey } from "./occurrences";
 // are counted from today so it always looks current. Nothing in the card can be focused or clicked;
 // the caption says in words what the picture shows.
 
-const PHYSICS = { id: "physics", name: "Physics", color: "#f59e0b" };
+const PHYSICS = { id: "physics", name: "Physics", color: "#f7841a" };
 const PROGRAMMING = { id: "programming", name: "Programming", color: "#0ea5e9" };
 const WRITING = { id: "writing", name: "Writing", color: "#ec4899" };
 const PERSONAL = { id: "personal", name: "Personal", color: "#14b8a6" };

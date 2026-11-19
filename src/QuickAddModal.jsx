@@ -242,7 +242,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span
                 className={`rounded-full border px-2 py-1 text-xs font-medium ${
-                  planner || preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-amber-300 bg-amber-50 text-amber-700"
+                  planner || preview.typeExplicit ? "border-slate-200 bg-white text-slate-600" : "border-dashed border-todo-300 bg-todo-50 text-todo-700"
                 }`}
               >
                 {planner ? "Task" : preview.typeExplicit ? (preview.type === "event" ? "Event" : "Task") : "tk / ev ?"}

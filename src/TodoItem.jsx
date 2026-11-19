@@ -34,7 +34,7 @@ function dueLabel(todo, isEvent) {
   const diffDays = Math.round((due - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
 
   if (diffDays < 0) return { text: "Overdue", tone: "text-danger-600 bg-danger-500/10" };
-  // Status colors: red is overdue, amber is due soon (strongest today), violet is kept for Urgent priority
+  // Status colors: red is overdue, orange is due soon (strongest today), violet is kept for Urgent priority
   if (diffDays === 0) return { text: "Due today", tone: "text-todo-700 bg-todo-100 font-semibold" };
   if (diffDays === 1) return { text: "Due tomorrow", tone: "text-todo-700 bg-todo-500/10" };
   if (diffDays <= 7) return { text: `Due ${due.toLocaleDateString(undefined, { weekday: "short" })}`, tone: "text-todo-700 bg-todo-500/10" };

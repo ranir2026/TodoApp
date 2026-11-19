@@ -1283,7 +1283,7 @@ function PointLanding({ left, diamond, color }) {
   );
 }
 
-// Diamonds take the project's color; due within a week adds an amber halo, overdue turns red
+// Diamonds take the project's color; due within a week adds an orange halo, overdue turns red
 const DIAMOND_TONES = {
   reached: "bg-success-500 border-success-500",
   overdue: "bg-white border-danger-500",

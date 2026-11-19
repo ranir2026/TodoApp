@@ -32,15 +32,16 @@
   --color-course-600: #0060c4;
   --color-course-700: #0050a3;
 
-  /* Amber — todos */
-  --color-todo-50: #fffbeb;
-  --color-todo-100: #fef3c7;
-  --color-todo-200: #fde68a;
-  --color-todo-300: #fcd34d;
-  --color-todo-400: #fbbf24;
-  --color-todo-500: #f59e0b;
-  --color-todo-600: #d97706;
-  --color-todo-700: #b45309;
+  /* Orange — the warm second color, opposite the blue: Add buttons, due soon, today. Overdue is red,
+     so it steps up orange to red. */
+  --color-todo-50: #fff7ed;
+  --color-todo-100: #ffedd5;
+  --color-todo-200: #fed7aa;
+  --color-todo-300: #fdba74;
+  --color-todo-400: #fb923c;
+  --color-todo-500: #f7841a;
+  --color-todo-600: #e86c0a;
+  --color-todo-700: #ad4e0b;
 
   /* Violet — urgent deadlines */
   --color-urgent-50: #f5f3ff;
@@ -163,7 +164,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .task-row:has(> button.row-press:active) { background-color: var(--color-slate-50); }
 .milestone-head:active { background-color: var(--color-slate-100); }
 
-/* Every text field focuses in the app's one tint (blue); amber stays the color of Add buttons */
+/* Every text field focuses in the app's one tint (blue); orange stays the color of Add buttons */
 .field-tint { transition: border-color 150ms ease, box-shadow 150ms ease; }
 .field-tint:focus { border-color: var(--color-course-300); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-course-500) 12%, transparent); outline: none; }
 
@@ -406,7 +407,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   --mobile-radius-sheet: calc(var(--mobile-radius-control) + 16px);
   /* The mobile palette lives here, not on .mobile-app: sheets shared with desktop (quick link,
      Canvas) mount outside it and need the same ink and tint. One tint for every selected /
-     active state; amber stays the brand color on Add. */
+     active state; orange stays the color of Add. */
   --mobile-ink: #172033;
   --mobile-muted: #7b8494;
   --tint: var(--color-course-600);
@@ -446,7 +447,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-date span { padding: 0 3px; color: #cbd5e1; }
 .mobile-icon-button { display: grid; height: 34px; width: 34px; place-items: center; border: 0; border-radius: 50%; background: rgba(118, 118, 128, .12); color: #475569; }
 .mobile-icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.mobile-quick-button { border: 0; border-radius: var(--mobile-radius-control); background: #f59e0b; padding: 10px 13px; color: #111827; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px -6px rgba(217, 119, 6, .55); }
+.mobile-quick-button { border: 0; border-radius: var(--mobile-radius-control); background: var(--color-todo-500); padding: 10px 13px; color: #111827; font-size: 14px; font-weight: 800; box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--color-todo-600) 55%, transparent); }
 /* Search grows leftward out of the search button and collapses back into it. Closed, it's
    clipped to a button-sized pill at its right edge; the clip transition retargets from the
    current shape, so a second tap mid-reveal reverses it smoothly. */
@@ -537,8 +538,8 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-bottom-nav .mobile-nav-active { color: var(--tint); }
 .mobile-add-fab {
   display: grid; flex: none; width: var(--dock-height); height: var(--dock-height); place-items: center;
-  border: 0; border-radius: 50%; background: #d97706; color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 8px 24px -8px rgba(180, 83, 9, .4), 0 2px 6px -2px rgba(15, 23, 42, .1);
+  border: 0; border-radius: 50%; background: var(--color-todo-600); color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 8px 24px -8px color-mix(in srgb, var(--color-todo-700) 40%, transparent), 0 2px 6px -2px rgba(15, 23, 42, .1);
 }
 .mobile-add-fab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 .mobile-sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .3); -webkit-backdrop-filter: blur(6px) saturate(140%); backdrop-filter: blur(6px) saturate(140%); }
@@ -664,7 +665,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
   .calendar-page-enter, .calendar-zoom-in, .calendar-zoom-out { animation: modal-backdrop-in 150ms ease both; }
 }
 
-/* Sheet fields share the app tint for focus, instead of the desktop quick-add's amber */
+/* Sheet fields share the app tint for focus, instead of the desktop quick-add's orange */
 .mobile-add-sheet input:focus, .mobile-add-sheet textarea:focus, .mobile-add-sheet select:focus {
   border-color: var(--tint, var(--color-course-600));
   box-shadow: 0 0 0 3px var(--tint-soft, color-mix(in srgb, var(--color-course-600) 10%, transparent));
@@ -678,7 +679,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .auth-screen {
   background:
     radial-gradient(56rem 36rem at 8% -12%, color-mix(in srgb, var(--color-course-500) 13%, transparent), transparent 62%),
-    radial-gradient(48rem 34rem at 104% 112%, rgb(245 158 11 / 0.12), transparent 60%),
+    radial-gradient(48rem 34rem at 104% 112%, color-mix(in srgb, var(--color-todo-500) 12%, transparent), transparent 60%),
     #f8fafc;
 }
 .auth-card {
