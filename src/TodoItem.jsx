@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { isOverdue, parseDateKey } from "./occurrences";
 import { useSwipeToDelete } from "./useSwipeToDelete";
 import { extractLinks } from "./noteLinks";
-import { courseAccentStyle, courseChipStyle } from "./courseColors";
+import { courseAccentStyle } from "./courseColors";
 import { CanvasDueFlag, CanvasSourceChips } from "./CanvasUI";
 import { CanvasActionsContext } from "./canvasStatus";
 
@@ -270,43 +270,43 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
       {/* When it's due leads, then when in the day, then what kind of thing it is and where it belongs */}
       {hasChips && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {due && !todo.completed && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${due.tone}`}>{due.text}</span>
+          <span className={`text-xs font-medium ${due.tone}`}>{due.text}</span>
         )}
         <CanvasDueFlag todo={todo} />
         {timeRange && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{timeRange}</span>
+          <span className="text-xs font-medium text-slate-500">{timeRange}</span>
         )}
         {todo.priority === "urgent" && (
-          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
+          <span className="text-xs font-medium text-urgent-700">
             Urgent
           </span>
         )}
         {isEvent && (
-          <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={courseChipStyle(course)}>Event</span>
+          <span className="text-xs font-medium text-slate-500">Event</span>
         )}
         {isMilestone && (
-          <span className="rounded-full bg-urgent-100 px-2 py-0.5 text-xs font-medium text-urgent-700">
+          <span className="text-xs font-medium text-urgent-700">
             {todo.completed ? "Milestone reached" : "Milestone"}
           </span>
         )}
         {isMilestone && todo.progress && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+          <span className="text-xs font-medium text-slate-500">
             {todo.progress.total ? `${todo.progress.done}/${todo.progress.total} tasks` : "No tasks linked"}
           </span>
         )}
         {project && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">▸ {project.name}</span>
+          <span className="text-xs font-medium text-slate-500">▸ {project.name}</span>
         )}
         {course && !hideCourse && (
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-medium"
-            style={courseChipStyle(course)}
+            className="text-xs font-medium text-slate-500"
+           
           >
             {course.name}
           </span>
         )}
         {todo.repeat && todo.repeat !== "none" && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
+          <span className="text-xs font-medium text-slate-500 capitalize">↻ {todo.repeat}</span>
         )}
         {links.map((link) => (
           // Span instead of <a>: the whole card is already a button
@@ -325,7 +325,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
               event.stopPropagation();
               window.open(link.href, "_blank", "noopener,noreferrer");
             }}
-            className="cursor-pointer rounded-full bg-link-100 px-2 py-0.5 text-xs font-medium text-link-700 hover:bg-link-200"
+            className="cursor-pointer text-xs font-medium text-link-700 underline-offset-2 hover:underline"
           >
             ↗ {link.label}
           </span>

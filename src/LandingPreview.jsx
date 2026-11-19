@@ -134,7 +134,7 @@ function TimelineView({ today }) {
   return (
     <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] text-caption">
       <div>
-        <p className="h-8 pt-3.5 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Projects</p>
+        <p className="h-8 pt-3.5 text-[11px] font-medium text-slate-500">Projects</p>
         {rows.map((row) => (
           <div key={row.label} className="flex items-center gap-1.5 truncate pr-2" style={{ height: ROW }}>
             {row.kind === "project" && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />}

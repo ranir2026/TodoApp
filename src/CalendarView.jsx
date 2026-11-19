@@ -349,7 +349,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
               <button onClick={() => setAddingKey(isAdding ? null : key)} className="month-quick-add absolute right-1.5 top-1 rounded px-1 text-xs text-slate-300 hover:text-todo-600" aria-label="Quick add">
                 +
               </button>
-              <span className={`month-day-number absolute bottom-1 right-1.5 text-xs ${isToday ? "font-bold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
+              <span className={`month-day-number absolute bottom-1 right-1.5 text-xs ${isToday ? "font-semibold text-todo-700" : "text-slate-500"}`}>{date.getDate()}</span>
 
               <div
                 className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
@@ -380,7 +380,7 @@ function MonthGrid({ compact, cells, todos, occByDay, courseMap, onEdit, onQuick
                     if (e.key === "Escape") setAddingKey(null);
                   }}
                   onBlur={() => submitQuickAdd(key)}
-                  placeholder="Task..."
+                  placeholder="Task"
                   className="mt-1 w-full shrink-0 rounded border border-todo-300 px-1 py-0.5 text-[11px] outline-none"
                 />
               )}

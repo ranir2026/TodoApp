@@ -497,10 +497,10 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
   ];
   // The field under the tray says which day its items are for
   const inboxPlaceholder = dateKey === todayKey
-    ? "Add something just for today…"
+    ? "Add something for today"
     : dateKey === addDays(todayKey, 1)
-    ? "Add something for tomorrow…"
-    : `Add something for ${parseDateKey(dateKey).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}…`;
+    ? "Add something for tomorrow"
+    : `Add something for ${parseDateKey(dateKey).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`;
   const nothingFound = searching && traySections.every((section) => section.items.length === 0) && inboxItems.length === 0;
   const showGhost = drag && (drag.kind === "new" ? !drag.overGrid : drag.kind === "move" && !drag.overGrid);
   // The picked-up row stays dimmed until its ghost has landed back on it
@@ -535,7 +535,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
         <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
           <span>{plannedDone} of {blocks.length} planned done</span>
           <span className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-            <span className="block h-full rounded-full bg-success-500 transition-all duration-500" style={{ width: `${(plannedDone / blocks.length) * 100}%` }} />
+            <span className="block h-full w-full origin-left rounded-full bg-success-500 transition-transform duration-500" style={{ transform: `scaleX(${blocks.length ? plannedDone / blocks.length : 0})` }} />
           </span>
         </div>
       )}
@@ -558,7 +558,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
                 setQuery("");
               }
             }}
-            placeholder="Find any task…"
+            placeholder="Find a task"
             aria-label="Find any task"
             className="field-tint mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs outline-none placeholder:text-slate-400 focus:bg-white"
           />
@@ -633,7 +633,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
       <div key={dateKey} className={`flex min-w-0 flex-1 flex-col ${dayShift ? "planner-day-enter" : ""}`} style={{ "--day-shift": `${dayShift * 32}px` }}>
         {allDayItems.length > 0 && (
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-slate-100 px-4 py-1.5">
-            <span className="mr-1 text-caption font-semibold tracking-wide text-slate-500 uppercase">All day</span>
+            <span className="mr-1 text-caption font-medium text-slate-500">All day</span>
             {allDayItems.map((item) => (
               <button key={item.id} type="button" onClick={() => onEdit(item)} className="rounded px-1.5 py-0.5 text-caption" style={courseChipStyle(courseMap[item.courseId], item.completed)}>
                 {item.title}
@@ -735,7 +735,7 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
 }
 
 function SectionLabel({ className = "", children }) {
-  return <h3 className={`mb-1.5 text-caption font-semibold tracking-wide uppercase ${className}`}>{children}</h3>;
+  return <h3 className={`mb-1.5 text-caption font-medium text-slate-500 ${className}`}>{children}</h3>;
 }
 
 // The category shows as a left stripe, the same as rows in the task list; planner-only items get a neutral one

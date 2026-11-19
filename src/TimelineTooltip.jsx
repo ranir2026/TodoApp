@@ -90,7 +90,7 @@ function Card({ card }) {
         {card.kind === "Milestone"
           ? <span className="h-2 w-2 shrink-0 rotate-45 rounded-[1px]" style={{ backgroundColor: card.color }} />
           : <span className={`h-2 w-2 shrink-0 ${card.kind.startsWith("Task") ? "rounded-full" : "rounded-sm"}`} style={{ backgroundColor: card.color }} />}
-        <span className="text-caption font-semibold tracking-wide uppercase" style={{ color: card.color }}>{card.kind}</span>
+        <span className="text-caption font-medium" style={{ color: card.color }}>{card.kind}</span>
         {card.status && (
           <span className={`ml-auto rounded-full px-1.5 py-px text-caption font-medium ${TONES[card.status.tone] ?? TONES.neutral}`}>{card.status.label}</span>
         )}

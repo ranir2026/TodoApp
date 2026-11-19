@@ -242,7 +242,7 @@ function ReviewStep({ feed, plan, options, setOptions, courses, now, timeZone })
   return (
     <div className="space-y-4">
       <div className="rounded-card bg-slate-50 px-3 py-5 text-center">
-        <p className="text-4xl font-bold text-slate-900 tabular-nums">{added}</p>
+        <p className="text-4xl font-semibold text-slate-900 tabular-nums">{added}</p>
         <p className="mt-1 text-sm text-slate-500">
           {added === 0 ? `No new ${noun}s to add` : `${added === 1 ? noun : `${noun}s`} across ${plural(plan.categoryCount, "category", "categories")}`}
         </p>

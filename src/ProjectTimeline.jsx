@@ -783,7 +783,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                 if (zoom === "months" && date.getDay() !== 0) return null;
                 const isToday = key === todayKey;
                 return (
-                  <div key={key} className={`absolute bottom-1 text-center text-caption ${isToday ? "font-bold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-400" : "text-slate-500"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
+                  <div key={key} className={`absolute bottom-1 text-center text-caption ${isToday ? "font-semibold text-danger-600" : date.getDay() === 0 || date.getDay() === 6 ? "text-slate-400" : "text-slate-500"}`} style={{ left: i * dayWidth, width: zoom === "weeks" ? dayWidth : dayWidth * 7, textAlign: zoom === "weeks" ? "center" : "left" }}>
                     {date.getDate()}
                   </div>
                 );
@@ -1534,7 +1534,7 @@ function NewProjectForm({ courses, todayKey, canCancel, focusName, onCreate, onC
               onCancel();
             }
           }}
-          placeholder={canCancel ? "Project name" : "Name your first project…"}
+          placeholder={canCancel ? "Project name" : "Name your first project"}
           aria-label="Project name"
           className="min-w-0 flex-1 bg-transparent py-1.5 pr-2.5 text-sm outline-none"
         />

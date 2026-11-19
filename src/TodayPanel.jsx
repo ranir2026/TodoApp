@@ -246,7 +246,7 @@ export default function TodayPanel({ open, onToggle, shortcut, todos, courseMap,
                   // With something typed, Esc clears it; on an empty field it closes the panel
                   if (entry) { event.stopPropagation(); setEntry(""); setAttempted(false); }
                 }}
-                placeholder="Add to today…"
+                placeholder="Add to today"
                 aria-label="Add to today's plan: a name, then a start and end time"
                 aria-describedby="today-entry-hint"
                 autoComplete="off"
@@ -390,7 +390,7 @@ function AgendaRow({ row, current, past, flash, onToggle }) {
 function DayGlyph({ date }) {
   return (
     <span aria-hidden="true" className="flex w-7 flex-col overflow-hidden rounded-md border border-slate-200 bg-white text-center leading-none">
-      <span className="bg-danger-500 py-[2px] text-[7px] font-bold tracking-wider text-white uppercase">{date.toLocaleDateString(undefined, { weekday: "short" })}</span>
+      <span className="bg-danger-500 py-[2px] text-[11px] font-semibold text-white">{date.toLocaleDateString(undefined, { weekday: "short" })}</span>
       <span className="py-[3px] text-xs font-semibold text-slate-800 tabular-nums">{date.getDate()}</span>
     </span>
   );

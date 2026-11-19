@@ -57,11 +57,11 @@ export default function StatsBar({ todos, dueFilter = null, onShowDue }) {
     <div className="space-y-1 rounded-card border border-slate-200 bg-white p-3 shadow-sm">
       <div className="pb-1">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-700">Week</p>
-          <p className="text-sm font-bold text-slate-900 tabular-nums">{completionPct}%</p>
+          <p className="text-xs font-semibold text-slate-700">This week</p>
+          <p className="text-sm font-semibold text-slate-900 tabular-nums">{weekTotal ? `${weekDone} of ${weekTotal} done` : "No tasks yet"}</p>
         </div>
         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-todo-500 transition-all duration-500" style={{ width: `${completionPct}%` }} />
+          <div className="h-full w-full origin-left rounded-full bg-todo-500 transition-transform duration-500" style={{ transform: `scaleX(${completionPct / 100})` }} />
         </div>
       </div>
       <StatRow label="Due soon" count={dueSoon.length} tone="text-urgent-600" zeroTone="text-urgent-600" active={dueFilter === "soon"} onClick={onShowDue && (() => onShowDue("soon"))} />
@@ -74,7 +74,7 @@ function StatRow({ label, count, tone, zeroTone = "text-slate-300", active, onCl
   const content = (
     <>
       <span className={`text-xs font-medium ${active ? "text-slate-800" : "text-slate-500"}`}>{label}</span>
-      <span className={`text-sm font-bold tabular-nums ${count ? tone : zeroTone}`}>{count}</span>
+      <span className={`text-sm font-semibold tabular-nums ${count ? tone : zeroTone}`}>{count}</span>
     </>
   );
   const layout = "-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between rounded-lg px-1.5 py-0.5";

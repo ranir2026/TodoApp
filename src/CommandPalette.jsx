@@ -58,7 +58,7 @@ export default function CommandPalette({ open, commands, keymap, onClose }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a command..."
+          placeholder="Type a command"
           className="w-full border-b border-slate-200 px-4 py-3 text-sm outline-none"
         />
         <ul className="max-h-80 overflow-y-auto py-1">

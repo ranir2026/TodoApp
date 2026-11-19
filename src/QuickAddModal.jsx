@@ -236,7 +236,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
         {preview && (
           <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-sm font-medium text-slate-800">
-              {preview.title || <span className="text-slate-300 italic">Untitled…</span>}
+              {preview.title || <span className="text-slate-300">Untitled</span>}
             </p>
             {preview.description && <p className="mt-1 text-xs text-slate-500">{preview.description}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">

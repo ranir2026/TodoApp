@@ -442,7 +442,7 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-header.is-scrolled::after { opacity: 1; }
 .mobile-calendar-header::after { display: none; }
 
-.mobile-header h1 { margin: 0; font-size: 1.875rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.022em; }
+.mobile-header h1 { margin: 0; font-size: 1.875rem; font-weight: 500; line-height: 1.1; letter-spacing: -0.022em; }
 .mobile-date { margin: 5px 0 0; color: #63748e; font-size: 12px; font-weight: 600; }
 .mobile-date span { padding: 0 3px; color: #cbd5e1; }
 .mobile-icon-button { display: grid; height: 34px; width: 34px; place-items: center; border: 0; border-radius: 50%; background: rgba(118, 118, 128, .12); color: #475569; }
@@ -674,12 +674,9 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 /* The app's mark */
 .brand-mark { display: block; flex-shrink: 0; width: var(--mark-size, 56px); height: var(--mark-size, 56px); border-radius: calc(var(--mark-size, 56px) * 0.22); }
 
-/* Sign in: a still wash of the app's two accents behind a frosted card. Nothing behind it moves. */
+/* Sign in: a flat background behind a frosted card. */
 .auth-screen {
-  background:
-    radial-gradient(56rem 36rem at 8% -12%, color-mix(in srgb, var(--color-course-500) 13%, transparent), transparent 62%),
-    radial-gradient(48rem 34rem at 104% 112%, color-mix(in srgb, var(--color-todo-500) 12%, transparent), transparent 60%),
-    #f8fafc;
+  background: #f8fafc;
 }
 .auth-card {
   border: 1px solid rgb(255 255 255 / 0.9);

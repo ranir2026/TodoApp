@@ -136,7 +136,7 @@ export default function AuthScreen() {
     <>
       <SegmentedControl label="Sign in or create an account" options={MODES} value={mode} onChange={switchMode} className="grid w-full" segmentClassName="px-2 py-1.5 text-[13px] normal-case!" />
       <div key={mode} className="auth-swap mt-6">
-        <h2 id={id("heading")} className="text-xl font-semibold text-slate-900">{signingUp ? "Create your account" : "Welcome back"}</h2>
+        <h2 id={id("heading")} className="text-xl font-semibold text-slate-900">{signingUp ? "Create your account" : "Sign in"}</h2>
         <p className="mt-1 text-sm text-slate-500">{signingUp ? "Your tasks stay in sync on every device you use." : "Sign in to pick up where you left off."}</p>
       </div>
       <form onSubmit={submit} noValidate aria-labelledby={id("heading")} className="mt-5 space-y-4">
@@ -232,7 +232,7 @@ export default function AuthScreen() {
             <BrandMark size={44} />
             <span className="text-lg font-semibold tracking-tight text-slate-900">Todo</span>
           </div>
-          <h1 className="mx-auto mt-6 max-w-md text-[1.75rem] leading-tight font-bold tracking-[-0.025em] text-balance text-slate-900 lg:mx-0 lg:mt-10 lg:text-5xl lg:leading-[1.05]">
+          <h1 className="mx-auto mt-6 max-w-md text-[1.75rem] leading-tight font-medium tracking-[-0.025em] text-balance text-slate-900 lg:mx-0 lg:mt-10 lg:text-5xl lg:leading-[1.05]">
             Every deadline, in one calm list.
           </h1>
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-pretty text-slate-500 lg:mx-0 lg:mt-5 lg:max-w-md lg:text-base">

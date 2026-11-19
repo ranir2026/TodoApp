@@ -45,6 +45,7 @@ export default function ActivityHeatmap({ todos }) {
   return (
     <div className="activity-heatmap rounded-card border border-slate-200 bg-white p-3 shadow-sm">
       <p className="mb-2 text-xs font-semibold text-slate-700">Activity</p>
+      {Object.keys(countsByDay).length === 0 && <p className="mb-2 text-caption text-slate-400">Finished tasks show up here</p>}
       <div className="heatmap-mobile-grid" aria-label="Activity heatmap">
         {Array.from({ length: 7 }, (_, dayIndex) => (
           <div key={dayIndex} className="heatmap-mobile-row">
