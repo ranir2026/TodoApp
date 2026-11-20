@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import HomeScreenGate from './HomeScreenGate.jsx'
 
 // A tab or home-screen app left open keeps running the build it first loaded, which can
 // silently miss fixes (including sync). When the app returns to the foreground, check whether
@@ -21,6 +22,8 @@ if (currentBundle) {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <HomeScreenGate>
+      <App />
+    </HomeScreenGate>
   </StrictMode>,
 )
