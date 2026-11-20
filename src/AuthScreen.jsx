@@ -2,26 +2,32 @@ import { useEffect, useId, useRef, useState } from "react";
 import BrandMark from "./BrandMark";
 import LandingPreview from "./LandingPreview";
 import SegmentedControl from "./SegmentedControl";
+import { passwordResetEnabled } from "./authEmails";
 import { supabase } from "./supabase";
 
 const MODES = [{ id: "sign-in", label: "Sign in" }, { id: "sign-up", label: "Create account" }];
-const MIN_PASSWORD = 6;
+export const MIN_PASSWORD = 6;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const redirectTo = () => import.meta.env.VITE_APP_URL || `${window.location.origin}/`;
 
-const FIELD = "field-tint block h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 text-base text-slate-900 outline-none placeholder:text-slate-400 aria-[invalid=true]:border-danger-500/60 md:h-11 md:text-sm";
+export const FIELD = "field-tint block h-12 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 text-base text-slate-900 outline-none placeholder:text-slate-400 aria-[invalid=true]:border-danger-500/60 md:h-11 md:text-sm";
 // A visible ring for the keyboard only, in the app's tint
-const FOCUS = "outline-none focus-visible:ring-4 focus-visible:ring-course-500/30";
-const PRIMARY = `flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-course-500 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-course-600 aria-disabled:opacity-70 md:h-11 md:text-sm ${FOCUS}`;
-const SECONDARY = `flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-100 md:h-11 md:text-sm ${FOCUS}`;
+export const FOCUS = "outline-none focus-visible:ring-4 focus-visible:ring-course-500/30";
+export const PRIMARY = `flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-course-500 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-course-600 aria-disabled:opacity-70 md:h-11 md:text-sm ${FOCUS}`;
+export const SECONDARY = `flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-100 md:h-11 md:text-sm ${FOCUS}`;
 
 // What Supabase said, put plainly, with the next step when there is one
-function describeError(error) {
+export function describeError(error) {
   const message = error?.message ?? "";
   if (error?.status === 429 || /rate limit|too many/i.test(message)) return { text: "Too many tries for now. Wait a minute, then try again." };
   if (/invalid login credentials/i.test(message)) return { text: "That email and password don't match." };
   if (/email not confirmed/i.test(message)) return { text: "Confirm your email first. The link is in the email we sent when you signed up.", action: "resend" };
   if (/already registered|already exists/i.test(message)) return { text: "There's already an account with this email.", action: "sign-in" };
+  if (/should be different|same password/i.test(message)) return { text: "That's your current password. Choose a different one." };
+  if (/weak password|at least \d+ characters/i.test(message)) return { text: `Choose a longer password, at least ${MIN_PASSWORD} characters.` };
+  if (/session missing|session_not_found|expired/i.test(message)) {
+    return passwordResetEnabled() ? { text: "This link has expired. Ask for a new one from Sign in.", action: "reset" } : { text: "This link has expired or was already used." };
+  }
   if (error?.name === "AuthRetryableFetchError" || /failed to fetch|network/i.test(message)) return { text: "Can't reach the server. Check your connection and try again." };
   return { text: message || "Something went wrong. Try again." };
 }
@@ -35,7 +41,7 @@ function fieldErrors(mode, email, password) {
   return errors;
 }
 
-function Spinner() {
+export function Spinner() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="auth-spinner h-4 w-4">
       <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeOpacity="0.3" strokeWidth="2.5" />
@@ -53,7 +59,8 @@ function MailIcon() {
   );
 }
 
-export default function AuthScreen() {
+// notice: a line shown at the top of the card, such as after an account is deleted or when a link has expired
+export default function AuthScreen({ notice = null }) {
   const ids = useId();
   const id = (name) => `${ids}-${name}`;
   const emailRef = useRef(null);
@@ -68,6 +75,9 @@ export default function AuthScreen() {
   // The address a sign-up link went to; the card then says to check it
   const [sentTo, setSentTo] = useState(null);
   const [resent, setResent] = useState(false);
+  // Asking for a password reset: the form, then the address the link went to
+  const [resetting, setResetting] = useState(false);
+  const [resetSentTo, setResetSentTo] = useState(null);
 
   const signingUp = mode === "sign-up";
   const errors = attempted ? fieldErrors(mode, email, password) : {};
@@ -81,6 +91,40 @@ export default function AuthScreen() {
     setMode(next);
     setError(null);
     setAttempted(false);
+  }
+
+  function startReset() {
+    setResetting(true);
+    setResetSentTo(null);
+    setError(null);
+    setAttempted(false);
+  }
+
+  function backToSignIn() {
+    setResetting(false);
+    setResetSentTo(null);
+    setError(null);
+    setAttempted(false);
+    setMode("sign-in");
+  }
+
+  // Supabase answers the same whether or not the address has an account, so neither can the card
+  async function sendReset(event) {
+    event?.preventDefault();
+    if (busy) return;
+    setAttempted(true);
+    if (fieldErrors("reset", email, "-").email) {
+      document.getElementById(id("email"))?.focus();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const address = email.trim();
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(address, { redirectTo: redirectTo() });
+    setBusy(false);
+    if (resetError) return setError(describeError(resetError));
+    setResent(Boolean(resetSentTo));
+    setResetSentTo(address);
   }
 
   async function submit(event) {
@@ -123,6 +167,7 @@ export default function AuthScreen() {
   function errorAction() {
     if (error?.action === "sign-in") return <button type="button" onClick={() => switchMode("sign-in")} className="font-semibold underline underline-offset-2">Sign in instead</button>;
     if (error?.action === "resend") return <button type="button" onClick={() => resend(email.trim())} className="font-semibold underline underline-offset-2">Send the link again</button>;
+    if (error?.action === "reset" && !resetting) return <button type="button" onClick={startReset} className="font-semibold underline underline-offset-2">Reset your password</button>;
     return null;
   }
 
@@ -162,7 +207,10 @@ export default function AuthScreen() {
           {errors.email && <p id={id("email-error")} className="mt-1.5 text-[13px] text-danger-600">{errors.email}</p>}
         </div>
         <div>
-          <label htmlFor={id("password")} className="mb-1.5 block text-[13px] font-medium text-slate-600">Password</label>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <label htmlFor={id("password")} className="block text-[13px] font-medium text-slate-600">Password</label>
+            {!signingUp && passwordResetEnabled() && <button type="button" onClick={startReset} className={`rounded text-[13px] font-medium text-course-600 hover:text-course-700 ${FOCUS}`}>Forgot password?</button>}
+          </div>
           <div className="relative">
             <input
               id={id("password")}
@@ -222,6 +270,65 @@ export default function AuthScreen() {
     </div>
   );
 
+  const resetForm = (
+    <div className="auth-swap">
+      <h2 id={id("reset-heading")} className="text-xl font-semibold text-slate-900">Reset your password</h2>
+      <p className="mt-1 text-sm text-slate-500">We'll email you a link to choose a new one.</p>
+      <form onSubmit={sendReset} noValidate aria-labelledby={id("reset-heading")} className="mt-5 space-y-4">
+        <div>
+          <label htmlFor={id("email")} className="mb-1.5 block text-[13px] font-medium text-slate-600">Email</label>
+          <input
+            ref={emailRef}
+            id={id("email")}
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="send"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? id("email-error") : undefined}
+            className={FIELD}
+          />
+          {errors.email && <p id={id("email-error")} className="mt-1.5 text-[13px] text-danger-600">{errors.email}</p>}
+        </div>
+        {errorBox}
+        <div className="grid gap-1.5 pt-2">
+          <button type="submit" aria-disabled={busy || undefined} className={PRIMARY}>
+            {busy && <Spinner />}
+            {busy ? "Sending…" : "Send reset link"}
+          </button>
+          <button type="button" onClick={backToSignIn} className={SECONDARY}>Back to sign in</button>
+        </div>
+      </form>
+    </div>
+  );
+
+  const resetSent = (
+    <div className="auth-swap text-center">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-course-50 text-course-600"><MailIcon /></div>
+      <h2 className="mt-5 text-xl font-semibold text-slate-900">Check your email</h2>
+      <p className="mt-2 text-sm leading-relaxed text-slate-500">
+        If there's an account for <span className="font-medium break-all text-slate-800">{resetSentTo}</span>, a link to choose a new password is on its way.
+      </p>
+      <p className="mt-3 text-[13px] text-slate-400" aria-live="polite">
+        {resent ? "Sent again. It can take a minute to arrive." : "Not there? Look in spam or promotions."}
+      </p>
+      {error && <div className="mt-4 text-left">{errorBox}</div>}
+      <div className="mt-6 grid gap-1.5">
+        <button type="button" onClick={() => sendReset()} aria-disabled={busy || undefined} className={PRIMARY}>
+          {busy && <Spinner />}
+          Send it again
+        </button>
+        <button type="button" onClick={backToSignIn} className={SECONDARY}>Back to sign in</button>
+      </div>
+    </div>
+  );
+
   return (
     <main className="auth-screen min-h-dvh">
       {/* Anchored a little above center rather than centered, so a message appearing in the card
@@ -242,7 +349,8 @@ export default function AuthScreen() {
         </section>
 
         <section className="auth-card auth-rise mx-auto w-full max-w-sm rounded-dialog p-6 sm:p-7 lg:mx-0 lg:mt-[5.25rem] lg:justify-self-end" style={{ "--rise-delay": "80ms" }}>
-          {sentTo ? checkEmail : form}
+          {notice && <p role="status" className="mb-5 rounded-xl bg-slate-900/5 px-3.5 py-2.5 text-[13px] leading-snug text-slate-700">{notice}</p>}
+          {resetting ? (resetSentTo ? resetSent : resetForm) : sentTo ? checkEmail : form}
         </section>
       </div>
     </main>

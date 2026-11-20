@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { hasRecoveredOutageEdits, markOutageEditsRecovered, mergeOutageEdits } from "./outageRecovery";
 import { hasCanvasData } from "./canvasSync";
+import { hasPrefsData } from "./prefs";
 
 // Columns added after launch. A Supabase project that hasn't run the latest schema yet is missing
 // some of them; those are switched off and the rest of the data keeps syncing.
-export const OPTIONAL_COLUMNS = ["quick_links", "planner", "canvas"];
+export const OPTIONAL_COLUMNS = ["quick_links", "planner", "canvas", "prefs"];
 
 export function missingColumn(error, columns) {
   if (!error) return null;
@@ -24,12 +25,16 @@ function hasPlannerData(planner) {
 // Same rule for the Canvas settings: {} is "never connected", so it never replaces real settings
 export { hasCanvasData };
 
-export function useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, planner, setPlanner, canvas, setCanvas, onError) {
+const NO_PREFS = {};
+const keepPrefs = () => {};
+
+// prefs (the checklist, tips seen; see prefs.js) come last so callers that don't keep them can leave them out
+export function useSyncedData(user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, planner, setPlanner, canvas, setCanvas, onError, prefs = NO_PREFS, setPrefs = keepPrefs) {
   const loadedUserRef = useRef(null);
   const saveTimerRef = useRef(null);
   const isRemoteUpdateRef = useRef(false);
   const lastSyncedPayloadRef = useRef(null);
-  const latestDataRef = useRef({ todos, courses, quickLinks, planner, canvas });
+  const latestDataRef = useRef({ todos, courses, quickLinks, planner, canvas, prefs });
   const columnsRef = useRef(Object.fromEntries(OPTIONAL_COLUMNS.map((column) => [column, true])));
   const hasPendingSaveRef = useRef(false);
   // The account the refs above describe
@@ -41,8 +46,8 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
   const [pulled, setPulled] = useState({ userId: null, at: 0 });
 
   useEffect(() => {
-    latestDataRef.current = { todos, courses, quickLinks, planner, canvas };
-  }, [todos, courses, quickLinks, planner, canvas]);
+    latestDataRef.current = { todos, courses, quickLinks, planner, canvas, prefs };
+  }, [todos, courses, quickLinks, planner, canvas, prefs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +76,11 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       return columnsRef.current.canvas && hasCanvasData(nextState.canvas) ? nextState.canvas : latestDataRef.current.canvas;
     }
 
+    // {} is a row from before the column existed (or nothing decided yet), never "cleared"
+    function remotePrefs(nextState) {
+      return columnsRef.current.prefs && hasPrefsData(nextState.prefs) ? nextState.prefs : latestDataRef.current.prefs;
+    }
+
     function applyRemoteState(nextState) {
       // Nothing from a sync that belonged to an account since signed out
       if (!nextState || cancelled) return;
@@ -86,6 +96,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         : latestDataRef.current.quickLinks;
       const nextPlanner = remotePlanner(nextState);
       const nextCanvas = remoteCanvas(nextState);
+      const nextPrefs = remotePrefs(nextState);
 
       const current = latestDataRef.current;
       const hasTodosDiff = JSON.stringify(nextTodos) !== JSON.stringify(current.todos);
@@ -93,8 +104,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       const hasQuickLinksDiff = JSON.stringify(nextQuickLinks) !== JSON.stringify(current.quickLinks);
       const hasPlannerDiff = JSON.stringify(nextPlanner) !== JSON.stringify(current.planner);
       const hasCanvasDiff = JSON.stringify(nextCanvas) !== JSON.stringify(current.canvas);
+      const hasPrefsDiff = JSON.stringify(nextPrefs) !== JSON.stringify(current.prefs);
 
-      if (hasTodosDiff || hasCoursesDiff || hasQuickLinksDiff || hasPlannerDiff || hasCanvasDiff) {
+      if (hasTodosDiff || hasCoursesDiff || hasQuickLinksDiff || hasPlannerDiff || hasCanvasDiff || hasPrefsDiff) {
         isRemoteUpdateRef.current = true;
         lastSyncedPayloadRef.current = JSON.stringify({
           todos: nextTodos,
@@ -102,6 +114,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
           quickLinks: nextQuickLinks,
           planner: nextPlanner,
           canvas: nextCanvas,
+          prefs: nextPrefs,
         });
 
         if (hasTodosDiff) setTodos(nextTodos);
@@ -109,6 +122,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
         if (hasQuickLinksDiff) setQuickLinks(nextQuickLinks);
         if (hasPlannerDiff) setPlanner(nextPlanner);
         if (hasCanvasDiff) setCanvas(nextCanvas);
+        if (hasPrefsDiff) setPrefs(nextPrefs);
       }
     }
 
@@ -140,8 +154,9 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
           const quickLinksToSave = Array.isArray(res.data.quick_links) ? res.data.quick_links : latestDataRef.current.quickLinks;
           const plannerToSave = remotePlanner(res.data);
           const canvasToSave = remoteCanvas(res.data);
+          const prefsToSave = remotePrefs(res.data);
           applyRemoteState({ ...res.data, todos: merged.todos, courses: merged.courses });
-          const ok = await saveToCloud(user.id, { todos: merged.todos, courses: merged.courses, quickLinks: quickLinksToSave, planner: plannerToSave, canvas: canvasToSave }, columnsRef, onError);
+          const ok = await saveToCloud(user.id, { todos: merged.todos, courses: merged.courses, quickLinks: quickLinksToSave, planner: plannerToSave, canvas: canvasToSave, prefs: prefsToSave }, columnsRef, onError);
           if (cancelled) return;
           if (ok) markOutageEditsRecovered(user.id);
         } else {
@@ -208,7 +223,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       window.removeEventListener("focus", handleVisibilityOrFocus);
       window.removeEventListener("online", handleOnline);
     };
-  }, [user, setTodos, setCourses, setQuickLinks, setPlanner, setCanvas, onError]);
+  }, [user, setTodos, setCourses, setQuickLinks, setPlanner, setCanvas, setPrefs, onError]);
 
   // Debounced save to Supabase
   useEffect(() => {
@@ -220,7 +235,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       return undefined;
     }
 
-    const data = { todos, courses, quickLinks, planner, canvas };
+    const data = { todos, courses, quickLinks, planner, canvas, prefs };
     const currentPayloadString = JSON.stringify(data);
     if (currentPayloadString === lastSyncedPayloadRef.current) {
       hasPendingSaveRef.current = false;
@@ -255,7 +270,7 @@ export function useSyncedData(user, todos, setTodos, courses, setCourses, quickL
       clearTimeout(saveTimerRef.current);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [user, todos, courses, quickLinks, planner, canvas, onError]);
+  }, [user, todos, courses, quickLinks, planner, canvas, prefs, onError]);
 
   // Saves what's still waiting right away (signing out can't wait for the pause). True once the
   // cloud has everything this device has.
@@ -281,7 +296,7 @@ function isAuthError(error) {
 }
 
 // Returns true when the data was saved
-export async function saveToCloud(userId, { todos, courses, quickLinks, planner, canvas }, columnsRef, onError) {
+export async function saveToCloud(userId, { todos, courses, quickLinks, planner, canvas, prefs }, columnsRef, onError) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     onError?.("Offline");
     return false;
@@ -300,13 +315,15 @@ export async function saveToCloud(userId, { todos, courses, quickLinks, planner,
       courses: courses ?? [],
       updated_at: new Date().toISOString(),
     };
-    const optionalValues = { quick_links: quickLinks ?? [], planner: planner ?? {}, canvas: canvas ?? {} };
+    const optionalValues = { quick_links: quickLinks ?? [], planner: planner ?? {}, canvas: canvas ?? {}, prefs: prefs ?? {} };
     for (const column of OPTIONAL_COLUMNS) {
       if (columnsRef.current[column]) row[column] = optionalValues[column];
     }
     // Canvas settings live only in memory until the cloud copy loads, so an empty {} here means
     // "not loaded or never connected". Leave the column out so it can't wipe saved settings.
     if (!hasCanvasData(row.canvas)) delete row.canvas;
+    // Nothing decided yet: leave the saved prefs as they are
+    if (!hasPrefsData(row.prefs)) delete row.prefs;
 
     let { error } = await supabase.from("app_state").upsert(row, { onConflict: "user_id" });
 

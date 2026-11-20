@@ -571,7 +571,17 @@ export default function DayPlanner({ todos, courseMap, toolbar, planner, updateP
           style={{ maskImage: edgeMask(listEdges), WebkitMaskImage: edgeMask(listEdges) }}
         >
           {nothingFound && <p className="text-caption text-slate-500">No open tasks match “{query.trim()}”.</p>}
-          {!searching && openTasks.length === 0 && inboxItems.length === 0 && <p className="text-caption text-slate-500">Nothing left to plan. Every task is done or on the schedule.</p>}
+          {!searching && openTasks.length === 0 && inboxItems.length === 0 && (
+            // With no tasks at all yet, say what this column is for instead of that it's finished
+            todos.some((todo) => (todo.type ?? "task") === "task") ? (
+              <p className="text-caption text-slate-500">Nothing left to plan. Every task is done or on the schedule.</p>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 px-3 py-3">
+                <p className="text-xs font-medium text-slate-700">Your open tasks wait here</p>
+                <p className="mt-1 text-caption leading-relaxed text-slate-500">Drag one onto an hour to plan when you'll do it. For something that's only for this day, like Laundry, type it in the field below.</p>
+              </div>
+            )
+          )}
           {traySections.map((section) => section.items.length > 0 && (
             <section key={section.id}>
               <SectionLabel className={section.tone}>{section.title}</SectionLabel>

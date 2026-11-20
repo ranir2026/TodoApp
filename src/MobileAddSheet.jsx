@@ -4,8 +4,14 @@ import BottomSheet from "./BottomSheet";
 import QuickAddModal from "./QuickAddModal";
 import SegmentedControl from "./SegmentedControl";
 
-export default function MobileAddSheet({ open, courses, onAdd, onClose }) {
+// `initialText` opens it on quick syntax with an example typed in (from Getting started)
+export default function MobileAddSheet({ open, courses, onAdd, onClose, initialText = "", onType, tip = null }) {
   const [mode, setMode] = useState("quick");
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open && initialText) setMode("quick");
+  }
 
   return (
     <BottomSheet open={open} onClose={onClose} label="Add task or event" title="Add to your day">
@@ -19,7 +25,7 @@ export default function MobileAddSheet({ open, courses, onAdd, onClose }) {
             value={mode}
             onChange={setMode}
           />
-          {mode === "quick" ? <div className="mobile-quick-add"><QuickAddModal open embedded courses={courses} onAdd={(item) => { onAdd(item); onClose(); }} onClose={onClose} /></div> : <AddTodoForm courses={courses} onAdd={(item) => { onAdd(item); onClose(); }} />}
+          {mode === "quick" ? <div className="mobile-quick-add"><QuickAddModal open embedded initialText={initialText} courses={courses} onType={onType} tip={tip} onAdd={(item) => { onAdd(item); onClose(); }} onClose={onClose} /></div> : <AddTodoForm courses={courses} onAdd={(item) => { onAdd(item); onClose(); }} />}
         </>
       )}
     </BottomSheet>

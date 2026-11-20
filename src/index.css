@@ -144,6 +144,18 @@ body {
   pointer-events: none;
 }
 
+/* A one-time tip settles into place where it applies */
+.tip-enter {
+  animation: tip-in 220ms var(--ease-out) both;
+}
+@keyframes tip-in {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip-enter { animation-name: tip-fade; }
+  @keyframes tip-fade { from { opacity: 0; } }
+}
+
 /* Size-specific tracking: small text opens up, large text tightens.
    In the base layer so explicit tracking-* utilities still win. */
 @layer base {
@@ -582,6 +594,9 @@ button.press-tint:not(:disabled):active { background-color: rgb(15 23 42 / 0.05)
 .mobile-group-title:first-of-type { margin-top: 6px; }
 .mobile-panel-action { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 44px; margin-top: 12px; border: 0; border-radius: var(--mobile-radius-control); background: var(--tint-soft); color: var(--tint); font-size: 14px; font-weight: 600; }
 .mobile-panel-action span { font-size: 18px; line-height: 1; }
+.mobile-help-list > li + li { border-top: 1px solid #eef1f5; }
+.mobile-help-row { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 44px; color: #172033; font-size: 15px; text-align: left; }
+.mobile-help-row span { color: #b8c0cc; font-size: 20px; line-height: 1; }
 .mobile-sheet-field { display: block; width: 100%; min-height: 48px; border: 1px solid #dbe2ea; border-radius: var(--mobile-radius-control); background: #fff; padding: 12px 14px; color: #172033; font-size: 16px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
 .mobile-sheet-field:focus { border-color: var(--tint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-course-500) 14%, transparent); }
 .mobile-sheet-primary { width: 100%; min-height: 50px; border: 0; border-radius: 999px; background: var(--tint); color: #fff; font-size: 16px; font-weight: 600; box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--color-course-600) 60%, transparent); transition: opacity 150ms ease; }

@@ -12,6 +12,26 @@ The app works locally with browser storage. To enable cross-device sync:
 
 On the first sign-in, existing local todos and courses are uploaded when the account has no cloud state. Later changes sync automatically across signed-in devices.
 
+## Before going public
+
+1. **Database.** On a project set up before November 2026, run `supabase/launch-2026-11.sql` in the SQL editor. It adds the `prefs` column (onboarding progress) and `delete_my_account()`. A new project gets both from `supabase-schema.sql`. The last three queries in the file are read-only checks that every table has row-level security and that only signed-in accounts can call the functions, with the expected result beside each.
+2. **Email, for now: off.** Supabase's built-in sender is for testing: it sends a few emails an hour and may only reach your Supabase team. So for a small launch, email confirmation is off (Authentication, Sign In / Providers, Email, "Confirm email") and new accounts are signed in straight away. Password reset needs email too, so "Forgot password?" is hidden until `VITE_PASSWORD_RESET=on` is in `.env.local`.
+3. **Test on a fresh address:** create an account and the app opens signed in. Sign out, and sign back in with the same password.
+
+When the app is shared more widely, turn email on:
+
+1. **Email sender.** In Authentication, Emails, SMTP Settings, add a provider (Resend, Brevo, Postmark, Amazon SES or similar), with "Todo" as the sender name. Most need a domain you own to send from.
+2. **Email wording.** In Authentication, Emails, Templates, paste `supabase/templates/confirm-signup.html` into "Confirm signup" and `supabase/templates/reset-password.html` into "Reset password". The subject line is at the top of each file.
+3. **Links.** In Authentication, URL Configuration, the Site URL is the app's public address (the same as `VITE_APP_URL`), and it's in Redirect URLs. Password reset links come back to the same address as confirmation links, so nothing else is needed.
+4. **Switch it on.** Turn "Confirm email" back on, add `VITE_PASSWORD_RESET=on` to `.env.local`, and deploy.
+5. **Test on a fresh address:** create an account, open the email, the link lands on "Email confirmed", "Open Todo" opens the app signed in, and signing in before confirming offers "Send the link again". Then "Forgot password?", open that email, choose a new password, and sign in with it.
+
+Privacy and your data (under the account box on a computer, Profile then Help on a phone) says what's stored, why, and who can see it, and has Delete account. Until step 1 is run, Delete account says it isn't switched on yet.
+
+### New accounts and What's new
+
+A new account gets a Getting started checklist in place of the empty list. An account that already has tasks gets a "What's new" note once instead. Both, and the one-time tips, are remembered in the account's `prefs` (see `src/prefs.js`), so they don't come back on another device. For a new note, change `RELEASE` in `src/prefs.js` and the items in `src/WhatsNew.jsx`. The "What you can do" page lists features from `src/features.js` and hides any the account can't use, such as Canvas when the app runs without an account.
+
 ## Development
 
 ```bash

@@ -761,6 +761,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       </Collapsible>
 
       <div className="relative min-h-0 flex-1">
+      {projects.length === 0 && !creating && <ProjectsIntro onStart={openCreate} />}
       <div ref={scrollRef} onScroll={hideTip} className="absolute inset-0 overflow-auto">
         <div className="relative flex min-h-full flex-col" style={{ width: labelWidth + timelineWidth, "--label-width": `${labelWidth}px` }}>
           <div aria-hidden="true" className="pointer-events-none absolute inset-y-0" style={{ left: labelWidth, width: timelineWidth, backgroundImage: weekendShading }} />
@@ -1491,6 +1492,43 @@ function RenameInput({ value, onChange, onCommit, onCancel }) {
       }}
       className="field-tint min-w-0 flex-1 rounded border border-course-300 px-1.5 py-0.5 text-xs outline-none"
     />
+  );
+}
+
+// An empty timeline says what a project is for, with a picture of one, over the empty grid
+function ProjectsIntro({ onStart }) {
+  const phases = [{ name: "Research", left: 0, width: 27 }, { name: "Draft", left: 28, width: 39 }, { name: "Revise", left: 68, width: 32 }];
+  const milestones = [{ name: "Outline due", at: 27 }, { name: "Draft due", at: 67 }, { name: "Final due", at: 99 }];
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40 flex items-start justify-center px-6 pt-16">
+      <section aria-labelledby="projects-intro-title" className="modal-surface pointer-events-auto w-full max-w-md rounded-card border border-slate-200 bg-white p-5 shadow-lg">
+        <h3 id="projects-intro-title" className="text-sm font-semibold text-slate-900">Group a big assignment into steps with deadlines</h3>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">A project spans weeks. Split it into phases, give each deadline a milestone, then add the tasks toward it. A milestone ticks itself off when its tasks are done.</p>
+        <figure aria-hidden="true" className="mt-4 rounded-xl bg-slate-50 px-4 pt-3 pb-3.5">
+          <figcaption className="flex items-baseline justify-between text-caption text-slate-400">
+            <span><span className="font-semibold text-slate-700">Research paper</span> · example</span>
+            <span>4 weeks</span>
+          </figcaption>
+          <div className="relative mt-2.5 h-5">
+            {phases.map((phase) => (
+              <span key={phase.name} className="absolute inset-y-0 flex items-center truncate rounded-md bg-course-500/15 px-1.5 text-caption font-medium text-course-700" style={{ left: `${phase.left}%`, width: `${phase.width}%` }}>
+                {phase.name}
+              </span>
+            ))}
+          </div>
+          <div className="relative mt-2 h-9">
+            <div className="absolute inset-x-0 top-[5px] h-px bg-slate-200" />
+            {milestones.map((milestone, index) => (
+              <span key={milestone.name} className={`absolute top-0 flex flex-col gap-1 ${index === milestones.length - 1 ? "-translate-x-full items-end" : "-translate-x-1/2 items-center"}`} style={{ left: `${milestone.at}%` }}>
+                <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-course-500" />
+                <span className="text-caption whitespace-nowrap text-slate-500">{milestone.name}</span>
+              </span>
+            ))}
+          </div>
+        </figure>
+        <button type="button" onClick={onStart} className="mt-4 rounded-lg bg-course-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-course-600">Make a project</button>
+      </section>
+    </div>
   );
 }
 

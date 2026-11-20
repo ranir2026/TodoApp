@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthScreen from "./AuthScreen";
 import LoadingScreen from "./LoadingScreen";
 
-const auth = vi.hoisted(() => ({ signInWithPassword: vi.fn(), signUp: vi.fn(), resend: vi.fn() }));
+const auth = vi.hoisted(() => ({ signInWithPassword: vi.fn(), signUp: vi.fn(), resend: vi.fn(), resetPasswordForEmail: vi.fn() }));
 vi.mock("./supabase", () => ({ supabase: { auth } }));
 
 afterEach(() => {
@@ -91,6 +91,61 @@ describe("Create account", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in instead" }));
     await waitFor(() => expect(screen.getByRole("radio", { name: "Sign in" }).getAttribute("aria-checked")).toBe("true"));
     expect(screen.getByLabelText("Password").getAttribute("autocomplete")).toBe("current-password");
+  });
+});
+
+describe("Forgot password", () => {
+  beforeEach(() => vi.stubEnv("VITE_PASSWORD_RESET", "on"));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is hidden until an email provider is set up", () => {
+    vi.stubEnv("VITE_PASSWORD_RESET", "");
+    render(<AuthScreen />);
+    expect(screen.queryByRole("button", { name: "Forgot password?" })).toBeNull();
+  });
+
+  it("sends a reset link to the address from sign in, and can send it again", async () => {
+    auth.resetPasswordForEmail.mockResolvedValue({ error: null });
+    render(<AuthScreen />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "sam@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+    expect(screen.getByLabelText("Email").value).toBe("sam@example.com");
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    submit("Send reset link");
+    expect(await screen.findByText("Check your email")).toBeTruthy();
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("sam@example.com", expect.objectContaining({ redirectTo: expect.any(String) }));
+    submit("Send it again");
+    expect(await screen.findByText("Sent again. It can take a minute to arrive.")).toBeTruthy();
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it("checks the address first", () => {
+    render(<AuthScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    submit("Send reset link");
+    expect(screen.getByText("Enter your email.")).toBeTruthy();
+    expect(auth.resetPasswordForEmail).not.toHaveBeenCalled();
+  });
+
+  it("goes back to sign in", () => {
+    render(<AuthScreen />);
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(screen.getByLabelText("Password")).toBeTruthy();
+  });
+
+  it("isn't offered while creating an account", () => {
+    render(<AuthScreen />);
+    fireEvent.click(screen.getByRole("radio", { name: "Create account" }));
+    expect(screen.queryByRole("button", { name: "Forgot password?" })).toBeNull();
+  });
+});
+
+describe("Notice", () => {
+  it("shows a line at the top of the card, such as after an expired link", () => {
+    render(<AuthScreen notice="That link has expired or was already used." />);
+    expect(screen.getByRole("status").textContent).toBe("That link has expired or was already used.");
   });
 });
 

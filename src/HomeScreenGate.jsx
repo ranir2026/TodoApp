@@ -120,7 +120,9 @@ export default function HomeScreenGate({ children }) {
   const [prompt] = useState(homeScreenPrompt);
   // Confirming an email opens the link in a browser, so say it worked before sending them on
   const [emailConfirmed] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("type") === "signup");
-  if (!prompt) return children;
+  // A password reset link opens in the browser too, and the new password has to be chosen there
+  const [recovery] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery");
+  if (!prompt || recovery) return children;
   const Prompt = prompt === "add" ? AddToHomeScreen : OpenInSafari;
   return (
     <>

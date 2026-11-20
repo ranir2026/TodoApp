@@ -40,6 +40,15 @@ import { LINK_BROKEN_CODES, disconnectFeed, reassignCategory, remapCanvasCourse,
 import { CanvasCard, CanvasCoursesNotice, CanvasLinkNotice, CanvasMobilePanel } from "./CanvasUI";
 import { CanvasActionsContext } from "./canvasStatus";
 import { useCanvasSync } from "./useCanvasSync";
+import GettingStarted from "./GettingStarted";
+import FeatureGuide from "./FeatureGuide";
+import ShortcutsSheet from "./ShortcutsSheet";
+import PrivacyDialog from "./PrivacyDialog";
+import WhatsNew from "./WhatsNew";
+import Tip from "./Tip";
+import NewPasswordScreen from "./NewPasswordScreen";
+import { passwordResetEnabled } from "./authEmails";
+import { EMPTY_PREFS, MANUAL_ADDS_FOR_TIP, checklistShown, checklistSteps, closeChecklist, countManualAdd, markStep, markTipSeen, markWhatsNewSeen, normalizePrefs, rememberSteps, reopenChecklist, skipStep, startPrefs, tipSeen, whatsNewShown } from "./prefs";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -56,11 +65,34 @@ const TYPE_NOUNS = { task: "tasks", event: "events", milestone: "milestones", al
 const DEFAULT_COURSES = [{ id: "c1", name: "General", color: "#0071e3" }];
 const COURSE_COLOR_PALETTE = COLOR_PALETTE;
 const DEFAULT_QUICK_LINKS = [];
+const QUICK_ADD_TIP = "Words like fri, 3pm, urgent and @Category become the chips above. End with tk for a task or ev for an event.";
 // Only the admin page offers Canvas import, so everyone else never downloads it
 const CanvasConnectModal = lazy(() => import("./CanvasConnectModal"));
 const CanvasSettingsModal = lazy(() => import("./CanvasSettingsModal"));
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
+
+// Typed into quick add by Getting started, so the words turn into chips before anything is pressed
+const EXAMPLE_TASK = "Essay draft fri urgent tk";
+// Everything kept on this device for one account (see deviceData.js), removed when it's deleted
+const ACCOUNT_KEYS = ["todos", "courses", "quickLinks", "planner", "prefs"];
+
+function hashParams() {
+  return new URLSearchParams(window.location.hash.slice(1));
+}
+
+function clearHash() {
+  window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+}
+
+// An email link that didn't work (expired, or already used) comes back with the reason in the hash
+function linkErrorNotice() {
+  const params = hashParams();
+  if (!params.get("error") && !params.get("error_code")) return null;
+  return passwordResetEnabled()
+    ? "That link has expired or was already used. Sign in, or use Forgot password? to get a new one."
+    : "That link has expired or was already used. Sign in to continue.";
+}
 
 function ArchiveIcon() {
   return (
@@ -109,6 +141,11 @@ export default function App() {
   const [storedPlanner, setPlanner] = useLocalStorage(dataKey("planner"), EMPTY_PLANNER);
   const planner = useMemo(() => normalizePlanner(storedPlanner), [storedPlanner]);
   const updatePlanner = useCallback((change) => setPlanner((current) => change(normalizePlanner(current))), [setPlanner]);
+  // The checklist, tips seen and the last What's new, synced with the account (see prefs.js).
+  // `change` returns the next prefs, or null to leave them alone.
+  const [storedPrefs, setPrefs] = useLocalStorage(dataKey("prefs"), EMPTY_PREFS);
+  const prefs = useMemo(() => normalizePrefs(storedPrefs), [storedPrefs]);
+  const updatePrefs = useCallback((change) => setPrefs((current) => change(normalizePrefs(current)) ?? current), [setPrefs]);
   // Canvas settings hold the feed link, a secret, so they stay out of localStorage and live only in
   // the user's own synced row. {} until that row loads (or if Canvas was never connected), and again
   // whenever the account changes.
@@ -143,6 +180,15 @@ export default function App() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  // Help pages: null, or where they were opened ("desktop" or "mobile"), which decides how they're drawn
+  const [guideOpen, setGuideOpen] = useState(null);
+  const [privacyOpen, setPrivacyOpen] = useState(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // What quick add opens with: the example from Getting started, otherwise nothing
+  const [quickAddText, setQuickAddText] = useState("");
+  const [mobileAddText, setMobileAddText] = useState("");
+  // The one-time tip on screen, if any (only ever one; see offerTip)
+  const [activeTip, setActiveTip] = useState(null);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const closeCanvas = useCallback(() => setCanvasOpen(false), []);
   // Set when setup opens at matching, for courses that showed up after connecting: { domain, keys }
@@ -158,10 +204,11 @@ export default function App() {
   const [plannerTabRequest, setPlannerTabRequest] = useState(null);
   const [todayOpen, setTodayOpen] = useLocalStorage("todayPanelOpen", false);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
-  const [emailConfirmed, setEmailConfirmed] = useState(() => {
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    return hashParams.get("type") === "signup";
-  });
+  const [emailConfirmed, setEmailConfirmed] = useState(() => hashParams().get("type") === "signup");
+  // Opened from a password reset email: choose the new password before anything else
+  const [recovering, setRecovering] = useState(() => hashParams().get("type") === "recovery");
+  // A line for the sign-in screen: a link that didn't work, or the account just deleted
+  const [authNotice, setAuthNotice] = useState(linkErrorNotice);
   const [syncError, setSyncError] = useState("");
   const [mobileTab, setMobileTab] = useState("tasks");
   const [mobileTabShift, setMobileTabShift] = useState(0);
@@ -182,6 +229,8 @@ export default function App() {
   const toastLeaveTimerRef = useRef(null);
   const listScrollRef = useRef(null);
   const addInputRef = useRef(null);
+  const categoryInputRef = useRef(null);
+  const mobileCategoryInputRef = useRef(null);
   const searchInputRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
   const taskListRef = useRef(null);
@@ -202,10 +251,22 @@ export default function App() {
     if (!supabase) return undefined;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      // A reset link that didn't sign anyone in has nothing to choose a password for
+      if (!data.session) setRecovering(false);
       setAuthLoading(false);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession);
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      if (event === "SIGNED_IN") setAuthNotice(null);
+    });
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // The reason a link didn't work is now on the sign-in screen; it shouldn't stay in the address
+  useEffect(() => {
+    const params = hashParams();
+    if (params.get("error") || params.get("error_code")) clearHash();
   }, []);
 
   useEffect(() => {
@@ -216,7 +277,7 @@ export default function App() {
   }, []);
 
   const handleSyncError = useCallback((message) => setSyncError(message), []);
-  const { lastSyncedAt, pulledAt, saveNow } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, storedPlanner, setPlanner, canvas, setCanvas, handleSyncError);
+  const { lastSyncedAt, pulledAt, saveNow } = useSyncedData(session?.user, todos, setTodos, courses, setCourses, quickLinks, setQuickLinks, storedPlanner, setPlanner, canvas, setCanvas, handleSyncError, storedPrefs, setPrefs);
   const signOutFlow = useSignOut(saveNow);
   const syncStatus = !session
     ? "Saved on this device only"
@@ -237,6 +298,162 @@ export default function App() {
 
   const dismissDueMoved = useCallback((id) => setTodos((prev) => prev.map((todo) => (todo.id === id ? withoutDueMoved(todo) : todo))), [setTodos]);
   const canvasActions = useMemo(() => ({ enabled: true, dismissDueMoved }), [dismissDueMoved]);
+
+  // New or existing is decided once, when the account's saved data has arrived (or straight away
+  // without accounts), so a returning account on a new device isn't mistaken for a new one
+  const prefsReady = !isSupabaseConfigured || (Boolean(session) && pulledAt > 0);
+  useEffect(() => {
+    if (!prefsReady) return;
+    const next = startPrefs(prefs, { todos });
+    if (next) setPrefs(next);
+  }, [prefsReady, prefs, todos, setPrefs]);
+
+  const showChecklist = prefsReady && checklistShown(prefs);
+  const desktopSteps = useMemo(() => checklistSteps(prefs, { todos, courses, canvas, planner, canvasAvailable, desktop: true }), [prefs, todos, courses, canvas, planner, canvasAvailable]);
+  const mobileSteps = useMemo(() => checklistSteps(prefs, { todos, courses, canvas, planner, canvasAvailable, desktop: false }), [prefs, todos, courses, canvas, planner, canvasAvailable]);
+  // A step stays ticked once done, even if what did it is later deleted
+  useEffect(() => {
+    if (!showChecklist) return;
+    const next = rememberSteps(prefs, desktopSteps);
+    if (next) setPrefs(next);
+  }, [showChecklist, prefs, desktopSteps, setPrefs]);
+
+  // What's new shows once: it's marked seen as it appears, and stays until closed or the next visit
+  const [whatsNewOpen, setWhatsNewOpen] = useAccountState(accountId, false);
+  const whatsNewDue = prefsReady && whatsNewShown(prefs);
+  useEffect(() => {
+    if (!whatsNewDue) return;
+    setWhatsNewOpen(true);
+    setPrefs((current) => markWhatsNewSeen(normalizePrefs(current)));
+  }, [whatsNewDue, setWhatsNewOpen, setPrefs]);
+
+  // One tip at a time, each once per account: it's marked seen as soon as it shows, and goes when
+  // the place it's about closes, however that happens
+  const tipPlaceOpen = { quickAdd: quickAddOpen || mobileAddOpen, repeatEdit: Boolean(editingItem), pressN: true };
+  if (activeTip && !tipPlaceOpen[activeTip]) setActiveTip(null);
+
+  function offerTip(id) {
+    if (!prefsReady || activeTip || tipSeen(prefs, id)) return;
+    setActiveTip(id);
+    updatePrefs((current) => markTipSeen(current, id));
+  }
+
+  function dismissTip(id) {
+    setActiveTip((current) => (current === id ? null : current));
+  }
+
+  const tipProps = (id, text) => (activeTip === id ? { text, onDismiss: () => dismissTip(id) } : null);
+
+  function closeQuickAdd() {
+    setQuickAddOpen(false);
+    setQuickAddText("");
+  }
+
+  function closeMobileAdd() {
+    setMobileAddOpen(false);
+    setMobileAddText("");
+  }
+
+  function openQuickAdd() {
+    dismissTip("pressN");
+    setQuickAddOpen(true);
+  }
+
+  // Tasks added with the form, one at a time: after a few, a tip that quick add is a key away
+  function addFromForm(item) {
+    addTodo(item);
+    if (tipSeen(prefs, "pressN")) return;
+    updatePrefs(countManualAdd);
+    if ((prefs.manualAdds ?? 0) + 1 >= MANUAL_ADDS_FOR_TIP) offerTip("pressN");
+  }
+
+  function openShortcuts() {
+    setShortcutsOpen(true);
+    updatePrefs((current) => (checklistShown(current) ? markStep(current, "shortcuts") : null));
+  }
+
+  // The field for a new category, on whichever layout asked
+  function focusCategoryField(mobile) {
+    if (mobile) {
+      switchMobileTab("profile");
+      requestAnimationFrame(() => {
+        mobileCategoryInputRef.current?.scrollIntoView({ block: "center" });
+        mobileCategoryInputRef.current?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    requestAnimationFrame(() => categoryInputRef.current?.focus());
+  }
+
+  // Each Getting started step's button does the thing itself
+  function runStep(id, mobile) {
+    if (id === "firstTask") {
+      if (mobile) {
+        setMobileAddText(EXAMPLE_TASK);
+        setMobileAddOpen(true);
+      } else {
+        setQuickAddText(EXAMPLE_TASK);
+        openQuickAdd();
+      }
+    } else if (id === "category") focusCategoryField(mobile);
+    else if (id === "canvas") openCanvasConnect();
+    else if (id === "planDay") setTodayOpen(true);
+    else if (id === "shortcuts") openShortcuts();
+  }
+
+  function hideChecklist(done) {
+    updatePrefs((current) => closeChecklist(current, done ? "done" : "dismissed"));
+    if (!done) showUndo(() => updatePrefs(reopenChecklist), "Getting started hidden. It's in What you can do.");
+  }
+
+  function showChecklistAgain() {
+    updatePrefs(reopenChecklist);
+    setGuideOpen(null);
+  }
+
+  // The help page's buttons go to the feature; the page closes first so focus can land there
+  function openFromGuide(target) {
+    const mobile = guideOpen === "mobile";
+    setGuideOpen(null);
+    if (target === "quickAdd") {
+      if (mobile) setMobileAddOpen(true);
+      else openQuickAdd();
+    } else if (target === "category") focusCategoryField(mobile);
+    else if (target === "today") setTodayOpen(true);
+    else if (target === "planner") { setPlannerTabRequest({ tab: "today" }); setPlannerOpen(true); }
+    else if (target === "projects") { setPlannerTabRequest({ tab: "timeline" }); setPlannerOpen(true); }
+    else if (target === "calendar") {
+      if (mobile) switchMobileTab("calendar");
+      else setView("calendar");
+    } else if (target === "canvas") {
+      if (canvas.feeds?.length) setCanvasSettingsOpen(true);
+      else openCanvasConnect();
+    } else if (target === "palette") setPaletteOpen(true);
+    else if (target === "shortcuts") openShortcuts();
+    else if (target === "keybinds") setSettingsOpen(true);
+  }
+
+  // Deletes the account and everything in it (the delete_my_account function in
+  // supabase-schema.sql), then this device's copy, then signs out. Resolves to an error message, or
+  // null once it's gone.
+  async function deleteAccount() {
+    if (!supabase || !accountId) return "Sign in to delete your account.";
+    const { error } = await supabase.rpc("delete_my_account");
+    if (error) {
+      const missing = error.code === "PGRST202" || /could not find the function/i.test(error.message ?? "");
+      return missing ? "Deleting accounts isn't switched on yet. Try again later." : "Couldn't delete your account. Check your connection and try again.";
+    }
+    try {
+      for (const name of ACCOUNT_KEYS) localStorage.removeItem(`${name}:${accountId}`);
+      localStorage.removeItem(`outage-recovered-2026-10-11-v2:${accountId}`);
+    } catch {
+      // Storage unavailable: nothing was kept here
+    }
+    setPrivacyOpen(null);
+    await supabase.auth.signOut({ scope: "local" });
+    setAuthNotice("Your account and everything in it was deleted.");
+    return null;
+  }
 
   function openCanvasConnect() {
     setCanvasMatch(null);
@@ -444,6 +661,8 @@ export default function App() {
   function editItem(item) {
     const stored = todos.find((t) => t.id === item.id);
     setEditingItem(stored ? { ...stored, occurrenceDate: item.occurrenceDate } : item);
+    // Only where Delete… offers just this date
+    if (stored && isRepeating(stored) && item.occurrenceDate) offerTip("repeatEdit");
   }
 
   function deleteTodo(id) {
@@ -704,7 +923,7 @@ export default function App() {
     {
       openPalette: () => setPaletteOpen((v) => !v),
       openSettings: () => setSettingsOpen(true),
-      quickAdd: () => setQuickAddOpen(true),
+      quickAdd: openQuickAdd,
       newTask: focusNewTask,
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
       moveDown: () => moveSelection(1),
@@ -724,6 +943,7 @@ export default function App() {
       quickLink: () => setQuickLinkOpen(true),
       openPlanner: () => setPlannerOpen(true),
       toggleToday: () => setTodayOpen((v) => !v),
+      showShortcuts: openShortcuts,
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
@@ -731,12 +951,12 @@ export default function App() {
         else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen && !canvasOpen && !canvasSettingsOpen,
+    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen && !canvasOpen && !canvasSettingsOpen && !shortcutsOpen && !guideOpen && !privacyOpen,
   );
 
   const commands = useMemo(
     () => [
-      { id: "quickAdd", label: "Quick add task/event", run: () => setQuickAddOpen(true) },
+      { id: "quickAdd", label: "Quick add task/event", run: () => openQuickAdd() },
       { id: "newTask", label: "Focus new task form", run: () => focusNewTask() },
       { id: "toggleView", label: "Toggle list / calendar view", run: () => setView((v) => (v === "list" ? "calendar" : "list")) },
       { id: "filterActive", label: "Show active tasks", run: () => setFilter("active") },
@@ -753,6 +973,9 @@ export default function App() {
       { id: "openPlanner", label: "Open planner", run: () => setPlannerOpen(true) },
       { id: "toggleToday", label: "Show or hide today's plan", run: () => setTodayOpen((v) => !v) },
       { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
+      { id: "showShortcuts", label: "Show keyboard shortcuts", run: () => openShortcuts() },
+      { id: "openGuide", label: "What you can do", run: () => setGuideOpen("desktop") },
+      { id: "openPrivacy", label: "Privacy and your data", run: () => setPrivacyOpen("desktop") },
     ],
     [view],
   );
@@ -782,7 +1005,7 @@ export default function App() {
       return { title: "All caught up", detail: "Everything on your list is done.", action: "Show completed", onAction: () => setFilter("completed") };
     }
     if (filter === "completed") return { title: "Nothing completed yet", action: "Show active", onAction: () => setFilter("active") };
-    return { title: "Nothing here yet", detail: "Add a task and it'll show up here.", action: "Add a task", onAction: () => setQuickAddOpen(true) };
+    return { fresh: true, title: "Nothing here yet", detail: "Add a task and it'll show up here.", action: "Add a task", onAction: () => openQuickAdd() };
   }
 
   useEffect(() => () => { clearTimeout(undoTimerRef.current); clearTimeout(toastLeaveTimerRef.current); }, []);
@@ -800,7 +1023,37 @@ export default function App() {
       />
     );
   }
-  if (isSupabaseConfigured && !session) return <AuthScreen />;
+  if (isSupabaseConfigured && recovering && session) {
+    return (
+      <NewPasswordScreen
+        email={session.user.email}
+        onDone={() => {
+          clearHash();
+          setRecovering(false);
+        }}
+      />
+    );
+  }
+  if (isSupabaseConfigured && !session) return <AuthScreen notice={authNotice} />;
+
+  const emptyState = orderedTasks.length === 0 ? emptyListState() : null;
+  // A brand-new list shows Getting started instead of saying it's empty
+  const listIntro = (mobile) => (
+    <>
+      {whatsNewOpen && <WhatsNew mobile={mobile} onOpenGuide={() => setGuideOpen(mobile ? "mobile" : "desktop")} onClose={() => setWhatsNewOpen(false)} />}
+      {showChecklist && (
+        <GettingStarted
+          mobile={mobile}
+          steps={mobile ? mobileSteps : desktopSteps}
+          onAction={(id) => runStep(id, mobile)}
+          onSkip={(id) => updatePrefs((current) => skipStep(current, id))}
+          onClose={(done) => hideChecklist(done)}
+          onShowGuide={() => setGuideOpen(mobile ? "mobile" : "desktop")}
+        />
+      )}
+    </>
+  );
+  const showEmpty = emptyState && !(showChecklist && emptyState.fresh);
 
   return (
     <CanvasActionsContext.Provider value={canvasActions}>
@@ -811,12 +1064,12 @@ export default function App() {
           <div className={`mobile-search-inline ${mobileSearchOpen ? "is-open" : ""}`} inert={!mobileSearchOpen}><input ref={mobileSearchInputRef} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks and notes..." enterKeyHint="search" /></div>
         </header>
         <main style={{ position: "relative", overflowX: "clip", "--tab-shift": `${mobileTabShift}px`, "--leave-offset": `${leaveOffset}px` }}>
-          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{canvasAvailable && <CanvasLinkNotice variant="mobile" canvas={canvas} onFix={openCanvasReplace} />}{canvasAvailable && <CanvasCoursesNotice variant="mobile" courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}{orderedTasks.length === 0 ? <div className="mobile-empty">No tasks here.</div> : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
+          <div hidden={tabPanelHidden("tasks")} className={`mobile-content ${tabPanelClass("tasks")}`}><section><div className="mobile-pill-row"><button type="button" onClick={() => setCourseFilter("all")} className={`mobile-pill ${courseFilter === "all" ? "mobile-pill-active" : ""}`}>All</button>{courses.map((course) => <button type="button" key={course.id} onClick={() => setCourseFilter(course.id)} className={`mobile-pill ${courseFilter === course.id ? "mobile-pill-active" : ""}`}><span style={{ backgroundColor: course.color }} />{course.name}</button>)}</div>{listIntro(true)}{canvasAvailable && <CanvasLinkNotice variant="mobile" canvas={canvas} onFix={openCanvasReplace} />}{canvasAvailable && <CanvasCoursesNotice variant="mobile" courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}{orderedTasks.length === 0 ? (showEmpty ? <div className="mobile-empty">No tasks here.</div> : null) : <div className="space-y-5">{(groupedTasks || [{ course: null, tasks: visibleTasks }]).map((group) => <div key={group.course?.id || "all"}>{group.course && <div className="mobile-group-label"><span style={{ backgroundColor: group.course.color }} />{group.course.name}</div>}<ul className="space-y-2">{group.tasks.map((todo) => <TodoItem key={todo.id} mobile leavesOnComplete={leavesListOnComplete(todo)} todo={todo} course={courseMap[todo.courseId]} project={projectMap[todo.projectId]} onToggle={toggleTodo} onDelete={deleteTodo} onEdit={editItem} selected={todo.id === selectedId} />)}</ul></div>)}</div>}{resolvedTodos.some((todo) => todo.completed) && <button type="button" onClick={() => setFilter(filter === "active" ? "all" : "active")} className="mobile-show-completed mobile-hit">{filter === "active" ? "Show completed" : "Hide completed"}</button>}</section></div>
           <div hidden={tabPanelHidden("calendar")} className={`mobile-content mobile-calendar-content ${tabPanelClass("calendar")}`}><section className="mobile-calendar-section"><CalendarView ref={calendarRef} todos={todosView} courseMap={courseMap} mode={mobileCalendarMode} compact onModeChange={setMobileCalendarMode} onEdit={editItem} onSelectDate={(date) => { setMobileSelectedDate(date); setMobileCalendarMode("day"); }} onQuickAdd={(title, dueDate) => addTodo({ type: "task", title, courseId: null, dueDate, priority: "normal" })} /></section></div>
-          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={signOutFlow.signOut} aria-disabled={signOutFlow.status === "saving"} className="mobile-filter-button mobile-hit aria-disabled:opacity-60">{signOutFlow.status === "saving" ? "Signing out…" : "Sign out"}</button>}</div>{signOutFlow.status === "unsaved" && <SignOutNotice className="text-[13px]" onRetry={signOutFlow.signOut} onSignOutAnyway={signOutFlow.signOutAnyway} />}<h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3>{canvasAvailable && <CanvasMobilePanel ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} onFix={openCanvasReplace} />}<section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[11px] font-medium text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section></section></div>
+          <div hidden={tabPanelHidden("profile")} className={`mobile-content ${tabPanelClass("profile")}`}><section className="mobile-profile space-y-3"><div className="mobile-section-heading mobile-account"><div className="min-w-0"><p className="mobile-email-heading">{session?.user?.email || "Local account"}</p><p className="mobile-account-status">{syncStatus}</p></div>{session && <button type="button" onClick={signOutFlow.signOut} aria-disabled={signOutFlow.status === "saving"} className="mobile-filter-button mobile-hit aria-disabled:opacity-60">{signOutFlow.status === "saving" ? "Signing out…" : "Sign out"}</button>}</div>{signOutFlow.status === "unsaved" && <SignOutNotice className="text-[13px]" onRetry={signOutFlow.signOut} onSignOutAnyway={signOutFlow.signOutAnyway} />}<h3 className="mobile-group-title">Overview</h3><StatsBar todos={todosView} /><ActivityHeatmap todos={todos} /><h3 className="mobile-group-title">Manage</h3>{canvasAvailable && <CanvasMobilePanel ready={canvasReady} canvas={canvas} sync={canvasSync} onConnect={openCanvasConnect} onManage={() => setCanvasSettingsOpen(true)} onFix={openCanvasReplace} />}<section className="mobile-panel"><div className="mobile-panel-heading"><h3>Quick links</h3><span>{quickLinks.length}</span></div>{quickLinks.length ? <ul className="space-y-1">{quickLinks.map((link) => <li key={link.id} className="flex items-center justify-between"><a href={link.url} target="_blank" rel="noreferrer" className="truncate text-sm font-medium text-course-600">{link.label}</a><button type="button" onClick={() => setQuickLinks((prev) => prev.filter((item) => item.id !== link.id))} className="mobile-hit px-2 text-lg leading-none text-slate-300" aria-label={`Delete ${link.label}`}>×</button></li>)}</ul> : <p className="mobile-muted">Add the links you use most.</p>}<button type="button" onClick={() => setQuickLinkOpen(true)} className="mobile-panel-action"><span aria-hidden="true">+</span>Add link</button></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Categories</h3><span>{courses.length}</span></div><ul className="space-y-2">{courses.map((course) => <li key={course.id} className="flex items-center gap-2"><label className="mobile-color-dot mobile-hit" style={{ backgroundColor: course.color }}><input type="color" value={course.color} onChange={(event) => updateCourseColor(course.id, event.target.value)} aria-label={`${course.name} color`} /></label><button type="button" onClick={() => startRenameCourse(course)} className={`min-w-0 flex-1 truncate text-left text-sm ${course.archived ? "text-slate-400" : "text-slate-700"}`}>{course.name}{course.archived && <span className="ml-1.5 text-[11px] font-medium text-slate-400">Archived</span>}</button><span className="text-xs text-slate-400">{resolvedTodos.filter((todo) => todo.courseId === course.id && !todo.completed).length}</span></li>)}</ul><form onSubmit={addCourse} className="mt-3 flex gap-2"><input ref={mobileCategoryInputRef} value={newCourseName} onChange={(event) => setNewCourseName(event.target.value)} placeholder="New category" aria-label="New category" className="mobile-field" /><button type="submit" className="mobile-add-button">Add</button></form></section><section className="mobile-panel"><div className="mobile-panel-heading"><h3>Help</h3></div><ul className="mobile-help-list"><li><button type="button" onClick={() => setGuideOpen("mobile")} className="mobile-help-row">What you can do<span aria-hidden="true">›</span></button></li>{session && <li><button type="button" onClick={() => setPrivacyOpen("mobile")} className="mobile-help-row">Privacy and your data<span aria-hidden="true">›</span></button></li>}</ul></section></section></div>
         </main>
         <div className="mobile-dock"><button type="button" onClick={() => setMobileAddOpen(true)} className="mobile-add-fab" aria-label="Add task or event"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button><nav className="mobile-bottom-nav" aria-label="Primary navigation"><span aria-hidden="true" className="mobile-nav-indicator" style={{ transform: `translateX(${MOBILE_TABS.findIndex((tab) => tab.id === mobileTab) * 100}%)` }} />{MOBILE_TABS.map((item) => <button type="button" key={item.id} onPointerDown={(event) => event.isPrimary && event.button === 0 && switchMobileTab(item.id)} onClick={() => switchMobileTab(item.id)} aria-current={mobileTab === item.id ? "page" : undefined} className={mobileTab === item.id ? "mobile-nav-active" : ""}>{item.icon}{item.label}</button>)}</nav></div>
-        <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={() => setMobileAddOpen(false)} />
+        <MobileAddSheet open={mobileAddOpen} courses={activeCourses} onAdd={addTodo} onClose={closeMobileAdd} initialText={mobileAddText} onType={() => offerTip("quickAdd")} tip={tipProps("quickAdd", QUICK_ADD_TIP)} />
       </div>
 
       <div className="hidden h-screen overflow-hidden md:flex">
@@ -830,7 +1083,7 @@ export default function App() {
         </header>
 
         <button
-          onClick={() => setQuickAddOpen(true)}
+          onClick={openQuickAdd}
           className="flex items-center justify-between rounded-xl border border-todo-200 bg-todo-50 px-3 py-2 text-sm font-medium text-todo-700 hover:border-todo-300"
         >
           Quick add
@@ -848,10 +1101,15 @@ export default function App() {
         <AddTodoForm
           ref={addInputRef}
           courses={activeCourses}
-          onAdd={addTodo}
+          onAdd={addFromForm}
           collapsed={addFormCollapsed}
           onToggleCollapsed={() => setAddFormCollapsed((v) => !v)}
         />
+        {activeTip === "pressN" && (
+          <Tip onDismiss={() => dismissTip("pressN")}>
+            Press <kbd className="rounded border border-course-300 bg-white px-1 font-sans font-semibold text-course-700">{comboLabel(resolvedKeymap.quickAdd)}</kbd> to open quick add from anywhere, then type the whole task in one line.
+          </Tip>
+        )}
 
         <div className="rounded-card border border-slate-200 bg-white p-3 shadow-sm">
           <p className="mb-1.5 text-xs font-semibold text-slate-700">Categories</p>
@@ -906,9 +1164,11 @@ export default function App() {
           </ul>
           <form onSubmit={addCourse} className="mt-2 flex items-center gap-1.5">
             <input
+              ref={categoryInputRef}
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
               placeholder="New category"
+              aria-label="New category"
               className="field-tint w-full min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none"
             />
             <button type="submit" className="shrink-0 rounded-lg bg-course-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-course-600">
@@ -957,15 +1217,32 @@ export default function App() {
           </div>
         )}
 
-        {/* Commands live with the rest of the app's chrome rather than floating over content */}
-        <button
-          onClick={() => setPaletteOpen(true)}
-          title={`Open shortcuts (${comboLabel(resolvedKeymap.openSettings)} to edit)`}
-          className="press-tint mt-auto flex shrink-0 items-center justify-between rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-        >
-          Commands
-          <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span>
-        </button>
+        {/* Help and commands live with the rest of the app's chrome rather than floating over content */}
+        <div className="mt-auto shrink-0">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setGuideOpen("desktop")}
+              className="press-tint flex-1 rounded-lg px-2 py-1.5 text-left text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              What you can do
+            </button>
+            <button
+              onClick={openShortcuts}
+              className="press-tint flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              Shortcuts
+              <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.showShortcuts)}</span>
+            </button>
+          </div>
+          <button
+            onClick={() => setPaletteOpen(true)}
+            title={`Open commands (${comboLabel(resolvedKeymap.openSettings)} to edit shortcuts)`}
+            className="press-tint flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            Commands
+            <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span>
+          </button>
+        </div>
       </aside>
 
       <main ref={taskListRef} className="@container flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -996,11 +1273,12 @@ export default function App() {
               </div>
             </div>
             <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1">
+              {listIntro(false)}
               {canvasAvailable && <CanvasLinkNotice canvas={canvas} onFix={openCanvasReplace} />}{canvasAvailable && <CanvasCoursesNotice courses={canvasNoticeCourses} onMatch={openCanvasMatch} onDismiss={() => setHiddenCourseKeys((keys) => [...keys, ...canvasNoticeCourses.map((course) => course.key)])} />}
               {/* Rows glide to their new places when the sort or a filter changes (not while typing a search) */}
               <FlipScope containerRef={listScrollRef} flipKey={[sortBy, filter, courseFilter, typeFilter, priorityFilter, dueFilter].join("|")}>
-              {orderedTasks.length === 0 ? (
-                <EmptyList {...emptyListState()} />
+              {emptyState ? (
+                showEmpty && <EmptyList {...emptyState} />
               ) : groupedTasks ? (
                 <div className="space-y-4 pb-2">
                   {groupedTasks.map((g) => (
@@ -1117,9 +1395,12 @@ export default function App() {
         {session && (
           <div className="mt-auto shrink-0 space-y-2">
             {signOutFlow.status === "unsaved" && <SignOutNotice className="text-xs" onRetry={signOutFlow.signOut} onSignOutAnyway={signOutFlow.signOutAnyway} />}
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-500">
-              <span className="min-w-0"><span className="block truncate" title={session.user.email}>{session.user.email}</span><span className="block text-caption text-slate-400">{syncStatus}</span></span>
-              <button type="button" onClick={signOutFlow.signOut} aria-disabled={signOutFlow.status === "saving"} className="shrink-0 font-medium text-course-600 hover:text-course-700 aria-disabled:opacity-60">{signOutFlow.status === "saving" ? "Signing out…" : "Sign out"}</button>
+            <div className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-500">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0"><span className="block truncate" title={session.user.email}>{session.user.email}</span><span className="block text-caption text-slate-400">{syncStatus}</span></span>
+                <button type="button" onClick={signOutFlow.signOut} aria-disabled={signOutFlow.status === "saving"} className="shrink-0 font-medium text-course-600 hover:text-course-700 aria-disabled:opacity-60">{signOutFlow.status === "saving" ? "Signing out…" : "Sign out"}</button>
+              </div>
+              <button type="button" onClick={() => setPrivacyOpen("desktop")} className="mt-1.5 border-t border-slate-100 pt-1.5 w-full text-left text-caption text-slate-400 hover:text-slate-600">Privacy and your data</button>
             </div>
           </div>
         )}
@@ -1181,6 +1462,7 @@ export default function App() {
       />
       <EditItemModal
         item={editingItem}
+        tip={tipProps("repeatEdit", "To remove just this date and keep the rest, use Delete… and choose only this one.")}
         courses={courses.filter((c) => !c.archived || c.id === editingItem?.courseId)}
         projects={planner.projects}
         milestones={todos.filter((todo) => todo.type === "milestone")}
@@ -1194,9 +1476,30 @@ export default function App() {
       />
       <QuickAddModal
         open={quickAddOpen}
+        initialText={quickAddText}
         courses={activeCourses}
         onAdd={(item) => addTodo(item)}
-        onClose={() => setQuickAddOpen(false)}
+        onClose={closeQuickAdd}
+        onType={() => offerTip("quickAdd")}
+        tip={tipProps("quickAdd", QUICK_ADD_TIP)}
+      />
+      <ShortcutsSheet open={shortcutsOpen} keymap={resolvedKeymap} onClose={() => setShortcutsOpen(false)} onEdit={() => { setShortcutsOpen(false); setSettingsOpen(true); }} />
+      <FeatureGuide
+        open={Boolean(guideOpen)}
+        mobile={guideOpen === "mobile"}
+        flags={{ canvas: canvasAvailable }}
+        keymap={resolvedKeymap}
+        onOpen={openFromGuide}
+        onClose={() => setGuideOpen(null)}
+        onShowChecklist={prefsReady && !checklistShown(prefs) ? showChecklistAgain : undefined}
+      />
+      <PrivacyDialog
+        open={Boolean(privacyOpen)}
+        mobile={privacyOpen === "mobile"}
+        email={session?.user?.email}
+        canDelete={isSupabaseConfigured && Boolean(session)}
+        onDeleteAccount={deleteAccount}
+        onClose={() => setPrivacyOpen(null)}
       />
       <QuickLinkModal open={quickLinkOpen} onAdd={addQuickLink} onClose={() => setQuickLinkOpen(false)} />
       {canvasAvailable && (

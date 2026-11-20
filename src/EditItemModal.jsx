@@ -7,6 +7,7 @@ import { CloseIcon, PlusIcon } from "./icons";
 import { parseDateKey, REPEAT_OPTIONS, resolveTask } from "./occurrences";
 import SegmentedControl from "./SegmentedControl";
 import SwitchRow from "./SwitchRow";
+import Tip from "./Tip";
 import TodoItem from "./TodoItem";
 import useDialogFocus from "./useDialogFocus";
 
@@ -187,7 +188,9 @@ function DayPicker({ labelId, days, onToggle, s, mobile }) {
 // Editing an item after it's been created. Desktop gets a dialog anchored near the top; a phone
 // gets a bottom sheet with its actions pinned to the bottom edge. Closing with unsaved changes
 // asks first, and a repeating item asks whether Delete means this date or every repeat.
-export default function EditItemModal({ item, courses, projects = [], milestones = [], onSave, onDelete, onSkipOccurrence, onClose }) {
+// `tip` is the app's one-time tip for the first repeating item edited ({ text, onDismiss }), shown
+// above the fields.
+export default function EditItemModal({ item, courses, projects = [], milestones = [], onSave, onDelete, onSkipOccurrence, onClose, tip = null }) {
   const mobile = isMobile();
   const s = STYLES[mobile ? "mobile" : "desktop"];
   const open = Boolean(item);
@@ -391,6 +394,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
     <>
       {mobile && subtitle && <p id={id("subtitle")} className="-mt-2 mb-4 text-[13px] text-slate-500">{subtitle}</p>}
       {mobile && <div className="mb-5">{previewRow}</div>}
+      {tip && storedRepeats && <Tip mobile={mobile} className={mobile ? "mb-5" : "mb-4"} onDismiss={tip.onDismiss}>{tip.text}</Tip>}
       {current.canvas && (
         <div className={mobile ? "mb-5" : "mb-4"}>
           <CanvasEditPanel todo={current} edited={canvasEdited} onRevert={revertToCanvas} mobile={mobile} />

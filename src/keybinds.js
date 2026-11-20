@@ -22,6 +22,7 @@ export const DEFAULT_KEYMAP = {
   openPlanner: "p",
   plannerSwitchTab: "t",
   toggleToday: "shift+p",
+  showShortcuts: "shift+?",
 };
 
 export const ACTION_LABELS = {
@@ -46,8 +47,9 @@ export const ACTION_LABELS = {
   toggleSort: "Toggle date/category sort",
   quickLink: "Add quick link",
   openPlanner: "Open planner",
-  plannerSwitchTab: "Switch planner between Today and Timeline",
+  plannerSwitchTab: "Switch planner between Day and Timeline",
   toggleToday: "Show or hide today's plan",
+  showShortcuts: "Show keyboard shortcuts",
 };
 
 export function normalizeCombo(e) {
@@ -61,10 +63,22 @@ export function normalizeCombo(e) {
   return parts.join("+");
 }
 
+const KEY_NAMES = { ctrl: "Ctrl", shift: "Shift", alt: "Alt", space: "Space", arrowleft: "←", arrowright: "→", arrowup: "↑", arrowdown: "↓", escape: "Esc", enter: "Enter" };
+// Keys that are typed with Shift on most keyboards, so "Shift" in front of them says nothing new
+const SHIFTED = new Set(["?", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", "\"", "<", ">", "~"]);
+
+// The keys of a combo, one label each, for drawing as keycaps: "ctrl+k" is ["Ctrl", "K"]
+export function comboKeys(combo) {
+  if (!combo) return [];
+  // Split on the "+" between keys, not a "+" that is itself the key ("shift++")
+  const parts = combo.split(/\+(?=.)/);
+  const key = parts.at(-1);
+  return parts
+    .filter((part, index) => !(part === "shift" && index < parts.length - 1 && SHIFTED.has(key)))
+    .map((part) => KEY_NAMES[part] ?? part.toUpperCase());
+}
+
 export function comboLabel(combo) {
   if (!combo) return "Unset";
-  return combo
-    .split("+")
-    .map((p) => (p === "ctrl" ? "Ctrl" : p === "shift" ? "Shift" : p === "alt" ? "Alt" : p.toUpperCase()))
-    .join(" + ");
+  return comboKeys(combo).join(" + ");
 }

@@ -219,6 +219,20 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
 
   const modeSwitch = <SegmentedControl label="Calendar view" className="inline-grid shrink-0" segmentClassName="px-3" options={["month", "week", "day"]} value={mode} onChange={(next) => { setZoomOrigin(null); onModeChange(next); }} />;
 
+  // An empty calendar says what lands on it and how to put something there
+  const nothingDated = !todos.some((todo) => todo.dueDate);
+  const emptyNote = nothingDated && (
+    <div role="note" className={`mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-course-100 bg-course-50 text-slate-700 ${compact ? "px-3.5 py-2.5 text-[13px]" : "px-3 py-2 text-xs"}`}>
+      <p className="min-w-0 flex-1 leading-snug">
+        Anything with a date lands here: tasks on the day they're due, events at their time.
+        {compact ? " Add one with the + button." : " In Month, hover a day and click + to add straight onto it."}
+      </p>
+      {!compact && mode !== "month" && (
+        <button type="button" onClick={() => { setZoomOrigin(null); onModeChange("month"); }} className="shrink-0 font-semibold text-course-600 hover:text-course-700">Show month</button>
+      )}
+    </div>
+  );
+
   const page = (
     <div
       ref={pageRef}
@@ -255,6 +269,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
           <div className="ml-auto @max-[40rem]:ml-0">{modeSwitch}</div>
         </div>
         <div className="mobile-calendar-shell flex min-h-0 flex-1 flex-col rounded-sheet border border-slate-200 bg-white p-4 shadow-sm" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+          {emptyNote}
           {page}
         </div>
       </div>
@@ -281,6 +296,7 @@ const CalendarView = forwardRef(function CalendarView({ todos, courseMap, mode, 
         </div>
         {modeSwitch}
       </div>
+      {emptyNote}
       {page}
     </div>
   );

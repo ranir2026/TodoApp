@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { extractLinks } from "./noteLinks";
 import { CloseIcon } from "./icons";
 import { parseQuickAdd, SUGGESTION_KEYWORDS } from "./quickAdd";
+import Tip from "./Tip";
 
 function getCurrentToken(text, cursorPos) {
   const before = text.slice(0, cursorPos);
@@ -67,8 +68,10 @@ function formatRepeatDays(days) {
 
 // In the planner, "@" picks a milestone instead of a category (pass the milestones as `courses`),
 // everything added is a task, and it docks at the bottom of the planner without a scrim so the
-// timeline stays visible and scrollable; `onPreviewChange` reports the parsed draft as you type
-export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", title, subtitle, courses, onAdd, onClose, onPreviewChange, defaultDueDate }) {
+// timeline stays visible and scrollable; `onPreviewChange` reports the parsed draft as you type.
+// `onType` hears each keystroke (the app shows a one-time tip on the first), and `tip` is that tip:
+// { text, onDismiss }.
+export default function QuickAddModal({ open, embedded = false, mode = "default", initialText = "", title, subtitle, courses, onAdd, onClose, onPreviewChange, defaultDueDate, onType, tip = null }) {
   const planner = mode === "planner";
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -200,6 +203,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
             onChange={(e) => {
               setText(e.target.value);
               setError(null);
+              onType?.();
             }}
             onKeyDown={handleKeyDown}
             inputMode="email"
@@ -300,6 +304,7 @@ export default function QuickAddModal({ open, embedded = false, mode = "default"
         )}
 
         {error && <p className="mt-1.5 text-xs font-medium text-danger-600">{error}</p>}
+        {tip && <Tip className="mt-2" mobile={embedded} onDismiss={tip.onDismiss}>{tip.text}</Tip>}
 
         {planner ? (
           // Docked over the timeline, the guide stays to one line so the panel covers as little as possible

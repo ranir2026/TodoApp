@@ -5,6 +5,7 @@ create table if not exists public.app_state (
   quick_links jsonb not null default '[]'::jsonb,
   planner jsonb not null default '{}'::jsonb,
   canvas jsonb not null default '{}'::jsonb,
+  prefs jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -12,6 +13,9 @@ alter table public.app_state add column if not exists quick_links jsonb not null
 alter table public.app_state add column if not exists planner jsonb not null default '{}'::jsonb;
 -- Canvas calendar-feed settings: feeds, course mapping, tombstones. {} means never connected.
 alter table public.app_state add column if not exists canvas jsonb not null default '{}'::jsonb;
+-- How someone is getting on with the app: the Getting started checklist, tips seen, the last
+-- "What's new" shown. {} means nothing decided yet. See src/prefs.js.
+alter table public.app_state add column if not exists prefs jsonb not null default '{}'::jsonb;
 
 do $$
 begin
@@ -84,3 +88,25 @@ $$;
 
 revoke all on function public.canvas_feed_allow() from public, anon;
 grant execute on function public.canvas_feed_allow() to authenticated;
+
+-- Deleting an account: the signed-in user deletes themselves, and everything that references
+-- auth.users (app_state, canvas_feed_requests) goes with it (on delete cascade). It takes no
+-- arguments, so it can only ever delete the caller.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller uuid := auth.uid();
+begin
+  if caller is null then
+    raise exception 'Not signed in';
+  end if;
+  delete from auth.users where id = caller;
+end;
+$$;
+
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
