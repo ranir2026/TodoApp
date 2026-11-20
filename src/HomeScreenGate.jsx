@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import BrandMark from "./BrandMark";
-import { needsHomeScreen } from "./homeScreen";
+import { homeScreenPrompt, pageLink, safariLink } from "./homeScreen";
+
+const FOCUS = "outline-none focus-visible:ring-4 focus-visible:ring-course-500/30";
+const PRIMARY = `flex h-12 w-full items-center justify-center rounded-xl bg-course-500 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-course-600 ${FOCUS}`;
+const SECONDARY = `flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-medium text-slate-600 transition-colors hover:bg-slate-100 ${FOCUS}`;
 
 // Drawn to look like the buttons Safari shows, so each step points at something on screen
 function ShareIcon() {
@@ -33,7 +37,9 @@ function Step({ number, children, hint }) {
   );
 }
 
-export function AddToHomeScreen({ emailConfirmed = false }) {
+// The sign-in screen's card, with what to do in place of the app
+function PromptScreen({ title, emailConfirmed, children }) {
+  const headingId = useId();
   return (
     <main className="auth-screen grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
@@ -41,7 +47,7 @@ export function AddToHomeScreen({ emailConfirmed = false }) {
           <BrandMark size={44} />
           <span className="text-lg font-semibold tracking-tight text-slate-900">Todo</span>
         </div>
-        <section className="auth-card auth-rise mt-8 rounded-dialog p-7" style={{ "--rise-delay": "80ms" }} aria-labelledby="home-screen-heading">
+        <section className="auth-card auth-rise mt-8 rounded-dialog p-7" style={{ "--rise-delay": "80ms" }} aria-labelledby={headingId}>
           {emailConfirmed && (
             <p className="mb-4 flex items-center gap-2 text-sm font-medium text-success-600">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
@@ -50,40 +56,78 @@ export function AddToHomeScreen({ emailConfirmed = false }) {
               Your email is confirmed.
             </p>
           )}
-          <h1 id="home-screen-heading" className="text-xl font-semibold text-balance text-slate-900">Add Todo to your Home Screen</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">On iPhone, Todo opens from your Home Screen, like an app.</p>
-          <ol className="mt-6 space-y-5">
-            <Step number={1} hint="Don't see it? Tap ••• first.">
-              Tap Share <ShareIcon />
-            </Step>
-            <Step number={2} hint="Then tap Add.">
-              {/* The icon stays with the word before it, never alone on a line */}
-              Tap Add to Home <span className="whitespace-nowrap">Screen <AddIcon /></span>
-            </Step>
-            <Step number={3} hint={emailConfirmed ? "Then sign in there." : undefined}>
-              Open Todo from your Home Screen
-            </Step>
-          </ol>
+          <h1 id={headingId} className="text-xl font-semibold text-balance text-slate-900">{title}</h1>
+          {children}
         </section>
       </div>
     </main>
   );
 }
 
-// In Safari on an iPhone, the app can't be used in the tab: this shows how to add it to the Home
-// Screen instead. Everywhere else, the app as usual.
+export function AddToHomeScreen({ emailConfirmed = false }) {
+  return (
+    <PromptScreen title="Add Todo to your Home Screen" emailConfirmed={emailConfirmed}>
+      <p className="mt-2 text-sm leading-relaxed text-slate-500">Todo works better outside Safari: from your Home Screen, or on the web from a computer.</p>
+      <ol className="mt-6 space-y-5">
+        <Step number={1} hint="Don't see it? Tap ••• first.">
+          Tap Share <ShareIcon />
+        </Step>
+        <Step number={2} hint="Then tap Add.">
+          {/* The icon stays with the word before it, never alone on a line */}
+          Tap Add to Home <span className="whitespace-nowrap">Screen <AddIcon /></span>
+        </Step>
+        <Step number={3} hint={emailConfirmed ? "Then sign in there." : undefined}>
+          Open Todo from your Home Screen
+        </Step>
+      </ol>
+    </PromptScreen>
+  );
+}
+
+// Other iPhone browsers can't be relied on to add Todo to the Home Screen, so this sends people to Safari.
+// The button asks the phone to open the page there; copying the link covers the browsers and apps
+// that won't hand it over.
+export function OpenInSafari({ emailConfirmed = false }) {
+  const [copy, setCopy] = useState(null); // null, "copied" or "failed"
+  const link = pageLink();
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopy("copied");
+    } catch {
+      setCopy("failed");
+    }
+  }
+
+  return (
+    <PromptScreen title="Open Todo in Safari" emailConfirmed={emailConfirmed}>
+      <p className="mt-2 text-sm leading-relaxed text-slate-500">To use Todo on iPhone, open it in Safari and add it to your Home Screen. Or use it on the web from a computer.</p>
+      <a href={safariLink()} className={`${PRIMARY} mt-6`}>Open in Safari</a>
+      <button type="button" onClick={copyLink} className={`${SECONDARY} mt-2`}>{copy === "copied" ? "Link copied" : "Copy link"}</button>
+      <p aria-live="polite" className="mt-2 text-center text-sm leading-snug text-slate-500 empty:mt-0">
+        {copy === "copied" && "Now paste it into Safari."}
+        {copy === "failed" && <>Copy this link into Safari: <span className="font-medium break-all text-slate-700 select-all">{link}</span></>}
+      </p>
+    </PromptScreen>
+  );
+}
+
+// On an iPhone, the app isn't used in a browser tab: Safari shows how to add it to the Home Screen,
+// and any other browser a way over to Safari. Everywhere else, the app as usual.
 export default function HomeScreenGate({ children }) {
   // A tab never turns into a home-screen app while it's open, so this is read once
-  const [required] = useState(needsHomeScreen);
-  // Confirming an email opens the link in Safari, so say it worked before sending them back
+  const [prompt] = useState(homeScreenPrompt);
+  // Confirming an email opens the link in a browser, so say it worked before sending them on
   const [emailConfirmed] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("type") === "signup");
-  if (!required) return children;
+  if (!prompt) return children;
+  const Prompt = prompt === "add" ? AddToHomeScreen : OpenInSafari;
   return (
     <>
       {/* The app still runs, out of sight and out of reach, and syncs as it would in any tab, so work
-          saved in Safari before this screen existed isn't stranded there */}
+          saved in the browser before this screen existed isn't stranded there */}
       <div hidden>{children}</div>
-      <AddToHomeScreen emailConfirmed={emailConfirmed} />
+      <Prompt emailConfirmed={emailConfirmed} />
     </>
   );
 }
