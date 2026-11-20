@@ -3,11 +3,12 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import GettingStarted from "./GettingStarted";
 import { checklistSteps, skipStep, startPrefs } from "./prefs";
+import { DEFAULT_COURSES } from "./starterData";
 
 afterEach(cleanup);
 
 const active = startPrefs({}, { todos: [], now: new Date("2026-11-19T15:00:00Z") });
-const context = { canvasAvailable: true, desktop: true, todos: [], courses: [{ id: "c1", name: "General" }] };
+const context = { canvasAvailable: true, desktop: true, todos: [], courses: DEFAULT_COURSES };
 const setup = (steps, props = {}) => {
   const handlers = { onAction: vi.fn(), onSkip: vi.fn(), onClose: vi.fn(), onShowGuide: vi.fn() };
   render(<GettingStarted steps={steps} {...handlers} {...props} />);
@@ -18,7 +19,7 @@ describe("GettingStarted", () => {
   it("shows progress, and a button for each step that does it", () => {
     const handlers = setup(checklistSteps(active, { ...context, todos: [{ id: "t1" }] }));
     const section = screen.getByRole("region", { name: /Getting started/ });
-    expect(section.textContent).toContain("1 of 5");
+    expect(section.textContent).toContain("1 of 6");
     expect(screen.getByText("Add your first task").textContent).toContain("(done)");
     expect(screen.queryByRole("button", { name: "Try it" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add one" }));
@@ -31,10 +32,16 @@ describe("GettingStarted", () => {
     expect(handlers.onSkip).toHaveBeenCalledWith("canvas");
     cleanup();
     setup(checklistSteps(skipStep(active, "canvas"), context));
-    expect(screen.getByRole("region", { name: /Getting started/ }).textContent).toContain("1 of 5");
+    expect(screen.getByRole("region", { name: /Getting started/ }).textContent).toContain("1 of 6");
     const canvas = screen.getByText("Connect Canvas").closest("li");
     expect(within(canvas).getByText("Skipped")).toBeTruthy();
     expect(within(canvas).getByRole("button", { name: "Connect" })).toBeTruthy();
+  });
+
+  it("has no button for checking off, since the task's own circle does it", () => {
+    setup(checklistSteps(active, context));
+    const step = screen.getByText("Check off a task").closest("li");
+    expect(within(step).queryByRole("button")).toBeNull();
   });
 
   it("can be hidden before it's finished", () => {

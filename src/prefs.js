@@ -2,6 +2,7 @@
 // one-time tips they've seen, and the last "What's new" note shown. It's saved with the account (the
 // `prefs` column), so a finished checklist or a dismissed tip doesn't come back on another device.
 // {} means nothing has been decided yet, the same as a row from before the column existed.
+import { isStartingCourse } from "./starterData";
 
 // Bump when there's a new "What's new" note to show existing accounts once
 export const RELEASE = "2026-11-launch";
@@ -19,14 +20,14 @@ export function hasPrefsData(prefs) {
   return Object.keys(normalizePrefs(prefs)).length > 0;
 }
 
-// The first time an account's data has loaded: a new account (nothing in its list) starts the
-// checklist and has nothing to catch up on, so it skips "What's new". An account that already has
-// tasks never sees the checklist (it's in "What you can do" instead) and gets "What's new" once.
-// Returns the prefs to save, or null when there's nothing to decide.
+// The first time an account's data has loaded: a new account (nothing in its list but the example
+// tasks) starts the checklist and has nothing to catch up on, so it skips "What's new". An account
+// that already has tasks never sees the checklist (it's in "What you can do" instead) and gets
+// "What's new" once. Returns the prefs to save, or null when there's nothing to decide.
 export function startPrefs(prefs, { todos, now = new Date() }) {
   const current = normalizePrefs(prefs);
   if (current.onboarding) return null;
-  if (todos.length === 0) {
+  if (todos.every((todo) => todo.example)) {
     return { ...current, onboarding: { status: "active", startedAt: now.toISOString(), done: {} }, seenRelease: RELEASE };
   }
   return { ...current, onboarding: { status: "existing" } };
@@ -38,13 +39,17 @@ export function checklistShown(prefs) {
 
 // The steps, each ticked off by what the person has actually done. `done` in prefs remembers a
 // step once it's been done, so deleting the first task doesn't untick it.
-// context: { todos, courses, canvas, planner, canvasAvailable, desktop }
+// context: { todos, courses, canvas, planner, canvasAvailable, desktop }. Checking off has no button:
+// the circle on the task is right there.
 export function checklistSteps(prefs, context) {
   const onboarding = normalizePrefs(prefs).onboarding ?? {};
   const remembered = onboarding.done ?? {};
   const skipped = onboarding.skipped ?? {};
   const observed = observedSteps(context);
+  const press = context.desktop ? "Click" : "Tap";
+  const examplesLeft = (context.todos ?? []).some((todo) => todo.example && !todo.completed);
   const steps = [
+    { id: "checkOff", label: "Check off a task", detail: examplesLeft ? `${press} the circle beside one of the examples below.` : `${press} the circle beside any task.` },
     { id: "firstTask", label: "Add your first task", detail: "Words like fri and urgent turn into a date and a flag as you type.", action: "Try it" },
     { id: "category", label: "Make a category", detail: "One for each class, so tasks are colored by where they're from.", action: "Add one" },
     context.canvasAvailable && { id: "canvas", label: "Connect Canvas", detail: "Optional. Brings in your assignments and keeps their dates up to date.", action: "Connect", optional: true },
@@ -61,8 +66,9 @@ export function checklistSteps(prefs, context) {
 // Steps that can be read off the data itself
 export function observedSteps({ todos = [], courses = [], canvas = {}, planner = {} }) {
   return {
-    firstTask: todos.some((todo) => !todo.canvas),
-    category: courses.some((course) => course.id !== "c1" || course.name !== "General"),
+    checkOff: todos.some((todo) => todo.completed || Object.keys(todo.completions ?? {}).length > 0),
+    firstTask: todos.some((todo) => !todo.canvas && !todo.example),
+    category: courses.some((course) => !isStartingCourse(course)),
     canvas: (canvas?.feeds?.length ?? 0) > 0,
     planDay: Object.values(planner?.days ?? {}).some((day) => (day?.blocks?.length ?? 0) > 0),
   };

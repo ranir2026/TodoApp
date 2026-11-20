@@ -77,7 +77,7 @@ export default function GettingStarted({ steps, mobile = false, onAction, onSkip
                       Skip
                     </button>
                   )}
-                  <button type="button" onClick={() => onAction(step.id)} className={action}>{step.action}</button>
+                  {step.action && <button type="button" onClick={() => onAction(step.id)} className={action}>{step.action}</button>}
                 </div>
               )}
             </li>

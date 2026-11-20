@@ -17,6 +17,7 @@ import {
   tipSeen,
   whatsNewShown,
 } from "./prefs";
+import { DEFAULT_COURSES, exampleTasks } from "./starterData";
 
 const now = new Date("2026-11-19T15:00:00Z");
 const everywhere = { canvasAvailable: true, desktop: true };
@@ -49,6 +50,10 @@ describe("startPrefs", () => {
     expect(whatsNewShown(markWhatsNewSeen(prefs))).toBe(false);
   });
 
+  it("counts a list of only the example tasks as new, so a second device starts the checklist too", () => {
+    expect(checklistShown(startPrefs({}, { todos: exampleTasks(DEFAULT_COURSES, now), now }))).toBe(true);
+  });
+
   it("decides only once, so another device doesn't start it again", () => {
     expect(startPrefs({ onboarding: { status: "dismissed" } }, { todos: [], now })).toBeNull();
     expect(startPrefs({ onboarding: { status: "existing" } }, { todos: [], now })).toBeNull();
@@ -63,9 +68,9 @@ describe("checklistSteps", () => {
   const active = startPrefs({}, { todos: [], now });
 
   it("lists only what this account can do on this device", () => {
-    expect(ids(checklistSteps(active, everywhere))).toEqual(["firstTask", "category", "canvas", "planDay", "shortcuts"]);
-    expect(ids(checklistSteps(active, { canvasAvailable: false, desktop: true }))).toEqual(["firstTask", "category", "planDay", "shortcuts"]);
-    expect(ids(checklistSteps(active, { canvasAvailable: true, desktop: false }))).toEqual(["firstTask", "category", "canvas"]);
+    expect(ids(checklistSteps(active, everywhere))).toEqual(["checkOff", "firstTask", "category", "canvas", "planDay", "shortcuts"]);
+    expect(ids(checklistSteps(active, { canvasAvailable: false, desktop: true }))).toEqual(["checkOff", "firstTask", "category", "planDay", "shortcuts"]);
+    expect(ids(checklistSteps(active, { canvasAvailable: true, desktop: false }))).toEqual(["checkOff", "firstTask", "category", "canvas"]);
   });
 
   it("only Canvas can be skipped", () => {
@@ -75,25 +80,41 @@ describe("checklistSteps", () => {
   it("ticks off steps from what's actually been done", () => {
     const steps = checklistSteps(active, {
       ...everywhere,
-      todos: [{ id: "t1", title: "Essay" }],
-      courses: [{ id: "c1", name: "General" }, { id: "c2", name: "Biology" }],
+      todos: [{ id: "t1", title: "Essay", completed: true }],
+      courses: [{ id: "personal", name: "Personal" }, { id: "c2", name: "Biology" }],
       canvas: { feeds: [{ id: "f1" }] },
       planner: { days: { "2026-11-19": { blocks: [{ id: "b1" }] } } },
     });
-    expect(steps.filter((step) => step.done).map((step) => step.id)).toEqual(["firstTask", "category", "canvas", "planDay"]);
+    expect(steps.filter((step) => step.done).map((step) => step.id)).toEqual(["checkOff", "firstTask", "category", "canvas", "planDay"]);
   });
 
-  it("doesn't count what came from Canvas, or the starting General category", () => {
-    const observed = observedSteps({ todos: [{ id: "t1", canvas: { uid: "x" } }], courses: [{ id: "c1", name: "General" }] });
+  it("doesn't count what came from Canvas, the example tasks, or the starting categories", () => {
+    const observed = observedSteps({ todos: [{ id: "t1", canvas: { uid: "x" } }, ...exampleTasks(DEFAULT_COURSES, now)], courses: DEFAULT_COURSES });
     expect(observed.firstTask).toBe(false);
     expect(observed.category).toBe(false);
-    expect(observedSteps({ courses: [{ id: "c1", name: "Math" }] }).category).toBe(true);
+    expect(observedSteps({ courses: [{ id: "c1", name: "General" }] }).category).toBe(false);
+    expect(observedSteps({ courses: [...DEFAULT_COURSES, { id: "c3", name: "Biology" }] }).category).toBe(true);
+    expect(observedSteps({ courses: [{ id: "work", name: "Internship" }] }).category).toBe(true);
+  });
+
+  it("counts any task checked off, a repeat included", () => {
+    expect(observedSteps({ todos: exampleTasks(DEFAULT_COURSES, now) }).checkOff).toBe(false);
+    expect(observedSteps({ todos: [{ id: "e1", example: true, completed: true }] }).checkOff).toBe(true);
+    expect(observedSteps({ todos: [{ id: "r1", repeat: "weekly", completed: false, completions: { "2026-11-19": now.toISOString() } }] }).checkOff).toBe(true);
+  });
+
+  it("points at the examples while one is left to check off", () => {
+    const step = (todos, desktop = true) => checklistSteps(active, { ...everywhere, desktop, todos })[0];
+    expect(step(exampleTasks(DEFAULT_COURSES, now)).detail).toBe("Click the circle beside one of the examples below.");
+    expect(step(exampleTasks(DEFAULT_COURSES, now), false).detail).toBe("Tap the circle beside one of the examples below.");
+    expect(step([]).detail).toBe("Click the circle beside any task.");
+    expect(step([]).action).toBeUndefined();
   });
 
   it("keeps a remembered step ticked after its task is deleted", () => {
     const remembered = rememberSteps(active, checklistSteps(active, { ...everywhere, todos: [{ id: "t1" }] }));
     expect(remembered.onboarding.done).toEqual({ firstTask: true });
-    expect(checklistSteps(remembered, { ...everywhere, todos: [] })[0].done).toBe(true);
+    expect(checklistSteps(remembered, { ...everywhere, todos: [] }).find((step) => step.id === "firstTask").done).toBe(true);
   });
 
   it("marks skipped, until the step is done", () => {
