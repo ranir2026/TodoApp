@@ -65,21 +65,21 @@ export function startingExamplesOpen(todos) {
 export function exampleProject(courses, now = new Date()) {
   const today = toDateKey(now);
   const courseId = categoryFor(courses, "work", 1);
-  const project = { id: EXAMPLE_PROJECT, name: "Research paper", courseId, color: null, startDate: today, endDate: addDays(today, 8), collapsed: false, example: true };
+  const project = { id: EXAMPLE_PROJECT, name: "Example project", courseId, color: null, startDate: today, endDate: addDays(today, 8), collapsed: false, example: true };
   const item = (id, title, days, fields = {}) => exampleTodo(now, { id, title, courseId, dueDate: addDays(today, days), projectId: EXAMPLE_PROJECT, ...fields });
-  const outline = "example-milestone-outline";
-  const paper = "example-milestone-paper";
+  const plan = "example-milestone-plan";
+  const due = "example-milestone-due";
   return {
     project,
     todos: [
-      item(outline, "Outline due", 6, { type: "milestone" }),
-      item("example-topic", "Pick a topic", 1, { milestoneId: outline }),
-      item("example-sources", "Find sources", 3, { milestoneId: outline }),
-      item("example-notes", "Take notes", 5, { milestoneId: outline }),
-      item(paper, "Paper due", 8, { type: "milestone" }),
-      item("example-draft", "Write the first draft", 6, { milestoneId: paper }),
-      item("example-feedback", "Get feedback", 7, { milestoneId: paper }),
-      item("example-revise", "Revise and proofread", 7, { milestoneId: paper }),
+      item(plan, "Plan ready", 6, { type: "milestone" }),
+      item("example-goal", "Set the goal", 1, { milestoneId: plan }),
+      item("example-gather", "Gather what you need", 3, { milestoneId: plan }),
+      item("example-plan", "Make a plan", 5, { milestoneId: plan }),
+      item(due, "Project due", 8, { type: "milestone" }),
+      item("example-work", "Do the work", 6, { milestoneId: due }),
+      item("example-feedback", "Get feedback", 7, { milestoneId: due }),
+      item("example-changes", "Make final changes", 7, { milestoneId: due }),
     ],
   };
 }

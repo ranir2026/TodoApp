@@ -54,14 +54,14 @@ describe("exampleProject", () => {
   const tasks = todos.filter((todo) => todo.type === "task");
 
   it("is a project in Work spanning from today to its last milestone, with no phases", () => {
-    expect(project).toMatchObject({ id: EXAMPLE_PROJECT, name: "Research paper", courseId: "work", startDate: "2026-11-20", example: true });
+    expect(project).toMatchObject({ id: EXAMPLE_PROJECT, name: "Example project", courseId: "work", startDate: "2026-11-20", example: true });
     expect(project.endDate).toBe(milestones.at(-1).dueDate);
     expect("phases" in project).toBe(false);
     expect(todos.every((todo) => todo.projectId === EXAMPLE_PROJECT && todo.courseId === "work" && todo.example)).toBe(true);
   });
 
   it("has two milestones with three tasks each, each task due before its milestone", () => {
-    expect(milestones.map((milestone) => milestone.title)).toEqual(["Outline due", "Paper due"]);
+    expect(milestones.map((milestone) => milestone.title)).toEqual(["Plan ready", "Project due"]);
     for (const milestone of milestones) {
       const own = tasks.filter((task) => task.milestoneId === milestone.id);
       expect(own).toHaveLength(3);
