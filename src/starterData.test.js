@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePlanner } from "./planner";
+import { daysBetween, normalizePlanner } from "./planner";
 import { withMilestoneStatus } from "./milestones";
 import {
   DEFAULT_COURSES,
@@ -78,8 +78,9 @@ describe("exampleProject", () => {
     expect(sameDay).toHaveLength(1);
   });
 
-  it("has its first milestone within a week, so it shows in the list", () => {
+  it("has its first milestone within a week, so it shows in the list, and the second two days after", () => {
     expect(milestones[0].dueDate <= "2026-11-27").toBe(true);
+    expect(daysBetween(milestones[0].dueDate, milestones[1].dueDate)).toBe(2);
   });
 
   it("starts with no milestone reached", () => {

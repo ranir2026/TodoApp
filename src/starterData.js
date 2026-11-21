@@ -59,13 +59,13 @@ export function startingExamplesOpen(todos) {
   return todos.some((todo) => STARTING_EXAMPLES.includes(todo.id) && !todo.completed);
 }
 
-// A project on the timeline: two milestones with three tasks toward each, two of them on the same
-// day so the timeline shows how tasks stack up. Its first milestone is under a week away, so it
-// also shows in the list as one card.
+// A project on the timeline: two milestones two days apart with three tasks toward each, two of the
+// second's on the same day so the timeline shows how tasks stack up. Everything is due within about
+// a week, so both milestones also show in the list, one card each.
 export function exampleProject(courses, now = new Date()) {
   const today = toDateKey(now);
   const courseId = categoryFor(courses, "work", 1);
-  const project = { id: EXAMPLE_PROJECT, name: "Research paper", courseId, color: null, startDate: today, endDate: addDays(today, 18), collapsed: false, example: true };
+  const project = { id: EXAMPLE_PROJECT, name: "Research paper", courseId, color: null, startDate: today, endDate: addDays(today, 8), collapsed: false, example: true };
   const item = (id, title, days, fields = {}) => exampleTodo(now, { id, title, courseId, dueDate: addDays(today, days), projectId: EXAMPLE_PROJECT, ...fields });
   const outline = "example-milestone-outline";
   const paper = "example-milestone-paper";
@@ -74,12 +74,12 @@ export function exampleProject(courses, now = new Date()) {
     todos: [
       item(outline, "Outline due", 6, { type: "milestone" }),
       item("example-topic", "Pick a topic", 1, { milestoneId: outline }),
-      item("example-sources", "Find sources", 4, { milestoneId: outline }),
-      item("example-notes", "Take notes", 4, { milestoneId: outline }),
-      item(paper, "Paper due", 18, { type: "milestone" }),
-      item("example-draft", "Write the first draft", 11, { milestoneId: paper }),
-      item("example-feedback", "Get feedback", 14, { milestoneId: paper }),
-      item("example-revise", "Revise and proofread", 17, { milestoneId: paper }),
+      item("example-sources", "Find sources", 3, { milestoneId: outline }),
+      item("example-notes", "Take notes", 5, { milestoneId: outline }),
+      item(paper, "Paper due", 8, { type: "milestone" }),
+      item("example-draft", "Write the first draft", 6, { milestoneId: paper }),
+      item("example-feedback", "Get feedback", 7, { milestoneId: paper }),
+      item("example-revise", "Revise and proofread", 7, { milestoneId: paper }),
     ],
   };
 }
