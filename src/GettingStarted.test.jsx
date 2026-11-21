@@ -63,11 +63,11 @@ describe("GettingStarted", () => {
     expect(handlers.onClose).toHaveBeenCalledWith(false);
   });
 
-  it("says so when every step is done, and points to What you can do", () => {
+  it("says so when every step is done, and points to the User Guide", () => {
     const steps = checklistSteps(active, context).map((step) => ({ ...step, done: true }));
     const handlers = setup(steps);
     expect(screen.getByRole("region", { name: /You're set up/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "What you can do" }));
+    fireEvent.click(screen.getByRole("button", { name: "User Guide" }));
     expect(handlers.onShowGuide).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(handlers.onClose).toHaveBeenCalledWith(true);

@@ -6,8 +6,8 @@ import { CloseIcon } from "./icons";
 // way new accounts do. Bump RELEASE in prefs.js and change these lines for the next one.
 export function whatsNewItems({ mobile }) {
   return [
-    { id: "guide", text: mobile ? "What you can do, in Profile, lists every feature and where it is." : "What you can do, at the bottom left, lists every feature and where it is.", action: "Open" },
-    !mobile && { id: "shortcuts", text: "Press ? to see every keyboard shortcut." },
+    { id: "guide", text: mobile ? "The User Guide, in Profile, lists every feature and where it is." : "The User Guide, at the bottom left, lists every feature and where it is.", action: "Open" },
+    !mobile && { id: "shortcuts", text: "Press ? to see every keybind, and change any of them." },
     passwordResetEnabled() && { id: "reset", text: "Forgot your password? Sign in now sends a reset link." },
     { id: "privacy", text: mobile ? "Privacy, in Profile, says what's stored and lets you delete your account." : "Privacy, under your email, says what's stored and lets you delete your account." },
   ].filter(Boolean);

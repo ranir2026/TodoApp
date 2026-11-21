@@ -19,7 +19,7 @@ export function shortcutGroups() {
 
 const MODIFIERS = ["Control", "Meta", "Alt", "Shift"];
 
-// The one place for shortcuts, behind "?": what each key does, and changing it. Click a key, then
+// Keybinds, the one place for shortcuts, behind "?": what each key does, and changing it. Click a key, then
 // press the new one; Escape leaves it as it was.
 export default function ShortcutsSheet({ open, keymap, setKeymap, onClose }) {
   const [capturing, setCapturing] = useState(null);
@@ -52,7 +52,7 @@ export default function ShortcutsSheet({ open, keymap, setKeymap, onClose }) {
   return (
     <InfoDialog
       open={open}
-      title="Keyboard shortcuts"
+      title="Keybinds"
       subtitle="They work anywhere except while you're typing in a field. Click a key to change it."
       onClose={close}
       footer={

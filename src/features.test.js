@@ -8,8 +8,8 @@ const itemIds = (groups) => groups.flatMap((group) => group.items.map((item) => 
 
 describe("featureGuide", () => {
   it("lists only what this account can use", () => {
-    expect(titles(featureGuide({ desktop: true, canvas: true }))).toEqual(["Basics", "Planning", "Canvas", "Shortcuts"]);
-    expect(titles(featureGuide({ desktop: true, canvas: false }))).toEqual(["Basics", "Planning", "Shortcuts"]);
+    expect(titles(featureGuide({ desktop: true, canvas: true }))).toEqual(["Basics", "Planning", "Canvas", "Keybinds"]);
+    expect(titles(featureGuide({ desktop: true, canvas: false }))).toEqual(["Basics", "Planning", "Keybinds"]);
   });
 
   it("leaves out what a phone doesn't have, and shortcuts with it", () => {

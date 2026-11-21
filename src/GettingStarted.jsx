@@ -41,7 +41,7 @@ export default function GettingStarted({ steps, mobile = false, onAction, onSkip
             <span className={`ml-2 font-normal text-slate-400 tabular-nums ${mobile ? "text-[13px]" : "text-xs"}`}>{finished} of {steps.length}</span>
           </h2>
           <p className={`mt-0.5 text-slate-500 ${mobile ? "text-[13px]" : "text-xs"}`}>
-            {allDone ? "That's the basics. Everything else is in What you can do." : "A few things to try, in any order. Each one ticks off once it's done."}
+            {allDone ? "That's the basics. Everything else is in the User Guide." : "A few things to try, in any order. Each one ticks off once it's done."}
           </p>
         </div>
         <button
@@ -56,7 +56,7 @@ export default function GettingStarted({ steps, mobile = false, onAction, onSkip
 
       {allDone ? (
         <div className={`flex gap-2 ${mobile ? "mt-3 pb-2" : "mt-3"}`}>
-          <button type="button" onClick={onShowGuide} className={action}>What you can do</button>
+          <button type="button" onClick={onShowGuide} className={action}>User Guide</button>
           <button type="button" onClick={() => onClose(allDone)} className={mobile ? "min-h-9 rounded-full px-3.5 text-[13px] font-medium text-slate-500" : "rounded-full px-3 py-1 text-xs font-medium text-slate-500 hover:text-slate-700"}>Close</button>
         </div>
       ) : (

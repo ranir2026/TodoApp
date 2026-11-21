@@ -47,7 +47,7 @@ export const ACTION_LABELS = {
   openPlanner: "Open planner",
   plannerSwitchTab: "Switch planner between Day and Timeline",
   toggleToday: "Show or hide today's plan",
-  showShortcuts: "Show keyboard shortcuts",
+  showShortcuts: "Show keybinds",
 };
 
 // action -> the other actions on the same keys

@@ -22,7 +22,7 @@ export function hasPrefsData(prefs) {
 
 // The first time an account's data has loaded: a new account (nothing in its list but the example
 // tasks) starts the checklist and has nothing to catch up on, so it skips "What's new". An account
-// that already has tasks never sees the checklist (it's in "What you can do" instead) and gets
+// that already has tasks never sees the checklist (it's in the User Guide instead) and gets
 // "What's new" once. Returns the prefs to save, or null when there's nothing to decide.
 export function startPrefs(prefs, { todos, now = new Date() }) {
   const current = normalizePrefs(prefs);
@@ -57,7 +57,7 @@ export function checklistSteps(prefs, context) {
     { id: "firstTask", label: "Quick add your first task", ...quickAdd },
     context.canvasAvailable && { id: "canvas", label: "Connect Canvas", detail: "Optional. Brings in your assignments and keeps their dates up to date.", action: "Connect", optional: true },
     context.desktop && { id: "planDay", label: "Plan your day in Today", detail: "Give tasks a time, like Study 3-5pm.", action: "Open Today" },
-    context.desktop && { id: "shortcuts", label: "Learn the shortcuts", detail: "Press ? any time to see them.", action: "Show them" },
+    context.desktop && { id: "shortcuts", label: "Learn the keybinds", detail: "Press ? any time to see or change them.", action: "Show them" },
   ].filter(Boolean);
   return steps.map((step) => ({
     ...step,

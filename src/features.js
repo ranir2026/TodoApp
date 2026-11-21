@@ -1,4 +1,4 @@
-// The "What you can do" page: every feature in one line, with where to find it. `where` names the
+// The User Guide: every feature in one line, with where to find it. `where` names the
 // place on a computer and on a phone; a feature with no place on one of them isn't listed there.
 // `keys` is the shortcut (a keymap action) shown beside it, and `open` what its button opens.
 // `needs` names an availability flag (see `featureFlags` in App.jsx): a feature this account can't
@@ -37,10 +37,10 @@ const GROUPS = [
     ],
   },
   {
-    title: "Shortcuts",
+    title: "Keybinds",
     only: "desktop",
     items: [
-      { id: "keyboard", title: "Keyboard shortcuts", detail: "Move through the list with J, check off with X, switch views with V, and more. Click a key there to change it to one you'd rather press.", where: { desktop: "Shortcuts, bottom left", mobile: null }, keys: "showShortcuts", open: "shortcuts" },
+      { id: "keyboard", title: "Keybinds", detail: "Move through the list with J, check off with X, switch views with V, and more. Click a key there to change it to one you'd rather press.", where: { desktop: "Keybinds, bottom left", mobile: null }, keys: "showShortcuts", open: "shortcuts" },
       { id: "palette", title: "Command palette", detail: "Every command, searchable by name.", where: { desktop: "From the keyboard", mobile: null }, keys: "openPalette", open: "palette" },
     ],
   },

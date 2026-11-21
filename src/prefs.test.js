@@ -165,7 +165,7 @@ describe("rememberSteps", () => {
 });
 
 describe("closing and reopening", () => {
-  it("closes for good, and comes back from What you can do with its progress", () => {
+  it("closes for good, and comes back from the User Guide with its progress", () => {
     const progress = markStep(startPrefs({}, { todos: [], now }), "shortcuts");
     const closed = closeChecklist(progress, "dismissed");
     expect(checklistShown(closed)).toBe(false);

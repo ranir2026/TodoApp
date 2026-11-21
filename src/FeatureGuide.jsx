@@ -1,7 +1,7 @@
 import InfoDialog, { Keys } from "./InfoDialog";
 import { featureGuide } from "./features";
 
-// "What you can do": everything the app does, a line each, with where it lives. Rows that can be
+// The User Guide: everything the app does, a line each, with where it lives. Rows that can be
 // opened from here have a button that goes there. `onShowChecklist`, when given, brings Getting
 // started back for someone who closed it.
 export default function FeatureGuide({ open, mobile = false, flags, keymap, onOpen, onClose, onShowChecklist }) {
@@ -19,7 +19,7 @@ export default function FeatureGuide({ open, mobile = false, flags, keymap, onOp
     <InfoDialog
       open={open}
       mobile={mobile}
-      title="What you can do"
+      title="User Guide"
       subtitle="Everything in Todo, and where to find it."
       onClose={onClose}
       footer={footer}
@@ -59,7 +59,7 @@ export default function FeatureGuide({ open, mobile = false, flags, keymap, onOp
             </ul>
           </section>
         ))}
-        {mobile && <p className="text-[13px] leading-snug text-slate-500">On a computer you also get the day planner, projects, the Today panel and keyboard shortcuts.</p>}
+        {mobile && <p className="text-[13px] leading-snug text-slate-500">On a computer you also get the day planner, projects, the Today panel and keybinds.</p>}
       </div>
     </InfoDialog>
   );
