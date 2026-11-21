@@ -12,22 +12,23 @@ const task = { id: "t1", type: "task", title: "Write it", courseId: "work", proj
 const noop = () => {};
 const stripe = (container) => container.querySelector("li").style.borderLeftColor;
 
-describe("milestone accent", () => {
-  it("is the project's color on a milestone's card", () => {
+const diamond = (container) => container.querySelector(".rotate-45");
+
+describe("milestone colors", () => {
+  it("keeps the category's color for a milestone card's stripe, with the diamond in the project's", () => {
     const { container } = render(<ul><MilestoneCard milestone={milestone} tasks={[task]} course={work} project={project} onToggle={noop} onDelete={noop} onEdit={noop} /></ul>);
-    expect(stripe(container)).toBe("rgb(236, 72, 153)");
+    expect(stripe(container)).toBe("rgb(0, 113, 227)");
+    expect(diamond(container).style.borderColor).toBe("rgb(236, 72, 153)");
   });
 
-  it("is the project's color on a milestone's own row, and the category's on a task", () => {
-    const row = (todo) => render(<ul><TodoItem todo={todo} course={work} project={project} onToggle={noop} onDelete={noop} onEdit={noop} /></ul>).container;
-    expect(stripe(row(milestone))).toBe("rgb(236, 72, 153)");
-    cleanup();
-    expect(stripe(row(task))).toBe("rgb(0, 113, 227)");
+  it("does the same on a milestone's own row", () => {
+    const { container } = render(<ul><TodoItem todo={milestone} course={work} project={project} onToggle={noop} onDelete={noop} onEdit={noop} /></ul>);
+    expect(stripe(container)).toBe("rgb(0, 113, 227)");
+    expect(diamond(container).style.borderColor).toBe("rgb(236, 72, 153)");
   });
 
   it("outlines the diamond in the project's color until it's reached", () => {
     const card = (fields) => render(<ul><MilestoneCard milestone={{ ...milestone, ...fields }} tasks={[task]} course={work} project={project} onToggle={noop} onDelete={noop} onEdit={noop} /></ul>).container;
-    const diamond = (container) => container.querySelector(".rotate-45");
     expect(diamond(card({})).style.borderColor).toBe("rgb(236, 72, 153)");
     cleanup();
     const reached = diamond(card({ completed: true }));
@@ -35,8 +36,8 @@ describe("milestone accent", () => {
     expect(reached.className).toContain("bg-success-500");
   });
 
-  it("falls back to the category's color without a project", () => {
+  it("outlines the diamond in the category's color without a project", () => {
     const { container } = render(<ul><MilestoneCard milestone={{ ...milestone, projectId: null }} tasks={[task]} course={work} onToggle={noop} onDelete={noop} onEdit={noop} /></ul>);
-    expect(stripe(container)).toBe("rgb(0, 113, 227)");
+    expect(diamond(container).style.borderColor).toBe("rgb(0, 113, 227)");
   });
 });

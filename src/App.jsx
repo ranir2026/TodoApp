@@ -862,7 +862,7 @@ export default function App() {
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
-  // With the color its timeline bar is drawn in, which its milestones take in the list
+  // With the color its timeline bar is drawn in, which its milestones' diamonds take in the list
   const projectMap = useMemo(() => Object.fromEntries(planner.projects.map((p) => [p.id, { ...p, accentColor: projectColor(p, courseMap) }])), [planner.projects, courseMap]);
 
   // Milestones get their completion from their tasks (or their project being done); everything that displays todos reads this
