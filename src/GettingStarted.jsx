@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { CloseIcon } from "./icons";
+import { Keys } from "./InfoDialog";
 
 function StepMark({ done }) {
   if (done) {
@@ -14,8 +15,9 @@ function StepMark({ done }) {
   return <span className="h-[18px] w-[18px] shrink-0 rounded-full border-[1.5px] border-slate-300" aria-hidden="true" />;
 }
 
-// The first thing a new account sees in place of an empty list: a few things to try, each a button
-// that does it, ticking off as they're done. It stays until it's finished or closed, on every device.
+// The first thing a new account sees above its example tasks: a few things to try, most with a
+// button that does it (or the key that does), ticking off as they're done. It stays until it's
+// finished or closed, on every device.
 // steps: from checklistSteps(); onAction(id) does a step, onSkip(id) skips an optional one, and
 // onClose(finished) hides it, finished saying whether every step was done.
 export default function GettingStarted({ steps, mobile = false, onAction, onSkip, onClose, onShowGuide }) {
@@ -78,6 +80,11 @@ export default function GettingStarted({ steps, mobile = false, onAction, onSkip
                     </button>
                   )}
                   {step.action && <button type="button" onClick={() => onAction(step.id)} className={action}>{step.action}</button>}
+                  {step.combo && (
+                    <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                      Press <Keys combo={step.combo} />
+                    </span>
+                  )}
                 </div>
               )}
             </li>

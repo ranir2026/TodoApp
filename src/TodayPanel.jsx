@@ -74,6 +74,8 @@ export default function TodayPanel({ open, onToggle, shortcut, todos, courseMap,
     ].sort((a, b) => a.start - b.start || a.end - b.end);
     return { rows: all, planned: blocks.length, plannedDone: blocks.filter((block) => block.done).length };
   }, [todos, planner, courseMap, todayKey]);
+  // Things added just for today that are still in the planner's tray, without a time yet
+  const waiting = planner.days[todayKey]?.inbox?.length ?? 0;
 
   function measureEdges() {
     const list = listRef.current;
@@ -209,7 +211,11 @@ export default function TodayPanel({ open, onToggle, shortcut, todos, courseMap,
           {shownRows.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
               <p className="text-sm font-medium text-slate-700">Nothing planned yet</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">Type something below to add it, or block out your day in the planner.</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                {waiting > 0
+                  ? `${waiting === 1 ? "One thing for today is" : `${waiting} things for today are`} waiting in the planner. Drag ${waiting === 1 ? "it" : "them"} onto an hour there, or type something below.`
+                  : "Type something below to add it, or block out your day in the planner."}
+              </p>
               <button type="button" onClick={onOpenPlanner} className="mt-3 rounded-full bg-course-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-course-600">
                 Plan today
               </button>

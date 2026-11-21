@@ -5,11 +5,13 @@ import {
   checklistSteps,
   closeChecklist,
   countManualAdd,
+  markPlannerItemsAdded,
   markStep,
   markTipSeen,
   markWhatsNewSeen,
   normalizePrefs,
   observedSteps,
+  plannerItemsAdded,
   rememberSteps,
   reopenChecklist,
   skipStep,
@@ -17,7 +19,7 @@ import {
   tipSeen,
   whatsNewShown,
 } from "./prefs";
-import { DEFAULT_COURSES, exampleTasks } from "./starterData";
+import { DEFAULT_COURSES, exampleProject, exampleTasks } from "./starterData";
 
 const now = new Date("2026-11-19T15:00:00Z");
 const everywhere = { canvasAvailable: true, desktop: true };
@@ -68,9 +70,9 @@ describe("checklistSteps", () => {
   const active = startPrefs({}, { todos: [], now });
 
   it("lists only what this account can do on this device", () => {
-    expect(ids(checklistSteps(active, everywhere))).toEqual(["checkOff", "firstTask", "category", "canvas", "planDay", "shortcuts"]);
-    expect(ids(checklistSteps(active, { canvasAvailable: false, desktop: true }))).toEqual(["checkOff", "firstTask", "category", "planDay", "shortcuts"]);
-    expect(ids(checklistSteps(active, { canvasAvailable: true, desktop: false }))).toEqual(["checkOff", "firstTask", "category", "canvas"]);
+    expect(ids(checklistSteps(active, everywhere))).toEqual(["checkOff", "firstTask", "canvas", "planDay", "shortcuts"]);
+    expect(ids(checklistSteps(active, { canvasAvailable: false, desktop: true }))).toEqual(["checkOff", "firstTask", "planDay", "shortcuts"]);
+    expect(ids(checklistSteps(active, { canvasAvailable: true, desktop: false }))).toEqual(["checkOff", "firstTask", "canvas"]);
   });
 
   it("only Canvas can be skipped", () => {
@@ -81,20 +83,28 @@ describe("checklistSteps", () => {
     const steps = checklistSteps(active, {
       ...everywhere,
       todos: [{ id: "t1", title: "Essay", completed: true }],
-      courses: [{ id: "personal", name: "Personal" }, { id: "c2", name: "Biology" }],
       canvas: { feeds: [{ id: "f1" }] },
       planner: { days: { "2026-11-19": { blocks: [{ id: "b1" }] } } },
     });
-    expect(steps.filter((step) => step.done).map((step) => step.id)).toEqual(["checkOff", "firstTask", "category", "canvas", "planDay"]);
+    expect(steps.filter((step) => step.done).map((step) => step.id)).toEqual(["checkOff", "firstTask", "canvas", "planDay"]);
   });
 
-  it("doesn't count what came from Canvas, the example tasks, or the starting categories", () => {
-    const observed = observedSteps({ todos: [{ id: "t1", canvas: { uid: "x" } }, ...exampleTasks(DEFAULT_COURSES, now)], courses: DEFAULT_COURSES });
-    expect(observed.firstTask).toBe(false);
-    expect(observed.category).toBe(false);
-    expect(observedSteps({ courses: [{ id: "c1", name: "General" }] }).category).toBe(false);
-    expect(observedSteps({ courses: [...DEFAULT_COURSES, { id: "c3", name: "Biology" }] }).category).toBe(true);
-    expect(observedSteps({ courses: [{ id: "work", name: "Internship" }] }).category).toBe(true);
+  it("doesn't count what came from Canvas, or any of the examples, as a first task", () => {
+    const examples = [...exampleTasks(DEFAULT_COURSES, now), ...exampleProject(DEFAULT_COURSES, now).todos];
+    expect(observedSteps({ todos: [{ id: "t1", canvas: { uid: "x" } }, ...examples] }).firstTask).toBe(false);
+  });
+
+  it("shows quick add's key in place of a button on a computer, and points at + on a phone", () => {
+    const quickAdd = (context) => checklistSteps(active, context).find((step) => step.id === "firstTask");
+    const desktop = quickAdd({ ...everywhere, quickAddKey: "n" });
+    expect(desktop).toMatchObject({ label: "Quick add your first task", combo: "n" });
+    expect(desktop.action).toBeUndefined();
+    // With the key unset there's nothing to press, so Try it opens quick add instead
+    expect(quickAdd({ ...everywhere, quickAddKey: "" })).toMatchObject({ action: "Try it" });
+    const phone = quickAdd({ canvasAvailable: true, desktop: false, quickAddKey: "n" });
+    expect(phone.combo).toBeUndefined();
+    expect(phone.action).toBeUndefined();
+    expect(phone.detail).toBe("Tap + at the bottom, then type it in one line, like Essay fri urgent.");
   });
 
   it("counts any task checked off, a repeat included", () => {
@@ -108,6 +118,8 @@ describe("checklistSteps", () => {
     expect(step(exampleTasks(DEFAULT_COURSES, now)).detail).toBe("Click the circle beside one of the examples below.");
     expect(step(exampleTasks(DEFAULT_COURSES, now), false).detail).toBe("Tap the circle beside one of the examples below.");
     expect(step([]).detail).toBe("Click the circle beside any task.");
+    // Only the two starting examples are "below": the project's are mostly further out
+    expect(step(exampleProject(DEFAULT_COURSES, now).todos).detail).toBe("Click the circle beside any task.");
     expect(step([]).action).toBeUndefined();
   });
 
@@ -123,6 +135,18 @@ describe("checklistSteps", () => {
     const connected = checklistSteps(skipped, { ...everywhere, canvas: { feeds: [{ id: "f1" }] } }).find((step) => step.id === "canvas");
     expect(connected).toMatchObject({ skipped: false, done: true });
     expect(skipStep(skipped, "canvas", false).onboarding.skipped).toEqual({});
+  });
+});
+
+describe("example planner items", () => {
+  it("are put in the tray once a day at most", () => {
+    const active = startPrefs({}, { todos: [], now });
+    expect(plannerItemsAdded(active, "2026-11-19")).toBe(false);
+    const added = markPlannerItemsAdded(active, "2026-11-19");
+    expect(plannerItemsAdded(added, "2026-11-19")).toBe(true);
+    expect(plannerItemsAdded(added, "2026-11-20")).toBe(false);
+    expect(added.onboarding.status).toBe("active");
+    expect(markPlannerItemsAdded({}, "2026-11-19")).toBeNull();
   });
 });
 

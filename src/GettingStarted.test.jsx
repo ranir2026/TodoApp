@@ -3,12 +3,11 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import GettingStarted from "./GettingStarted";
 import { checklistSteps, skipStep, startPrefs } from "./prefs";
-import { DEFAULT_COURSES } from "./starterData";
 
 afterEach(cleanup);
 
 const active = startPrefs({}, { todos: [], now: new Date("2026-11-19T15:00:00Z") });
-const context = { canvasAvailable: true, desktop: true, todos: [], courses: DEFAULT_COURSES };
+const context = { canvasAvailable: true, desktop: true, todos: [], quickAddKey: "n" };
 const setup = (steps, props = {}) => {
   const handlers = { onAction: vi.fn(), onSkip: vi.fn(), onClose: vi.fn(), onShowGuide: vi.fn() };
   render(<GettingStarted steps={steps} {...handlers} {...props} />);
@@ -19,11 +18,25 @@ describe("GettingStarted", () => {
   it("shows progress, and a button for each step that does it", () => {
     const handlers = setup(checklistSteps(active, { ...context, todos: [{ id: "t1" }] }));
     const section = screen.getByRole("region", { name: /Getting started/ });
-    expect(section.textContent).toContain("1 of 6");
-    expect(screen.getByText("Add your first task").textContent).toContain("(done)");
-    expect(screen.queryByRole("button", { name: "Try it" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add one" }));
-    expect(handlers.onAction).toHaveBeenCalledWith("category");
+    expect(section.textContent).toContain("1 of 5");
+    expect(screen.getByText("Quick add your first task").textContent).toContain("(done)");
+    expect(screen.queryByText("Make a category")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Today" }));
+    expect(handlers.onAction).toHaveBeenCalledWith("planDay");
+  });
+
+  it("says which key opens quick add, in place of a button", () => {
+    setup(checklistSteps(active, { ...context, quickAddKey: "shift+q" }));
+    const step = screen.getByText("Quick add your first task").closest("li");
+    expect(within(step).queryByRole("button")).toBeNull();
+    expect(step.textContent).toContain("Press");
+    expect([...step.querySelectorAll("kbd")].map((key) => key.textContent)).toEqual(["Shift", "Q"]);
+  });
+
+  it("falls back to Try it when quick add has no key", () => {
+    const handlers = setup(checklistSteps(active, { ...context, quickAddKey: "" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try it" }));
+    expect(handlers.onAction).toHaveBeenCalledWith("firstTask");
   });
 
   it("lets Canvas be skipped, and counts it toward finishing", () => {
@@ -32,7 +45,7 @@ describe("GettingStarted", () => {
     expect(handlers.onSkip).toHaveBeenCalledWith("canvas");
     cleanup();
     setup(checklistSteps(skipStep(active, "canvas"), context));
-    expect(screen.getByRole("region", { name: /Getting started/ }).textContent).toContain("1 of 6");
+    expect(screen.getByRole("region", { name: /Getting started/ }).textContent).toContain("1 of 5");
     const canvas = screen.getByText("Connect Canvas").closest("li");
     expect(within(canvas).getByText("Skipped")).toBeTruthy();
     expect(within(canvas).getByRole("button", { name: "Connect" })).toBeTruthy();

@@ -8,6 +8,7 @@ import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { edgeDepth } from "./dragEdges";
+import { isProjectDone, reopenProject } from "./projects";
 import { CheckIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
 import TimelineTooltip from "./TimelineTooltip";
 
@@ -80,11 +81,12 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject, onCompleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   // null means "fit the longest name"; dragging the column's edge sets a width of your own
   const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
   const [creating, setCreating] = useState(false);
+  const [showDone, setShowDone] = useLocalStorage("timelineShowDone", false);
   // Bumped each time the form opens so its fields start fresh and play their entrance again
   const [formKey, setFormKey] = useState(0);
   const [colorMenu, setColorMenu] = useState(null);
@@ -146,16 +148,22 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
   const { projects } = planner;
   const projectIds = new Set(projects.map((project) => project.id));
   const projectTodos = todos.filter((todo) => todo.projectId && projectIds.has(todo.projectId));
+  // Projects marked done wait under Completed at the bottom, most recent first, hidden until it's opened
+  const { activeProjects, doneProjects, shownProjects } = useMemo(() => {
+    const active = projects.filter((project) => !isProjectDone(project));
+    const done = projects.filter(isProjectDone).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+    return { activeProjects: active, doneProjects: done, shownProjects: showDone ? [...active, ...done] : active };
+  }, [projects, showDone]);
+  const shownIds = new Set(shownProjects.map((project) => project.id));
 
-  // Fit the name column to its longest label: project rows (chevron, color, name, count), phases, and milestones
+  // Fit the name column to its longest label: project rows (chevron, color, name, count) and milestones
   const autoLabelWidth = useMemo(() => {
-    let widest = 0;
-    for (const project of projects) {
+    let widest = doneProjects.length ? 12 + 24 + textWidth("Completed", "500 0.75") + 6 + textWidth(String(doneProjects.length), "400 0.6875") + 8 : 0;
+    for (const project of shownProjects) {
       const items = projectTodos.filter((todo) => todo.projectId === project.id);
       const taskCount = items.filter((todo) => todo.type !== "milestone").length;
       widest = Math.max(widest, 12 + 18 + 6 + 16 + 6 + textWidth(project.name, "600 0.875") + (taskCount ? 6 + textWidth(`${taskCount}/${taskCount}`, "400 0.6875") : 0) + 8);
       if (project.collapsed) continue;
-      for (const phase of project.phases ?? []) widest = Math.max(widest, 32 + textWidth(phase.name, "400 0.75") + 8);
       for (const milestone of items.filter((todo) => todo.type === "milestone")) {
         widest = Math.max(widest, 12 + 16 + 4 + 8 + 6 + textWidth(milestone.title, "400 0.75") + 6 + textWidth("00/00", "400 0.6875") + 8);
         if (openMilestones.has(milestone.id) || closingMilestones.has(milestone.id)) {
@@ -166,7 +174,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       }
     }
     return Math.round(Math.min(Math.max(widest + 12, LABEL_MIN + 52), LABEL_AUTO_MAX));
-  }, [projects, projectTodos, openMilestones, closingMilestones]);
+  }, [shownProjects, doneProjects.length, projectTodos, openMilestones, closingMilestones]);
   const labelWidth = Math.min(Math.max(labelOverride ?? autoLabelWidth, LABEL_MIN), LABEL_MAX);
 
   function startLabelResize(event) {
@@ -187,14 +195,11 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     window.addEventListener("pointercancel", handleUp);
   }
 
-  // The visible range covers every project with some room on both sides, starting on a Sunday
+  // The visible range covers every project shown with some room on both sides, starting on a Sunday
   // so the weekend shading lines up
   const keys = [todayKey];
-  for (const project of projects) {
-    keys.push(project.startDate, project.endDate);
-    for (const phase of project.phases ?? []) keys.push(phase.start, phase.end);
-  }
-  for (const todo of projectTodos) if (todo.dueDate) keys.push(todo.dueDate);
+  for (const project of shownProjects) keys.push(project.startDate, project.endDate);
+  for (const todo of projectTodos) if (todo.dueDate && shownIds.has(todo.projectId)) keys.push(todo.dueDate);
   if (draft?.dueDate) keys.push(draft.dueDate);
   const rangeStart = startOfWeekKey(addDays(earliest(keys), -14));
   const rangeEnd = addDays(latest(keys), zoom === "weeks" ? 45 : 120);
@@ -318,16 +323,6 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     }));
   }
 
-  function updatePhase(projectId, phaseId, patch) {
-    updateProject(projectId, (project) => ({
-      phases: project.phases.map((phase) => (phase.id === phaseId ? { ...phase, ...patch } : phase)),
-    }));
-  }
-
-  function deletePhase(projectId, phaseId) {
-    updateProject(projectId, (project) => ({ phases: project.phases.filter((phase) => phase.id !== phaseId) }));
-  }
-
   function openCreate() {
     if (creating) return;
     setFormKey((key) => key + 1);
@@ -338,7 +333,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     const id = crypto.randomUUID();
     updatePlanner((current) => ({
       ...current,
-      projects: [...current.projects, { id, name, courseId, color: color ?? null, startDate, endDate: endDate < startDate ? startDate : endDate, collapsed: false, phases: [] }],
+      projects: [...current.projects, { id, name, courseId, color: color ?? null, startDate, endDate: endDate < startDate ? startDate : endDate, collapsed: false }],
     }));
     setCreating(false);
     setCreatedId(id);
@@ -357,24 +352,18 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     setColorMenu({ x, y, originX: anchor.left - root.left + anchor.width / 2 - x, originY: anchor.top - root.top - y, value, categoryColor, onChange });
   }
 
-  function addItem(project, { kind, title, date, endDate, milestoneId }) {
-    if (kind === "phase") {
-      const end = endDate && endDate >= date ? endDate : date;
-      updateProject(project.id, (current) => ({ phases: [...(current.phases ?? []), { id: crypto.randomUUID(), name: title, start: date, end }] }));
-      extendProject(project.id, [date, end]);
-    } else {
-      onAddTodo({
-        type: kind,
-        title,
-        dueDate: date,
-        courseId: project.courseId && courseMap[project.courseId] && !courseMap[project.courseId].archived ? project.courseId : null,
-        projectId: project.id,
-        milestoneId: kind === "task" ? milestoneId || null : null,
-        priority: "normal",
-        repeat: "none",
-      });
-      extendProject(project.id, [date]);
-    }
+  function addItem(project, { kind, title, date, milestoneId }) {
+    onAddTodo({
+      type: kind,
+      title,
+      dueDate: date,
+      courseId: project.courseId && courseMap[project.courseId] && !courseMap[project.courseId].archived ? project.courseId : null,
+      projectId: project.id,
+      milestoneId: kind === "task" ? milestoneId || null : null,
+      priority: "normal",
+      repeat: "none",
+    });
+    extendProject(project.id, [date]);
     closePopover();
   }
 
@@ -382,7 +371,6 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     if (!renaming) return;
     const value = renaming.value.trim();
     if (value && renaming.kind === "project") updateProject(renaming.id, { name: value });
-    if (value && renaming.kind === "phase") updatePhase(renaming.projectId, renaming.id, { name: value });
     setRenaming(null);
   }
 
@@ -492,10 +480,6 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       extendProject(projectId, [next.start]);
     }
     if (kind === "project") updateProject(id, { startDate: next.start, endDate: next.end });
-    if (kind === "phase") {
-      updatePhase(projectId, id, next);
-      extendProject(projectId, [next.start, next.end]);
-    }
     if (kind === "todo") {
       onUpdateTodo(id, { dueDate: next.start });
       extendProject(projectId, [next.start]);
@@ -792,7 +776,12 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
             </div>
           </div>
 
-          {projects.map((project) => {
+          {[...activeProjects, ...(doneProjects.length ? [COMPLETED_HEADER] : []), ...(showDone ? doneProjects : [])].map((project) => {
+            // Between the projects in progress and the finished ones: the row that shows or hides them
+            if (project === COMPLETED_HEADER) {
+              return <CompletedHeader key="completed" count={doneProjects.length} open={showDone} nothingActive={!activeProjects.length} onToggle={() => setShowDone(!showDone)} />;
+            }
+            const done = isProjectDone(project);
             const color = projectColor(project, courseMap);
             const items = projectTodos.filter((todo) => todo.projectId === project.id);
             const milestones = items.filter((todo) => todo.type === "milestone").sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
@@ -803,8 +792,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
             const span = liveRange("project", project.id, { start: project.startDate, end: project.endDate });
             const spanGeometry = barGeometry("project", project.id, { start: project.startDate, end: project.endDate });
             const spanHandlers = barHandlers("project", project.id, project.id, { start: project.startDate, end: project.endDate });
-            const phases = project.phases ?? [];
-            const isEmpty = !phases.length && !items.length;
+            const isEmpty = !items.length;
             // While a quick add is open for this project it stays expanded and shows where the task will land
             const draftHere = draft?.projectId === project.id ? draft : null;
             const quickAddHere = quickAddProjectId === project.id;
@@ -923,29 +911,48 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                       {renaming?.kind === "project" && renaming.id === project.id ? (
                         <RenameInput value={renaming.value} onChange={(value) => setRenaming({ ...renaming, value })} onCommit={commitRename} onCancel={() => setRenaming(null)} />
                       ) : (
-                        <button type="button" onClick={() => setRenaming({ kind: "project", id: project.id, value: project.name })} className="line-clamp-2 min-w-0 text-left text-sm leading-tight font-semibold break-words text-slate-800 hover:text-course-600" title={`${project.name} (click to rename)`}>
+                        <button type="button" onClick={() => setRenaming({ kind: "project", id: project.id, value: project.name })} className={`line-clamp-2 min-w-0 text-left text-sm leading-tight font-semibold break-words hover:text-course-600 ${done ? "text-slate-500" : "text-slate-800"}`} title={`${project.name} (click to rename)`}>
                           {project.name}
                         </button>
                       )}
-                      {tasks.length > 0 && <span className="shrink-0 text-caption text-slate-500">{doneCount}/{tasks.length}</span>}
+                      {done ? (
+                        <span className="flex shrink-0 items-center gap-0.5 text-caption font-medium text-success-600"><CheckIcon className="h-3 w-3" />Done</span>
+                      ) : tasks.length > 0 && doneCount === tasks.length && onCompleteProject ? (
+                        // Every task is done: offer to mark the project done, in place of the count
+                        <button type="button" onClick={() => onCompleteProject(project.id)} className="shrink-0 rounded-full bg-success-500/10 px-2 py-0.5 text-caption font-medium text-success-600 hover:bg-success-500/20" title={`All ${tasks.length} tasks are done`}>
+                          Mark done
+                        </button>
+                      ) : tasks.length > 0 && <span className="shrink-0 text-caption text-slate-500">{doneCount}/{tasks.length}</span>}
                       <HoverActions>
-                        {onQuickAdd && (
+                        {done && (
+                          <button type="button" onClick={() => updatePlanner((current) => reopenProject(current, project.id))} className="flex h-6 shrink-0 items-center rounded-md px-1.5 text-caption font-medium text-slate-500 hover:bg-slate-100 hover:text-course-600" aria-label={`Reopen ${project.name}`} title="Back to the projects in progress">
+                            Reopen
+                          </button>
+                        )}
+                        {!done && onQuickAdd && (
                           <button type="button" onClick={() => onQuickAdd(project.id)} className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-caption font-medium text-slate-500 hover:bg-slate-100 hover:text-course-600" aria-label={`Quick add a task to ${project.name}`} title="Quick add a task to this project">
                             <PlusIcon className="h-3 w-3" />
                             Task
                           </button>
                         )}
-                        <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add to ${project.name}`} title="Add a phase, milestone, or task on a date">
-                          <PlusIcon className="h-3.5 w-3.5" />
-                        </button>
+                        {!done && (
+                          <button type="button" onClick={(event) => openPopover(event, project, { date: todayKey >= project.startDate && todayKey <= project.endDate ? todayKey : project.startDate })} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-course-600" aria-label={`Add to ${project.name}`} title="Add a milestone or task on a date">
+                            <PlusIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {!done && onCompleteProject && (
+                          <button type="button" onClick={() => onCompleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-success-600" aria-label={`Mark ${project.name} done`} title="Mark project done (checks off what's left)">
+                            <CheckIcon className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button type="button" onClick={() => onDeleteProject(project.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete ${project.name}`} title="Delete project and its tasks">
                           <CloseIcon className="h-3.5 w-3.5" />
                         </button>
                       </HoverActions>
                     </div>
                   }
-                  sublabel={`${shortDate(span.start)} – ${shortDate(span.end)}`}
-                  onTimelineDoubleClick={(event) => openPopover(event, project)}
+                  sublabel={done ? `Done ${shortDate(toDateKey(new Date(project.completedAt)))}` : `${shortDate(span.start)} – ${shortDate(span.end)}`}
+                  onTimelineDoubleClick={done ? undefined : (event) => openPopover(event, project)}
                 >
                   {spanGeometry.landing && <BarLanding {...spanGeometry.landing} height={14} color={color} />}
                   <Bar
@@ -953,13 +960,13 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
                     left={spanGeometry.left}
                     width={spanGeometry.width}
                     height={10}
-                    style={{ backgroundColor: `${color}33`, color, boxShadow: `inset 0 0 0 1px ${color}55` }}
+                    style={{ backgroundColor: `${color}${done ? "1a" : "33"}`, color, boxShadow: `inset 0 0 0 1px ${color}${done ? "33" : "55"}` }}
                     tip={tipHandlers(`project:${project.id}`, () => ({
                       kind: "Project",
                       color,
                       title: project.name,
                       lines: [`${longDate(span.start)} \u2013 ${longDate(span.end)}`, dayCount(span.start, span.end)],
-                      status: spanStatus(span.start, span.end),
+                      status: done ? { label: "Done", tone: "success" } : spanStatus(span.start, span.end),
                       progress: { done: doneCount, total: tasks.length },
                     }), "bar")}
                     handlers={spanHandlers}
@@ -972,58 +979,6 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 
                 {expanded && (
                   <>
-                    {phases.map((phase) => {
-                      const range = liveRange("phase", phase.id, { start: phase.start, end: phase.end });
-                      const geometry = barGeometry("phase", phase.id, { start: phase.start, end: phase.end });
-                      const width = geometry.width;
-                      return (
-                        <Row
-                          key={phase.id}
-                          height={ROW}
-                          indent
-                          label={
-                            <div className="group/label relative flex min-w-0 items-center gap-1.5">
-                              {renaming?.kind === "phase" && renaming.id === phase.id ? (
-                                <RenameInput value={renaming.value} onChange={(value) => setRenaming({ ...renaming, value })} onCommit={commitRename} onCancel={() => setRenaming(null)} />
-                              ) : (
-                                <button type="button" onClick={() => setRenaming({ kind: "phase", projectId: project.id, id: phase.id, value: phase.name })} className="line-clamp-2 min-w-0 text-left text-xs leading-tight break-words text-slate-600 hover:text-course-600" title={`${phase.name} (click to rename)`}>
-                                  {phase.name}
-                                </button>
-                              )}
-                              <HoverActions>
-                                <button type="button" onClick={() => deletePhase(project.id, phase.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete phase ${phase.name}`}>
-                                  <CloseIcon className="h-3.5 w-3.5" />
-                                </button>
-                              </HoverActions>
-                            </div>
-                          }
-                          onTimelineDoubleClick={(event) => openPopover(event, project, { kind: "phase" })}
-                        >
-                          {geometry.landing && <BarLanding {...geometry.landing} height={24} rounded="rounded-lg" color={color} />}
-                          <Bar
-                            dragKey={`phase:${phase.id}`}
-                            left={geometry.left}
-                            width={width}
-                            height={20}
-                            rounded="rounded-md"
-                            style={{ backgroundColor: `${color}2e`, color, boxShadow: `inset 0 0 0 1px ${color}44` }}
-                            tip={tipHandlers(`phase:${phase.id}`, () => ({
-                              kind: "Phase",
-                              color,
-                              title: phase.name,
-                              lines: [`${longDate(range.start)} \u2013 ${longDate(range.end)}`, `${dayCount(range.start, range.end)} in ${project.name}`],
-                              status: spanStatus(range.start, range.end),
-                            }), "bar")}
-                            handlers={barHandlers("phase", phase.id, project.id, { start: phase.start, end: phase.end })}
-                            active={isDragging("phase", phase.id)}
-                            pressed={pressed === `phase:${phase.id}`}
-                          >
-                            {width > 60 && <span className="block truncate px-2 text-caption font-medium leading-5">{phase.name}</span>}
-                          </Bar>
-                        </Row>
-                      );
-                    })}
-
                     {milestones.map((milestone) => {
                       const milestoneTasks = tasks.filter((task) => task.raw.milestoneId === milestone.id);
                       const listOpen = openMilestones.has(milestone.id);
@@ -1210,6 +1165,29 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
         </>
       )}
     </div>
+  );
+}
+
+// Stands in the list of projects for the Completed row
+const COMPLETED_HEADER = { id: "completed-header" };
+
+// Shows or hides the projects marked done. With none in progress, a line says so above it.
+function CompletedHeader({ count, open, nothingActive, onToggle }) {
+  return (
+    <>
+      {nothingActive && <Row height={ROW} label={<span className="text-xs text-slate-400">No projects in progress</span>} />}
+      <Row
+        height={ROW}
+        className="border-b border-slate-100"
+        label={
+          <button type="button" onClick={onToggle} aria-expanded={open} className="-ml-1.5 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-slate-400"><Chevron open={open} /></span>
+            Completed
+            <span className="ml-0.5 text-caption font-normal text-slate-400 tabular-nums">{count}</span>
+          </button>
+        }
+      />
+    </>
   );
 }
 
@@ -1497,27 +1475,21 @@ function RenameInput({ value, onChange, onCommit, onCancel }) {
 
 // An empty timeline says what a project is for, with a picture of one, over the empty grid
 function ProjectsIntro({ onStart }) {
-  const phases = [{ name: "Research", left: 0, width: 27 }, { name: "Draft", left: 28, width: 39 }, { name: "Revise", left: 68, width: 32 }];
+  const tasks = [9, 19, 37, 52, 78, 88];
   const milestones = [{ name: "Outline due", at: 27 }, { name: "Draft due", at: 67 }, { name: "Final due", at: 99 }];
   return (
     <div className="pointer-events-none absolute inset-0 z-40 flex items-start justify-center px-6 pt-16">
       <section aria-labelledby="projects-intro-title" className="modal-surface pointer-events-auto w-full max-w-md rounded-card border border-slate-200 bg-white p-5 shadow-lg">
         <h3 id="projects-intro-title" className="text-sm font-semibold text-slate-900">Group a big assignment into steps with deadlines</h3>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">A project spans weeks. Split it into phases, give each deadline a milestone, then add the tasks toward it. A milestone ticks itself off when its tasks are done.</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">A project spans weeks. Give each deadline a milestone, then add the tasks toward it. A milestone ticks itself off when its tasks are done.</p>
         <figure aria-hidden="true" className="mt-4 rounded-xl bg-slate-50 px-4 pt-3 pb-3.5">
           <figcaption className="flex items-baseline justify-between text-caption text-slate-400">
             <span><span className="font-semibold text-slate-700">Research paper</span> · example</span>
             <span>4 weeks</span>
           </figcaption>
-          <div className="relative mt-2.5 h-5">
-            {phases.map((phase) => (
-              <span key={phase.name} className="absolute inset-y-0 flex items-center truncate rounded-md bg-course-500/15 px-1.5 text-caption font-medium text-course-700" style={{ left: `${phase.left}%`, width: `${phase.width}%` }}>
-                {phase.name}
-              </span>
-            ))}
-          </div>
-          <div className="relative mt-2 h-9">
+          <div className="relative mt-3 h-9">
             <div className="absolute inset-x-0 top-[5px] h-px bg-slate-200" />
+            {tasks.map((at) => <span key={at} className="absolute top-[3px] h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-course-300" style={{ left: `${at}%` }} />)}
             {milestones.map((milestone, index) => (
               <span key={milestone.name} className={`absolute top-0 flex flex-col gap-1 ${index === milestones.length - 1 ? "-translate-x-full items-end" : "-translate-x-1/2 items-center"}`} style={{ left: `${milestone.at}%` }}>
                 <span className="h-2.5 w-2.5 rotate-45 rounded-[2px] bg-course-500" />
@@ -1643,7 +1615,6 @@ function ColorMenu({ menu, closing = false, onChange, onClose }) {
 }
 
 const KIND_OPTIONS = [
-  { id: "phase", label: "Phase" },
   { id: "milestone", label: "Milestone" },
   { id: "task", label: "Task" },
 ];
@@ -1652,7 +1623,6 @@ function AddPopover({ popover, closing = false, project, milestones, onAdd, onCl
   const [kind, setKind] = useState(popover.kind);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(popover.date);
-  const [endDate, setEndDate] = useState(addDays(popover.date, 6));
   // New tasks default to the next milestone they lead up to
   const [milestoneId, setMilestoneId] = useState(() => milestones.find((milestone) => milestone.dueDate >= popover.date)?.id ?? "");
   const inputRef = useRef(null);
@@ -1660,7 +1630,7 @@ function AddPopover({ popover, closing = false, project, milestones, onAdd, onCl
   function submit(event) {
     event.preventDefault();
     if (!title.trim() || !date) return;
-    onAdd({ kind, title: title.trim(), date, endDate, milestoneId });
+    onAdd({ kind, title: title.trim(), date, milestoneId });
   }
 
   return (
@@ -1687,17 +1657,11 @@ function AddPopover({ popover, closing = false, project, milestones, onAdd, onCl
         autoFocus
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder={kind === "phase" ? "Phase name (e.g. Research)" : kind === "milestone" ? "Milestone (e.g. Draft due)" : "Task"}
+        placeholder={kind === "milestone" ? "Milestone (e.g. Draft due)" : "Task"}
         className="field-tint w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none"
       />
       <div className="flex items-center gap-1.5">
-        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label={kind === "phase" ? "Start date" : "Date"} className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
-        {kind === "phase" && (
-          <>
-            <span className="text-xs text-slate-400">to</span>
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-label="End date" className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
-          </>
-        )}
+        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="Date" className="field-tint min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 outline-none" />
       </div>
       {kind === "task" && milestones.length > 0 && (
         <select value={milestoneId} onChange={(event) => setMilestoneId(event.target.value)} aria-label="Milestone" className="field-tint w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 outline-none">

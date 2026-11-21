@@ -28,7 +28,8 @@ import Collapsible, { Chevron } from "./Collapsible";
 import PlannerModal from "./PlannerModal";
 import TodayPanel from "./TodayPanel";
 import { withMilestoneStatus } from "./milestones";
-import { EMPTY_PLANNER, addDays, normalizePlanner, toDateKey } from "./planner";
+import { checkOffProject, doneProjectDates, isProjectDone, markProjectDone, openProjectTasks } from "./projects";
+import { EMPTY_PLANNER, addDays, hasPhases, normalizePlanner, toDateKey } from "./planner";
 import { COLOR_PALETTE } from "./courseColors";
 import FilterMenu from "./FilterMenu";
 import { DEFAULT_FILTERS, activeFilterCount } from "./filters";
@@ -48,8 +49,8 @@ import WhatsNew from "./WhatsNew";
 import Tip from "./Tip";
 import NewPasswordScreen from "./NewPasswordScreen";
 import { passwordResetEnabled } from "./authEmails";
-import { DEFAULT_COURSES, withExampleTasks } from "./starterData";
-import { EMPTY_PREFS, MANUAL_ADDS_FOR_TIP, checklistShown, checklistSteps, closeChecklist, countManualAdd, markStep, markTipSeen, markWhatsNewSeen, normalizePrefs, rememberSteps, reopenChecklist, skipStep, startPrefs, tipSeen, whatsNewShown } from "./prefs";
+import { DEFAULT_COURSES, startingExamplesOpen, withExamplePlannerItems, withExampleProject, withExampleTasks } from "./starterData";
+import { EMPTY_PREFS, MANUAL_ADDS_FOR_TIP, checklistShown, checklistSteps, closeChecklist, countManualAdd, markPlannerItemsAdded, markStep, markTipSeen, markWhatsNewSeen, normalizePrefs, plannerItemsAdded, rememberSteps, reopenChecklist, skipStep, startPrefs, tipSeen, whatsNewShown } from "./prefs";
 
 const MOBILE_TABS = [
   { id: "tasks", label: "Tasks", icon: <svg viewBox="0 0 24 24" aria-hidden="true"><circle className="tab-fill" cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg> },
@@ -141,6 +142,10 @@ export default function App() {
   const [storedPlanner, setPlanner] = useLocalStorage(dataKey("planner"), EMPTY_PLANNER);
   const planner = useMemo(() => normalizePlanner(storedPlanner), [storedPlanner]);
   const updatePlanner = useCallback((change) => setPlanner((current) => change(normalizePlanner(current))), [setPlanner]);
+  // Projects no longer have phases: any still saved here or arriving from another device are dropped
+  useEffect(() => {
+    if (hasPhases(storedPlanner)) setPlanner((current) => normalizePlanner(current));
+  }, [storedPlanner, setPlanner]);
   // The checklist, tips seen and the last What's new, synced with the account (see prefs.js).
   // `change` returns the next prefs, or null to leave them alone.
   const [storedPrefs, setPrefs] = useLocalStorage(dataKey("prefs"), EMPTY_PREFS);
@@ -307,19 +312,33 @@ export default function App() {
     const next = startPrefs(prefs, { todos });
     if (!next) return;
     setPrefs(next);
-    // A new account's list starts with two example tasks for the checklist to point at
-    if (checklistShown(next)) setTodos((current) => withExampleTasks(current, courses));
-  }, [prefsReady, prefs, todos, courses, setPrefs, setTodos]);
+    // A new account starts with examples: two tasks for the checklist to point at, and a project
+    // on the timeline
+    if (!checklistShown(next)) return;
+    setTodos((current) => withExampleTasks(current, courses));
+    setPlanner((current) => withExampleProject(normalizePlanner(current), courses));
+  }, [prefsReady, prefs, todos, courses, setPrefs, setTodos, setPlanner]);
 
   const showChecklist = prefsReady && checklistShown(prefs);
-  const desktopSteps = useMemo(() => checklistSteps(prefs, { todos, courses, canvas, planner, canvasAvailable, desktop: true }), [prefs, todos, courses, canvas, planner, canvasAvailable]);
-  const mobileSteps = useMemo(() => checklistSteps(prefs, { todos, courses, canvas, planner, canvasAvailable, desktop: false }), [prefs, todos, courses, canvas, planner, canvasAvailable]);
+  const desktopSteps = useMemo(() => checklistSteps(prefs, { todos, canvas, planner, canvasAvailable, desktop: true, quickAddKey: resolvedKeymap.quickAdd }), [prefs, todos, canvas, planner, canvasAvailable, resolvedKeymap.quickAdd]);
+  const mobileSteps = useMemo(() => checklistSteps(prefs, { todos, canvas, planner, canvasAvailable, desktop: false }), [prefs, todos, canvas, planner, canvasAvailable]);
   // A step stays ticked once done, even if what did it is later deleted
   useEffect(() => {
     if (!showChecklist) return;
     const next = rememberSteps(prefs, desktopSteps);
     if (next) setPrefs(next);
   }, [showChecklist, prefs, desktopSteps, setPrefs]);
+
+  // Planning the day with both starting examples already checked off would leave nothing due to
+  // plan, so opening Today or the planner puts two things just for today in the tray (once a day)
+  const planDayPending = showChecklist && desktopSteps.some((step) => step.id === "planDay" && !step.done);
+  const plannerItemsDue = planDayPending && (todayOpen || plannerOpen) && !startingExamplesOpen(todos) && !plannerItemsAdded(prefs, toDateKey(new Date()));
+  useEffect(() => {
+    if (!plannerItemsDue) return;
+    const dateKey = toDateKey(new Date());
+    updatePrefs((current) => markPlannerItemsAdded(current, dateKey));
+    updatePlanner((current) => withExamplePlannerItems(current, dateKey));
+  }, [plannerItemsDue, updatePrefs, updatePlanner]);
 
   // What's new shows once: it's marked seen as it appears, and stays until closed or the next visit
   const [whatsNewOpen, setWhatsNewOpen] = useAccountState(accountId, false);
@@ -388,18 +407,13 @@ export default function App() {
     requestAnimationFrame(() => categoryInputRef.current?.focus());
   }
 
-  // Each Getting started step's button does the thing itself
-  function runStep(id, mobile) {
+  // Each Getting started step's button does the thing itself. Quick add's step only has one on a
+  // computer with its key unset.
+  function runStep(id) {
     if (id === "firstTask") {
-      if (mobile) {
-        setMobileAddText(EXAMPLE_TASK);
-        setMobileAddOpen(true);
-      } else {
-        setQuickAddText(EXAMPLE_TASK);
-        openQuickAdd();
-      }
-    } else if (id === "category") focusCategoryField(mobile);
-    else if (id === "canvas") openCanvasConnect();
+      setQuickAddText(EXAMPLE_TASK);
+      openQuickAdd();
+    } else if (id === "canvas") openCanvasConnect();
     else if (id === "planDay") setTodayOpen(true);
     else if (id === "shortcuts") openShortcuts();
   }
@@ -697,6 +711,19 @@ export default function App() {
     }, `Deleted project “${project.name}”`);
   }
 
+  // Marking a project done checks off what's still open in it; undo puts the project and the tasks back
+  function completeProject(id) {
+    const project = planner.projects.find((item) => item.id === id);
+    if (!project || isProjectDone(project)) return;
+    const open = new Map(openProjectTasks(todos, id).map((todo) => [todo.id, todo]));
+    updatePlanner((current) => markProjectDone(current, id));
+    if (open.size) setTodos((prev) => checkOffProject(prev, id));
+    showUndo(() => {
+      updatePlanner((current) => ({ ...current, projects: current.projects.map((item) => (item.id === id ? project : item)) }));
+      if (open.size) setTodos((prev) => prev.map((todo) => open.get(todo.id) ?? todo));
+    }, `Marked “${project.name}” done${open.size ? ` and checked off ${open.size} task${open.size === 1 ? "" : "s"}` : ""}`);
+  }
+
   // The toast names what just happened, so Undo says exactly what it will put back
   function showUndo(undo, message) {
     clearTimeout(undoTimerRef.current);
@@ -819,8 +846,9 @@ export default function App() {
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
   const projectMap = useMemo(() => Object.fromEntries(planner.projects.map((p) => [p.id, p])), [planner.projects]);
 
-  // Milestones get their completion from their tasks; everything that displays todos reads this
-  const todosView = useMemo(() => withMilestoneStatus(todos), [todos]);
+  // Milestones get their completion from their tasks (or their project being done); everything that displays todos reads this
+  const doneProjects = useMemo(() => doneProjectDates(planner.projects), [planner.projects]);
+  const todosView = useMemo(() => withMilestoneStatus(todos, doneProjects), [todos, doneProjects]);
   const resolvedTodos = useMemo(() => todosView.map(resolveTask), [todosView]);
 
   const visibleTasks = useMemo(() => {
@@ -1048,7 +1076,7 @@ export default function App() {
         <GettingStarted
           mobile={mobile}
           steps={mobile ? mobileSteps : desktopSteps}
-          onAction={(id) => runStep(id, mobile)}
+          onAction={runStep}
           onSkip={(id) => updatePrefs((current) => skipStep(current, id))}
           onClose={(done) => hideChecklist(done)}
           onShowGuide={() => setGuideOpen(mobile ? "mobile" : "desktop")}
@@ -1462,12 +1490,14 @@ export default function App() {
         onEdit={editItem}
         onDeleteTodo={deleteTodo}
         onDeleteProject={deleteProject}
+        onCompleteProject={completeProject}
       />
       <EditItemModal
         item={editingItem}
         tip={tipProps("repeatEdit", "To remove just this date and keep the rest, use Delete… and choose only this one.")}
         courses={courses.filter((c) => !c.archived || c.id === editingItem?.courseId)}
-        projects={planner.projects}
+        // A project marked done isn't offered for new tasks, apart from the one this is already in
+        projects={planner.projects.filter((project) => !isProjectDone(project) || project.id === editingItem?.projectId)}
         milestones={todos.filter((todo) => todo.type === "milestone")}
         onSave={(id, patch) => {
           updateTodo(id, patch);

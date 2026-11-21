@@ -1,15 +1,21 @@
 // Planner data lives outside the todo list: day plans are only shown in the planner modal, and
-// projects hold the timeline-only pieces (span, phases). Milestones and project tasks are todos.
+// projects hold the timeline-only piece (their span). Milestones and project tasks are todos.
 import { getCourseColor } from "./courseColors";
 import { expandRange, isOccurrenceCompleted, parseDateKey } from "./occurrences";
 
 export const EMPTY_PLANNER = { days: {}, projects: [] };
 export const EMPTY_DAY = { blocks: [], inbox: [] };
 
+// Projects used to have phases. They were taken out in November 2026, and any still saved are dropped.
+export function hasPhases(planner) {
+  return Array.isArray(planner?.projects) && planner.projects.some((project) => project && "phases" in project);
+}
+
 export function normalizePlanner(planner) {
+  const projects = Array.isArray(planner?.projects) ? planner.projects : [];
   return {
     days: planner?.days && typeof planner.days === "object" ? planner.days : {},
-    projects: Array.isArray(planner?.projects) ? planner.projects : [],
+    projects: hasPhases(planner) ? projects.map(({ phases: _phases, ...project }) => project) : projects,
   };
 }
 

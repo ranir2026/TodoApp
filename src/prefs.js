@@ -2,7 +2,7 @@
 // one-time tips they've seen, and the last "What's new" note shown. It's saved with the account (the
 // `prefs` column), so a finished checklist or a dismissed tip doesn't come back on another device.
 // {} means nothing has been decided yet, the same as a row from before the column existed.
-import { isStartingCourse } from "./starterData";
+import { startingExamplesOpen } from "./starterData";
 
 // Bump when there's a new "What's new" note to show existing accounts once
 export const RELEASE = "2026-11-launch";
@@ -39,19 +39,22 @@ export function checklistShown(prefs) {
 
 // The steps, each ticked off by what the person has actually done. `done` in prefs remembers a
 // step once it's been done, so deleting the first task doesn't untick it.
-// context: { todos, courses, canvas, planner, canvasAvailable, desktop }. Checking off has no button:
-// the circle on the task is right there.
+// context: { todos, canvas, planner, canvasAvailable, desktop, quickAddKey }. Two steps have no
+// button, since what does them is right there: the circle on a task, and quick add's key (on a
+// computer, shown as `combo`) or the + button (on a phone). With quick add's key unset, Try it opens it.
 export function checklistSteps(prefs, context) {
   const onboarding = normalizePrefs(prefs).onboarding ?? {};
   const remembered = onboarding.done ?? {};
   const skipped = onboarding.skipped ?? {};
   const observed = observedSteps(context);
   const press = context.desktop ? "Click" : "Tap";
-  const examplesLeft = (context.todos ?? []).some((todo) => todo.example && !todo.completed);
+  const examplesLeft = startingExamplesOpen(context.todos ?? []);
+  const quickAdd = !context.desktop
+    ? { detail: "Tap + at the bottom, then type it in one line, like Essay fri urgent." }
+    : { detail: "Words like fri and urgent turn into a date and a flag as you type.", ...(context.quickAddKey ? { combo: context.quickAddKey } : { action: "Try it" }) };
   const steps = [
     { id: "checkOff", label: "Check off a task", detail: examplesLeft ? `${press} the circle beside one of the examples below.` : `${press} the circle beside any task.` },
-    { id: "firstTask", label: "Add your first task", detail: "Words like fri and urgent turn into a date and a flag as you type.", action: "Try it" },
-    { id: "category", label: "Make a category", detail: "One for each class, so tasks are colored by where they're from.", action: "Add one" },
+    { id: "firstTask", label: "Quick add your first task", ...quickAdd },
     context.canvasAvailable && { id: "canvas", label: "Connect Canvas", detail: "Optional. Brings in your assignments and keeps their dates up to date.", action: "Connect", optional: true },
     context.desktop && { id: "planDay", label: "Plan your day in Today", detail: "Give tasks a time, like Study 3-5pm.", action: "Open Today" },
     context.desktop && { id: "shortcuts", label: "Learn the shortcuts", detail: "Press ? any time to see them.", action: "Show them" },
@@ -64,11 +67,10 @@ export function checklistSteps(prefs, context) {
 }
 
 // Steps that can be read off the data itself
-export function observedSteps({ todos = [], courses = [], canvas = {}, planner = {} }) {
+export function observedSteps({ todos = [], canvas = {}, planner = {} }) {
   return {
     checkOff: todos.some((todo) => todo.completed || Object.keys(todo.completions ?? {}).length > 0),
     firstTask: todos.some((todo) => !todo.canvas && !todo.example),
-    category: courses.some((course) => !isStartingCourse(course)),
     canvas: (canvas?.feeds?.length ?? 0) > 0,
     planDay: Object.values(planner?.days ?? {}).some((day) => (day?.blocks?.length ?? 0) > 0),
   };
@@ -98,6 +100,18 @@ export function skipStep(prefs, id, skipped = true) {
   if (skipped) next[id] = true;
   else delete next[id];
   return { ...current, onboarding: { ...onboarding, skipped: next } };
+}
+
+// The day the example planner items were put in the tray (see withExamplePlannerItems), so
+// they're offered once a day at most, and not again after they've been removed
+export function plannerItemsAdded(prefs, dateKey) {
+  return normalizePrefs(prefs).onboarding?.plannerItems === dateKey;
+}
+
+export function markPlannerItemsAdded(prefs, dateKey) {
+  const current = normalizePrefs(prefs);
+  if (!current.onboarding) return null;
+  return { ...current, onboarding: { ...current.onboarding, plannerItems: dateKey } };
 }
 
 // status: "dismissed" (closed early) or "done" (closed after finishing)

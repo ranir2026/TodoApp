@@ -30,7 +30,7 @@ Privacy and your data (under the account box on a computer, Profile then Help on
 
 ### New accounts and What's new
 
-A new account gets a Getting started checklist in place of the empty list. An account that already has tasks gets a "What's new" note once instead. Both, and the one-time tips, are remembered in the account's `prefs` (see `src/prefs.js`), so they don't come back on another device. For a new note, change `RELEASE` in `src/prefs.js` and the items in `src/WhatsNew.jsx`. The "What you can do" page lists features from `src/features.js` and hides any the account can't use, such as Canvas when the app runs without an account.
+A new account starts with the categories Personal and Work, a Getting started checklist, and examples for it to point at: two tasks and a project on the timeline (`src/starterData.js`). An account that already has tasks gets a "What's new" note once instead. Both, and the one-time tips, are remembered in the account's `prefs` (see `src/prefs.js`), so they don't come back on another device. For a new note, change `RELEASE` in `src/prefs.js` and the items in `src/WhatsNew.jsx`. The "What you can do" page lists features from `src/features.js` and hides any the account can't use, such as Canvas when the app runs without an account.
 
 ## Development
 
