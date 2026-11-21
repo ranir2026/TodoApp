@@ -7,7 +7,6 @@ import AddTodoForm from "./AddTodoForm";
 import TodoItem, { MilestoneCard } from "./TodoItem";
 import CalendarView from "./CalendarView";
 import CommandPalette from "./CommandPalette";
-import KeybindSettings from "./KeybindSettings";
 import EditItemModal from "./EditItemModal";
 import QuickAddModal from "./QuickAddModal";
 import ActivityHeatmap from "./ActivityHeatmap";
@@ -28,7 +27,7 @@ import Collapsible, { Chevron } from "./Collapsible";
 import PlannerModal from "./PlannerModal";
 import TodayPanel from "./TodayPanel";
 import { withMilestoneStatus } from "./milestones";
-import { checkOffProject, doneProjectDates, isProjectDone, markProjectDone, openProjectTasks } from "./projects";
+import { checkOffProject, doneProjectDates, forgetDeleted, hasExpiredDeleted, isProjectDone, markProjectDone, moveToDeleted, openProjectTasks, putBackDeleted, restoreDeleted, restoredTodos, withoutExpiredDeleted } from "./projects";
 import { EMPTY_PLANNER, addDays, hasPhases, normalizePlanner, toDateKey } from "./planner";
 import { COLOR_PALETTE } from "./courseColors";
 import FilterMenu from "./FilterMenu";
@@ -146,6 +145,10 @@ export default function App() {
   useEffect(() => {
     if (hasPhases(storedPlanner)) setPlanner((current) => normalizePlanner(current));
   }, [storedPlanner, setPlanner]);
+  // Projects in Recently deleted for more than 30 days go for good
+  useEffect(() => {
+    if (hasExpiredDeleted(planner)) updatePlanner((current) => withoutExpiredDeleted(current));
+  }, [planner, updatePlanner]);
   // The checklist, tips seen and the last What's new, synced with the account (see prefs.js).
   // `change` returns the next prefs, or null to leave them alone.
   const [storedPrefs, setPrefs] = useLocalStorage(dataKey("prefs"), EMPTY_PREFS);
@@ -181,7 +184,6 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickLinkOpen, setQuickLinkOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -447,7 +449,6 @@ export default function App() {
       else openCanvasConnect();
     } else if (target === "palette") setPaletteOpen(true);
     else if (target === "shortcuts") openShortcuts();
-    else if (target === "keybinds") setSettingsOpen(true);
   }
 
   // Deletes the account and everything in it (the delete_my_account function in
@@ -697,18 +698,35 @@ export default function App() {
     setEditingItem(null);
   }
 
-  // A project takes its milestones and tasks with it; undo puts all of them back
+  // A project takes its milestones and tasks with it into Recently deleted, at the bottom of the
+  // timeline, for 30 days; undo puts all of them back where they were
   function deleteProject(id) {
     const index = planner.projects.findIndex((project) => project.id === id);
     const project = planner.projects[index];
     if (!project) return;
     const removedTodos = todos.filter((todo) => todo.projectId === id);
-    updatePlanner((current) => ({ ...current, projects: current.projects.filter((item) => item.id !== id) }));
+    updatePlanner((current) => moveToDeleted(current, id, removedTodos));
     setTodos((prev) => prev.filter((todo) => todo.projectId !== id));
     showUndo(() => {
-      updatePlanner((current) => ({ ...current, projects: [...current.projects.slice(0, index), project, ...current.projects.slice(index)] }));
-      setTodos((prev) => [...prev, ...removedTodos]);
-    }, `Deleted project “${project.name}”`);
+      updatePlanner((current) => restoreDeleted(current, id, index));
+      setTodos((prev) => restoredTodos(prev, { todos: removedTodos }));
+    }, `Moved “${project.name}” to Recently deleted`);
+  }
+
+  // Back from Recently deleted, at the end of the timeline, with its milestones and tasks
+  function restoreProject(id) {
+    const entry = planner.deleted.find((item) => item.project?.id === id);
+    if (!entry) return;
+    updatePlanner((current) => restoreDeleted(current, id));
+    setTodos((prev) => restoredTodos(prev, entry));
+  }
+
+  // Gone for good before its 30 days are up; undo puts it back in Recently deleted
+  function forgetProject(id) {
+    const entry = planner.deleted.find((item) => item.project?.id === id);
+    if (!entry) return;
+    updatePlanner((current) => forgetDeleted(current, id));
+    showUndo(() => updatePlanner((current) => putBackDeleted(current, entry)), `Deleted “${entry.project.name}” for good`);
   }
 
   // Marking a project done checks off what's still open in it; undo puts the project and the tasks back
@@ -953,7 +971,6 @@ export default function App() {
     resolvedKeymap,
     {
       openPalette: () => setPaletteOpen((v) => !v),
-      openSettings: () => setSettingsOpen(true),
       quickAdd: openQuickAdd,
       newTask: focusNewTask,
       toggleView: () => setView((v) => (v === "list" ? "calendar" : "list")),
@@ -977,12 +994,11 @@ export default function App() {
       showShortcuts: openShortcuts,
       escape: () => {
         if (paletteOpen) setPaletteOpen(false);
-        else if (settingsOpen) setSettingsOpen(false);
         else if (quickAddOpen) setQuickAddOpen(false);
         else if (editingItem) setEditingItem(null);
       },
     },
-    !settingsOpen && !editingItem && !quickAddOpen && !plannerOpen && !canvasOpen && !canvasSettingsOpen && !shortcutsOpen && !guideOpen && !privacyOpen,
+    !editingItem && !quickAddOpen && !plannerOpen && !canvasOpen && !canvasSettingsOpen && !shortcutsOpen && !guideOpen && !privacyOpen,
   );
 
   const commands = useMemo(
@@ -1003,8 +1019,7 @@ export default function App() {
       { id: "quickLink", label: "Add quick link", run: () => setQuickLinkOpen(true) },
       { id: "openPlanner", label: "Open planner", run: () => setPlannerOpen(true) },
       { id: "toggleToday", label: "Show or hide today's plan", run: () => setTodayOpen((v) => !v) },
-      { id: "openSettings", label: "Open keybind settings", run: () => setSettingsOpen(true) },
-      { id: "showShortcuts", label: "Show keyboard shortcuts", run: () => openShortcuts() },
+      { id: "showShortcuts", label: "Keyboard shortcuts (see or change them)", run: () => openShortcuts() },
       { id: "openGuide", label: "What you can do", run: () => setGuideOpen("desktop") },
       { id: "openPrivacy", label: "Privacy and your data", run: () => setPrivacyOpen("desktop") },
     ],
@@ -1248,30 +1263,22 @@ export default function App() {
           </div>
         )}
 
-        {/* Help and commands live with the rest of the app's chrome rather than floating over content */}
-        <div className="mt-auto shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setGuideOpen("desktop")}
-              className="press-tint flex-1 rounded-lg px-2 py-1.5 text-left text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              What you can do
-            </button>
-            <button
-              onClick={openShortcuts}
-              className="press-tint flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              Shortcuts
-              <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.showShortcuts)}</span>
-            </button>
-          </div>
+        {/* Help lives with the rest of the app's chrome rather than floating over content: what the app
+            does, and its keys (seen and changed in one place; the command palette is one of them) */}
+        <div className="mt-auto flex shrink-0 items-center gap-1">
           <button
-            onClick={() => setPaletteOpen(true)}
-            title={`Open commands (${comboLabel(resolvedKeymap.openSettings)} to edit shortcuts)`}
-            className="press-tint flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            onClick={() => setGuideOpen("desktop")}
+            className="press-tint flex-1 rounded-lg px-2 py-1.5 text-left text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            Commands
-            <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.openPalette)}</span>
+            What you can do
+          </button>
+          <button
+            onClick={openShortcuts}
+            title="See or change the keyboard shortcuts"
+            className="press-tint flex shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            Shortcuts
+            <span className="rounded bg-slate-900/5 px-1.5 py-0.5 font-mono">{comboLabel(resolvedKeymap.showShortcuts)}</span>
           </button>
         </div>
       </aside>
@@ -1472,7 +1479,6 @@ export default function App() {
         </div>
       )}
       <CommandPalette open={paletteOpen} commands={commands} keymap={resolvedKeymap} onClose={() => setPaletteOpen(false)} />
-      <KeybindSettings open={settingsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setSettingsOpen(false)} />
       <PlannerModal
         open={plannerOpen}
         tabRequest={plannerTabRequest}
@@ -1491,6 +1497,8 @@ export default function App() {
         onDeleteTodo={deleteTodo}
         onDeleteProject={deleteProject}
         onCompleteProject={completeProject}
+        onRestoreProject={restoreProject}
+        onForgetProject={forgetProject}
       />
       <EditItemModal
         item={editingItem}
@@ -1516,7 +1524,7 @@ export default function App() {
         onType={() => offerTip("quickAdd")}
         tip={tipProps("quickAdd", QUICK_ADD_TIP)}
       />
-      <ShortcutsSheet open={shortcutsOpen} keymap={resolvedKeymap} onClose={() => setShortcutsOpen(false)} onEdit={() => { setShortcutsOpen(false); setSettingsOpen(true); }} />
+      <ShortcutsSheet open={shortcutsOpen} keymap={resolvedKeymap} setKeymap={setKeymap} onClose={() => setShortcutsOpen(false)} />
       <FeatureGuide
         open={Boolean(guideOpen)}
         mobile={guideOpen === "mobile"}

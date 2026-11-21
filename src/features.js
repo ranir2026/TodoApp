@@ -22,7 +22,7 @@ const GROUPS = [
     items: [
       { id: "today", title: "Today", detail: "Your plan for today at the edge of the screen. Type a task with its time, like Study 3-5pm.", where: { desktop: "The date tab on the right edge", mobile: null }, keys: "toggleToday", open: "today" },
       { id: "dayPlanner", title: "Day planner", detail: "Drag tasks onto the hours of any day to plan when you'll do them.", where: { desktop: "Planner, Day", mobile: null }, keys: "openPlanner", open: "planner" },
-      { id: "projects", title: "Projects and milestones", detail: "Lay out a big assignment over weeks: milestones with deadlines, and the tasks toward each. A milestone completes when its tasks do. Mark a project done to put it away under Completed.", where: { desktop: "Planner, Timeline", mobile: null }, keys: "plannerSwitchTab", open: "projects" },
+      { id: "projects", title: "Projects and milestones", detail: "Lay out a big assignment over weeks: milestones with deadlines, and the tasks toward each. A milestone completes when its tasks do. Mark a project done to put it away under Completed. A deleted one waits in Recently deleted, at the bottom, for 30 days.", where: { desktop: "Planner, Timeline", mobile: null }, keys: "plannerSwitchTab", open: "projects" },
       { id: "calendar", title: "Calendar", detail: "Month, week and day views of everything with a date. Add straight onto a day in Month.", where: { desktop: "The calendar button above the list", mobile: "Calendar tab" }, keys: "toggleView", open: "calendar" },
       { id: "stats", title: "Stats", detail: "What's due soon and overdue, and what you finished each day. Click a count to see those tasks.", where: { desktop: "Right column", mobile: "Profile, Overview" } },
       { id: "links", title: "Quick links", detail: "The sites you open every day, one click away.", where: { desktop: "Right column", mobile: "Profile, Quick links" }, keys: "quickLink" },
@@ -40,9 +40,8 @@ const GROUPS = [
     title: "Shortcuts",
     only: "desktop",
     items: [
-      { id: "palette", title: "Command palette", detail: "Every command, searchable by name.", where: { desktop: "Commands, bottom left", mobile: null }, keys: "openPalette", open: "palette" },
-      { id: "keyboard", title: "Keyboard shortcuts", detail: "Move through the list with J, check off with X, switch views with V, and more.", where: { desktop: "Press ?", mobile: null }, keys: "showShortcuts", open: "shortcuts" },
-      { id: "rebind", title: "Your own keys", detail: "Change any shortcut to the key you'd rather press.", where: { desktop: "Keybind settings", mobile: null }, keys: "openSettings", open: "keybinds" },
+      { id: "keyboard", title: "Keyboard shortcuts", detail: "Move through the list with J, check off with X, switch views with V, and more. Click a key there to change it to one you'd rather press.", where: { desktop: "Shortcuts, bottom left", mobile: null }, keys: "showShortcuts", open: "shortcuts" },
+      { id: "palette", title: "Command palette", detail: "Every command, searchable by name.", where: { desktop: "From the keyboard", mobile: null }, keys: "openPalette", open: "palette" },
     ],
   },
 ];

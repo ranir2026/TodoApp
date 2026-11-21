@@ -8,7 +8,7 @@ import { parseDateKey, resolveTask } from "./occurrences";
 import { addDays, daysBetween, formatClock, projectColor, timeToMinutes, toDateKey } from "./planner";
 import { animateSpring } from "./spring";
 import { edgeDepth } from "./dragEdges";
-import { isProjectDone, reopenProject } from "./projects";
+import { deletedUntil, isProjectDone, recentlyDeleted, reopenProject } from "./projects";
 import { CheckIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons";
 import TimelineTooltip from "./TimelineTooltip";
 
@@ -81,12 +81,13 @@ function milestoneTone(milestone, todayKey) {
   return "open";
 }
 
-export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject, onCompleteProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
+export default function ProjectTimeline({ todos, courses, courseMap, toolbar, planner, updatePlanner, onAddTodo, onUpdateTodo, onEdit, onDeleteTodo, onDeleteProject, onCompleteProject, onRestoreProject, onForgetProject, onToggleTodo, onQuickAdd, quickAddProjectId, draft, bottomInset = 0 }) {
   const [zoom, setZoom] = useLocalStorage("timelineZoom", "weeks");
   // null means "fit the longest name"; dragging the column's edge sets a width of your own
   const [labelOverride, setLabelOverride] = useLocalStorage("timelineLabelWidth", null);
   const [creating, setCreating] = useState(false);
   const [showDone, setShowDone] = useLocalStorage("timelineShowDone", false);
+  const [showDeleted, setShowDeleted] = useState(false);
   // Bumped each time the form opens so its fields start fresh and play their entrance again
   const [formKey, setFormKey] = useState(0);
   const [colorMenu, setColorMenu] = useState(null);
@@ -155,10 +156,16 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
     return { activeProjects: active, doneProjects: done, shownProjects: showDone ? [...active, ...done] : active };
   }, [projects, showDone]);
   const shownIds = new Set(shownProjects.map((project) => project.id));
+  // Deleted in the last 30 days, under Recently deleted at the very bottom, closed until opened
+  const deletedEntries = useMemo(() => recentlyDeleted(planner), [planner]);
 
   // Fit the name column to its longest label: project rows (chevron, color, name, count) and milestones
   const autoLabelWidth = useMemo(() => {
-    let widest = doneProjects.length ? 12 + 24 + textWidth("Completed", "500 0.75") + 6 + textWidth(String(doneProjects.length), "400 0.6875") + 8 : 0;
+    const groupWidth = (title, count) => 12 + 24 + textWidth(title, "500 0.75") + 6 + textWidth(String(count), "400 0.6875") + 8;
+    let widest = Math.max(doneProjects.length ? groupWidth("Completed", doneProjects.length) : 0, deletedEntries.length ? groupWidth("Recently deleted", deletedEntries.length) : 0);
+    if (showDeleted) {
+      for (const { project } of deletedEntries) widest = Math.max(widest, 12 + 10 + 6 + textWidth(project.name, "600 0.875") + 6 + textWidth("Restore", "500 0.6875") + 16 + 4 + 24 + 8);
+    }
     for (const project of shownProjects) {
       const items = projectTodos.filter((todo) => todo.projectId === project.id);
       const taskCount = items.filter((todo) => todo.type !== "milestone").length;
@@ -174,7 +181,7 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
       }
     }
     return Math.round(Math.min(Math.max(widest + 12, LABEL_MIN + 52), LABEL_AUTO_MAX));
-  }, [shownProjects, doneProjects.length, projectTodos, openMilestones, closingMilestones]);
+  }, [shownProjects, doneProjects.length, deletedEntries, showDeleted, projectTodos, openMilestones, closingMilestones]);
   const labelWidth = Math.min(Math.max(labelOverride ?? autoLabelWidth, LABEL_MIN), LABEL_MAX);
 
   function startLabelResize(event) {
@@ -1102,6 +1109,22 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
             );
           })}
 
+          {deletedEntries.length > 0 && (
+            <RecentlyDeleted
+              entries={deletedEntries}
+              open={showDeleted}
+              onToggle={() => setShowDeleted(!showDeleted)}
+              courseMap={courseMap}
+              onRestore={onRestoreProject ? (entry) => {
+                onRestoreProject(entry.project.id);
+                // Done projects go back under Completed, so it opens to show where it went
+                if (isProjectDone(entry.project)) setShowDone(true);
+                setCreatedId(entry.project.id);
+              } : null}
+              onForget={onForgetProject ? (entry) => onForgetProject(entry.project.id) : null}
+            />
+          )}
+
           {/* Carries the label column down to the bottom so the day grid doesn't show through under it */}
           <div className="flex flex-1">
             <div className="sticky left-0 z-20 shrink-0 border-r border-slate-100 bg-white" style={{ width: "var(--label-width)", minHeight: bottomInset }} />
@@ -1171,22 +1194,68 @@ export default function ProjectTimeline({ todos, courses, courseMap, toolbar, pl
 // Stands in the list of projects for the Completed row
 const COMPLETED_HEADER = { id: "completed-header" };
 
+// The row that opens or closes a group at the bottom: Completed, Recently deleted
+function GroupHeader({ title, count, open, onToggle }) {
+  return (
+    <Row
+      height={ROW}
+      className="border-b border-slate-100"
+      label={
+        <button type="button" onClick={onToggle} aria-expanded={open} className="-ml-1.5 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-slate-400"><Chevron open={open} /></span>
+          {title}
+          <span className="ml-0.5 text-caption font-normal text-slate-400 tabular-nums">{count}</span>
+        </button>
+      }
+    />
+  );
+}
+
 // Shows or hides the projects marked done. With none in progress, a line says so above it.
 function CompletedHeader({ count, open, nothingActive, onToggle }) {
   return (
     <>
       {nothingActive && <Row height={ROW} label={<span className="text-xs text-slate-400">No projects in progress</span>} />}
-      <Row
-        height={ROW}
-        className="border-b border-slate-100"
-        label={
-          <button type="button" onClick={onToggle} aria-expanded={open} className="-ml-1.5 flex min-w-0 items-center gap-1 rounded-md py-0.5 pr-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-slate-400"><Chevron open={open} /></span>
-            Completed
-            <span className="ml-0.5 text-caption font-normal text-slate-400 tabular-nums">{count}</span>
-          </button>
-        }
-      />
+      <GroupHeader title="Completed" count={count} open={open} onToggle={onToggle} />
+    </>
+  );
+}
+
+// Projects deleted in the last 30 days, with their milestones and tasks, newest first. Restore puts
+// one back on the timeline; × deletes it for good. Nothing is drawn on the timeline for them.
+function RecentlyDeleted({ entries, open, onToggle, courseMap, onRestore, onForget }) {
+  return (
+    <>
+      <GroupHeader title="Recently deleted" count={entries.length} open={open} onToggle={onToggle} />
+      {open && entries.map((entry) => {
+        const { project } = entry;
+        const deleted = shortDate(toDateKey(new Date(entry.deletedAt)));
+        const until = shortDate(toDateKey(deletedUntil(entry)));
+        return (
+          <Row
+            key={project.id}
+            height={PROJECT_ROW}
+            className="planner-row-enter border-b border-slate-100"
+            label={
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full opacity-50 ring-1 ring-black/10 ring-inset" style={{ backgroundColor: projectColor(project, courseMap) }} />
+                <span className="line-clamp-2 min-w-0 flex-1 text-sm leading-tight font-semibold break-words text-slate-500">{project.name}</span>
+                {onRestore && (
+                  <button type="button" onClick={() => onRestore(entry)} className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-caption font-medium text-slate-600 hover:bg-course-50 hover:text-course-700" aria-label={`Restore ${project.name}`} title="Put it back on the timeline, with its milestones and tasks">
+                    Restore
+                  </button>
+                )}
+                {onForget && (
+                  <button type="button" onClick={() => onForget(entry)} className="-mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-danger-500" aria-label={`Delete ${project.name} for good`} title="Delete for good">
+                    <CloseIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            }
+            sublabel={`Deleted ${deleted} · kept until ${until}`}
+          />
+        );
+      })}
     </>
   );
 }

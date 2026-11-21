@@ -7,7 +7,6 @@ export const DEFAULT_KEYMAP = {
   moveUp: "shift+j",
   toggleComplete: "x",
   deleteSelected: "d",
-  openSettings: "ctrl+,",
   filterActive: "1",
   filterCompleted: "2",
   filterAll: "3",
@@ -34,7 +33,6 @@ export const ACTION_LABELS = {
   moveUp: "Scroll task list up",
   toggleComplete: "Toggle complete on selected task",
   deleteSelected: "Delete selected task",
-  openSettings: "Open keybind settings",
   filterActive: "Show active tasks",
   filterCompleted: "Show completed tasks",
   filterAll: "Show all tasks",
@@ -51,6 +49,21 @@ export const ACTION_LABELS = {
   toggleToday: "Show or hide today's plan",
   showShortcuts: "Show keyboard shortcuts",
 };
+
+// action -> the other actions on the same keys
+export function shortcutClashes(keymap) {
+  const byCombo = new Map();
+  for (const action of Object.keys(ACTION_LABELS)) {
+    const combo = keymap[action];
+    if (combo) byCombo.set(combo, [...(byCombo.get(combo) ?? []), action]);
+  }
+  const clashes = {};
+  for (const actions of byCombo.values()) {
+    if (actions.length < 2) continue;
+    for (const action of actions) clashes[action] = actions.filter((other) => other !== action);
+  }
+  return clashes;
+}
 
 export function normalizeCombo(e) {
   const parts = [];

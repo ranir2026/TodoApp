@@ -42,3 +42,84 @@ export function reopenProject(planner, projectId) {
 export function doneProjectDates(projects) {
   return Object.fromEntries(projects.filter(isProjectDone).map((project) => [project.id, project.completedAt]));
 }
+
+// ── Recently deleted ─────────────────────────────────────────────────────────────────────────────
+// A deleted project leaves the timeline with its milestones and tasks, and waits in
+// `planner.deleted` ({ project, todos, deletedAt }, newest first) for 30 days before it's gone for good.
+
+export const KEEP_DELETED_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function isEntry(entry) {
+  return Boolean(entry?.project?.id) && Array.isArray(entry.todos) && typeof entry.deletedAt === "string";
+}
+
+// When a deleted project goes for good
+export function deletedUntil(entry) {
+  return new Date(new Date(entry.deletedAt).getTime() + KEEP_DELETED_DAYS * DAY_MS);
+}
+
+function isKept(entry, now) {
+  return isEntry(entry) && deletedUntil(entry) > now;
+}
+
+// The ones that can still be restored, newest first
+export function recentlyDeleted(planner, now = new Date()) {
+  return (planner.deleted ?? []).filter((entry) => isKept(entry, now));
+}
+
+export function hasExpiredDeleted(planner, now = new Date()) {
+  return (planner.deleted ?? []).some((entry) => !isKept(entry, now));
+}
+
+export function withoutExpiredDeleted(planner, now = new Date()) {
+  return hasExpiredDeleted(planner, now) ? { ...planner, deleted: recentlyDeleted(planner, now) } : planner;
+}
+
+// Takes the project off the timeline and keeps it, with `todos` (its milestones and tasks, already
+// taken out of the list), in Recently deleted
+export function moveToDeleted(planner, projectId, todos, now = new Date()) {
+  const project = planner.projects.find((item) => item.id === projectId);
+  if (!project) return planner;
+  const entry = { project, todos, deletedAt: now.toISOString() };
+  return {
+    ...planner,
+    projects: planner.projects.filter((item) => item.id !== projectId),
+    deleted: [entry, ...recentlyDeleted(planner, now).filter((kept) => kept.project.id !== projectId)],
+  };
+}
+
+// Puts the project back on the timeline, at `index` (the end by default), and out of Recently
+// deleted. Its todos go back to the list separately (restoredTodos).
+export function restoreDeleted(planner, projectId, index = planner.projects.length) {
+  const entry = (planner.deleted ?? []).find((item) => item.project?.id === projectId);
+  if (!entry) return planner;
+  const projects = planner.projects.filter((item) => item.id !== projectId);
+  return {
+    ...planner,
+    projects: [...projects.slice(0, index), entry.project, ...projects.slice(index)],
+    deleted: planner.deleted.filter((item) => item !== entry),
+  };
+}
+
+// The list with a restored project's todos added back, leaving out any already in it (a Canvas
+// assignment that came back by itself, say)
+export function restoredTodos(todos, entry) {
+  const have = new Set(todos.map((todo) => todo.id));
+  const missing = entry.todos.filter((todo) => !have.has(todo.id));
+  return missing.length ? [...todos, ...missing] : todos;
+}
+
+// Deletes it for good, before its 30 days are up
+export function forgetDeleted(planner, projectId) {
+  const deleted = planner.deleted ?? [];
+  return deleted.some((item) => item.project?.id === projectId)
+    ? { ...planner, deleted: deleted.filter((item) => item.project?.id !== projectId) }
+    : planner;
+}
+
+// Back in Recently deleted, as it was (undoing a delete for good)
+export function putBackDeleted(planner, entry) {
+  const deleted = (planner.deleted ?? []).filter((item) => item.project?.id !== entry.project.id);
+  return { ...planner, deleted: [...deleted, entry].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt)) };
+}

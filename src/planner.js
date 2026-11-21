@@ -3,7 +3,8 @@
 import { getCourseColor } from "./courseColors";
 import { expandRange, isOccurrenceCompleted, parseDateKey } from "./occurrences";
 
-export const EMPTY_PLANNER = { days: {}, projects: [] };
+// `deleted`: projects in Recently deleted (see projects.js)
+export const EMPTY_PLANNER = { days: {}, projects: [], deleted: [] };
 export const EMPTY_DAY = { blocks: [], inbox: [] };
 
 // Projects used to have phases. They were taken out in November 2026, and any still saved are dropped.
@@ -16,6 +17,7 @@ export function normalizePlanner(planner) {
   return {
     days: planner?.days && typeof planner.days === "object" ? planner.days : {},
     projects: hasPhases(planner) ? projects.map(({ phases: _phases, ...project }) => project) : projects,
+    deleted: Array.isArray(planner?.deleted) ? planner.deleted : [],
   };
 }
 

@@ -54,7 +54,7 @@ export default function PrivacyDialog({ open, mobile = false, email, canDelete, 
           <p>Only you. Each account's data is kept in its own row, and the database lets an account read and change only its own. The Canvas feed link is shown masked and is only ever sent to Todo's server to fetch your feed.</p>
         </Section>
         <Section title="Deleting it" mobile={mobile}>
-          <p>Delete tasks, categories and projects one at a time anywhere in the app. Disconnect Canvas from its settings, and choose whether its assignments go too.</p>
+          <p>Delete tasks, categories and projects one at a time anywhere in the app. A deleted project is kept in Recently deleted, at the bottom of the timeline, for 30 days so it can be restored, then it's gone; delete it there to remove it sooner. Disconnect Canvas from its settings, and choose whether its assignments go too.</p>
           {canDelete && <p>Or delete your account, which removes all of the above for good, on every device.</p>}
         </Section>
 
