@@ -28,7 +28,7 @@ import PlannerModal from "./PlannerModal";
 import TodayPanel from "./TodayPanel";
 import { withMilestoneStatus } from "./milestones";
 import { checkOffProject, doneProjectDates, forgetDeleted, hasExpiredDeleted, isProjectDone, markProjectDone, moveToDeleted, openProjectTasks, putBackDeleted, restoreDeleted, restoredTodos, withoutExpiredDeleted } from "./projects";
-import { EMPTY_PLANNER, addDays, hasPhases, normalizePlanner, toDateKey } from "./planner";
+import { EMPTY_PLANNER, addDays, hasPhases, normalizePlanner, projectColor, toDateKey } from "./planner";
 import { COLOR_PALETTE } from "./courseColors";
 import FilterMenu from "./FilterMenu";
 import { DEFAULT_FILTERS, activeFilterCount } from "./filters";
@@ -862,7 +862,8 @@ export default function App() {
   }
 
   const courseMap = useMemo(() => Object.fromEntries(courses.map((c) => [c.id, c])), [courses]);
-  const projectMap = useMemo(() => Object.fromEntries(planner.projects.map((p) => [p.id, p])), [planner.projects]);
+  // With the color its timeline bar is drawn in, which its milestones take in the list
+  const projectMap = useMemo(() => Object.fromEntries(planner.projects.map((p) => [p.id, { ...p, accentColor: projectColor(p, courseMap) }])), [planner.projects, courseMap]);
 
   // Milestones get their completion from their tasks (or their project being done); everything that displays todos reads this
   const doneProjects = useMemo(() => doneProjectDates(planner.projects), [planner.projects]);
@@ -1264,7 +1265,7 @@ export default function App() {
         )}
 
         {/* Help lives with the rest of the app's chrome rather than floating over content: what the app
-            does, and its keys (seen and changed in one place; the command palette is one of them) */}
+            does, and its keys (seen and changed in one place) */}
         <div className="mt-auto flex shrink-0 items-center gap-1">
           <button
             onClick={() => setGuideOpen("desktop")}

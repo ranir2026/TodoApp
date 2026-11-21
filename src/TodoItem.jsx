@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { isOverdue, parseDateKey } from "./occurrences";
 import { useSwipeToDelete } from "./useSwipeToDelete";
 import { extractLinks } from "./noteLinks";
-import { courseAccentStyle, courseChipStyle } from "./courseColors";
+import { courseChipStyle, getCourseColor } from "./courseColors";
 import { CanvasDueFlag, CanvasSourceChips } from "./CanvasUI";
 import { CanvasActionsContext } from "./canvasStatus";
 
@@ -57,14 +57,24 @@ function openLink(event, href) {
 
 const SMALL_CHIP = "shrink-0 rounded-full px-1.5 py-px text-caption font-medium";
 
+// A milestone has its project's color (`accentColor`, as on the timeline), for its stripe and its
+// diamond's outline until it's reached; everything else its category's
+function accentColor(todo, course, project) {
+  return todo.type === "milestone" && project?.accentColor ? project.accentColor : getCourseColor(course);
+}
+
+function accentStyle(todo, course, project) {
+  return { borderLeftColor: accentColor(todo, course, project) };
+}
+
 // A milestone's tasks in one card: the milestone heads it (click to edit), and each task is a slim
 // row with its checkbox and only the chips that differ from task to task. Category and project are
-// shared, so they're said once, by the card's accent and header.
+// shared, so they're said once, by the card's header and its accent (the project's color).
 export function MilestoneCard({ milestone, tasks, course, project, onToggle, onDelete, onEdit, selectedId }) {
   const due = dueLabel(milestone, false);
   const progress = milestone.progress;
   return (
-    <li data-flip-key={`milestone:${milestone.id}`} className="overflow-hidden rounded-xl border border-l-4 border-slate-200 bg-white transition-shadow hover:shadow-sm" style={courseAccentStyle(course)}>
+    <li data-flip-key={`milestone:${milestone.id}`} className="overflow-hidden rounded-xl border border-l-4 border-slate-200 bg-white transition-shadow hover:shadow-sm" style={accentStyle(milestone, course, project)}>
       <button
         type="button"
         data-task-id={milestone.id}
@@ -72,7 +82,10 @@ export function MilestoneCard({ milestone, tasks, course, project, onToggle, onD
         title={`Edit milestone ${milestone.title}`}
         className="row-press milestone-head flex w-full min-w-0 items-center gap-2 px-3.5 pt-2.5 pb-2 text-left transition-colors hover:bg-slate-50/70"
       >
-        <span className={`h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] border-2 ${milestone.completed ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
+        <span
+          className={`h-2.5 w-2.5 shrink-0 rotate-45 rounded-[2px] border-2 ${milestone.completed ? "border-success-500 bg-success-500" : ""}`}
+          style={milestone.completed ? undefined : { borderColor: accentColor(milestone, course, project) }}
+        />
         <span className="min-w-0 truncate text-xs font-semibold text-slate-700">{milestone.title}</span>
         {project && <span className="min-w-0 truncate text-caption text-slate-400">▸ {project.name}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1">
@@ -233,7 +246,10 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
       title={todo.completed ? "Milestone reached" : "Reached automatically when its tasks are done"}
       className={`flex shrink-0 items-center justify-center ${mobile ? "task-toggle-mobile" : `${toggleOffset} h-5 w-5`}`}
     >
-      <span className={`block h-3 w-3 rotate-45 rounded-[2px] border-2 ${done ? "border-success-500 bg-success-500" : "border-urgent-500"}`} />
+      <span
+        className={`block h-3 w-3 rotate-45 rounded-[2px] border-2 ${done ? "border-success-500 bg-success-500" : ""}`}
+        style={done ? undefined : { borderColor: accentColor(todo, course, project) }}
+      />
     </span>
   ) : (
     <button
@@ -343,7 +359,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
           ref={surfaceRef}
           {...(preview ? {} : swipeHandlers)}
           className={`task-row-mobile flex items-start gap-3 border-l-4 ${selected ? "ring-2 ring-[var(--tint)]/30" : ""}`}
-          style={courseAccentStyle(course)}
+          style={accentStyle(todo, course, project)}
         >
           {toggleButton}
           {details}
@@ -359,7 +375,7 @@ export default function TodoItem({ todo, course, project, onToggle, onDelete, on
       className={`task-card group flex ${hasChips ? "items-start" : "items-center"} gap-3 rounded-xl border bg-white px-4 py-3 transition-[box-shadow,background-color] hover:shadow-sm ${
         selected ? "is-selected border-course-300 ring-2 ring-course-500/25" : "border-slate-200"
       } border-l-4`}
-      style={courseAccentStyle(course)}
+      style={accentStyle(todo, course, project)}
     >
       {toggleButton}
       {details}

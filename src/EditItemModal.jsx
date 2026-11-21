@@ -5,6 +5,7 @@ import { CanvasEditPanel } from "./CanvasUI";
 import Collapsible from "./Collapsible";
 import { CloseIcon, PlusIcon } from "./icons";
 import { parseDateKey, REPEAT_OPTIONS, resolveTask } from "./occurrences";
+import { projectColor } from "./planner";
 import SegmentedControl from "./SegmentedControl";
 import SwitchRow from "./SwitchRow";
 import Tip from "./Tip";
@@ -373,6 +374,11 @@ export default function EditItemModal({ item, courses, projects = [], milestones
   // The row as the list will draw it once saved, chips and all. It's only a picture, so it can't
   // be focused or clicked and screen readers skip it; the fields below say the same thing.
   const previewTodo = resolveTask({ ...current, ...patch, title: patch.title || "Untitled" });
+  const previewProjectItem = projects.find((project) => project.id === previewTodo.projectId);
+  const previewProject = previewProjectItem && {
+    ...previewProjectItem,
+    accentColor: projectColor(previewProjectItem, Object.fromEntries(courses.map((candidate) => [candidate.id, candidate]))),
+  };
   const previewRow = (
     <div inert aria-hidden="true" className={`edit-preview ${mobile ? "rounded-[var(--mobile-radius-panel)] bg-[#f2f2f7] p-2" : ""}`}>
       <ul>
@@ -381,7 +387,7 @@ export default function EditItemModal({ item, courses, projects = [], milestones
           mobile={mobile}
           todo={previewTodo}
           course={course}
-          project={projects.find((project) => project.id === previewTodo.projectId)}
+          project={previewProject}
           onToggle={() => {}}
           onDelete={() => {}}
           onEdit={() => {}}

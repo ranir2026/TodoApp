@@ -39,6 +39,15 @@ describe("ShortcutsSheet", () => {
     expect(screen.getByText("Same key as Open quick add")).toBeTruthy();
   });
 
+  it("leaves the command palette off the sheet, though Ctrl+K still opens it", () => {
+    render(<Sheet initial={{ ...DEFAULT_KEYMAP, openPalette: "ctrl+j" }} />);
+    expect(screen.queryByText("Open command palette")).toBeNull();
+    // Not under Other either, and a change to it alone doesn't offer a reset nobody could see the reason for
+    expect(screen.queryByText("Other")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset all to default" })).toBeNull();
+    expect(DEFAULT_KEYMAP.openPalette).toBe("ctrl+k");
+  });
+
   it("has no separate settings shortcut any more", () => {
     render(<Sheet />);
     expect(screen.queryByText(/keybind settings/i)).toBeNull();

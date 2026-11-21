@@ -1,18 +1,18 @@
 import { useRef, useState } from "react";
 import InfoDialog, { Keys } from "./InfoDialog";
-import { ACTION_LABELS, DEFAULT_KEYMAP, comboLabel, normalizeCombo, shortcutClashes } from "./keybinds";
+import { ACTION_LABELS, DEFAULT_KEYMAP, HIDDEN_SHORTCUTS, comboLabel, normalizeCombo, shortcutClashes } from "./keybinds";
 
 // Every shortcut, grouped by what it's for. Anything not listed here still shows up, under Other,
-// so a new shortcut is never left out.
+// so a new shortcut is never left out, unless it's in HIDDEN_SHORTCUTS.
 export const SHORTCUT_GROUPS = [
   { title: "Adding", actions: ["quickAdd", "newTask", "quickLink"] },
-  { title: "Getting around", actions: ["openPalette", "showShortcuts", "focusSearch", "toggleView", "openPlanner", "plannerSwitchTab", "toggleToday"] },
+  { title: "Getting around", actions: ["showShortcuts", "focusSearch", "toggleView", "openPlanner", "plannerSwitchTab", "toggleToday"] },
   { title: "The list", actions: ["moveDown", "moveUp", "toggleComplete", "deleteSelected", "filterActive", "filterCompleted", "filterAll", "toggleSort"] },
   { title: "The calendar", actions: ["calendarMonth", "calendarWeek", "calendarDay", "calendarPrevious", "calendarNext"] },
 ];
 
 export function shortcutGroups() {
-  const listed = new Set(SHORTCUT_GROUPS.flatMap((group) => group.actions));
+  const listed = new Set([...SHORTCUT_GROUPS.flatMap((group) => group.actions), ...HIDDEN_SHORTCUTS]);
   const other = Object.keys(ACTION_LABELS).filter((action) => !listed.has(action));
   return other.length ? [...SHORTCUT_GROUPS, { title: "Other", actions: other }] : SHORTCUT_GROUPS;
 }
@@ -24,7 +24,8 @@ const MODIFIERS = ["Control", "Meta", "Alt", "Shift"];
 export default function ShortcutsSheet({ open, keymap, setKeymap, onClose }) {
   const [capturing, setCapturing] = useState(null);
   const listRef = useRef(null);
-  const changed = Object.keys(ACTION_LABELS).some((action) => keymap[action] !== DEFAULT_KEYMAP[action]);
+  // Only what's on the sheet: a change nobody can see here wouldn't explain the button
+  const changed = shortcutGroups().some((group) => group.actions.some((action) => keymap[action] !== DEFAULT_KEYMAP[action]));
   const clashes = shortcutClashes(keymap);
 
   // Back on the key that was being changed, so the keyboard carries on from there

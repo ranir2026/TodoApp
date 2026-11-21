@@ -50,6 +50,9 @@ export const ACTION_LABELS = {
   showShortcuts: "Show keybinds",
 };
 
+// Left off the Keybinds sheet: Ctrl+K still opens the command palette, and the User Guide says so
+export const HIDDEN_SHORTCUTS = ["openPalette"];
+
 // action -> the other actions on the same keys
 export function shortcutClashes(keymap) {
   const byCombo = new Map();

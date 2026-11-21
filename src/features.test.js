@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { featureGuide } from "./features";
-import { ACTION_LABELS, DEFAULT_KEYMAP, comboKeys, comboLabel } from "./keybinds";
+import { ACTION_LABELS, DEFAULT_KEYMAP, HIDDEN_SHORTCUTS, comboKeys, comboLabel } from "./keybinds";
 import { SHORTCUT_GROUPS, shortcutGroups } from "./ShortcutsSheet";
 
 const titles = (groups) => groups.map((group) => group.title);
@@ -56,10 +56,10 @@ describe("comboKeys", () => {
 });
 
 describe("shortcutGroups", () => {
-  it("lists every shortcut exactly once", () => {
+  it("lists every shortcut but the hidden ones exactly once", () => {
     const listed = shortcutGroups().flatMap((group) => group.actions);
     expect(new Set(listed).size).toBe(listed.length);
-    expect([...listed].sort()).toEqual(Object.keys(ACTION_LABELS).sort());
+    expect([...listed, ...HIDDEN_SHORTCUTS].sort()).toEqual(Object.keys(ACTION_LABELS).sort());
   });
 
   it("only names actions that exist", () => {
